@@ -13,13 +13,15 @@ type Model struct {
 	CharacterSet CharacterSet
 	Width        int
 	Height       int
+	GameWidth    int // Width of the playing field (1/3 of total)
 	Score        int
 	Missed       int
 	Input        string
 	GameOver     bool
 	LastSpawn    time.Time
 	LastUpdate   time.Time
-	MissedKanas  []Kana // Track kanas that reached the bottom
+	MissedKanas  []Kana            // Track kanas that reached the bottom
+	CharStats    map[string]int    // Count of correct answers per character
 }
 
 // Message types for the Bubble Tea update loop
@@ -33,9 +35,11 @@ func InitialModel() Model {
 		CharacterSet: Hiragana(),
 		Width:        80,
 		Height:       24,
+		GameWidth:    26, // 1/3 of 80
 		LastSpawn:    time.Now(),
 		LastUpdate:   time.Now(),
 		MissedKanas:  make([]Kana, 0),
+		CharStats:    make(map[string]int),
 	}
 }
 
@@ -64,6 +68,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.Width = msg.Width
 		m.Height = msg.Height - 3 // Reserve space for status bar and instructions
+		m.GameWidth = m.Width / 3  // 1/3 for game area
 
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -104,6 +109,8 @@ func (m *Model) checkAnswer() {
 		if k.Romaji == m.Input {
 			m.Kanas = append(m.Kanas[:i], m.Kanas[i+1:]...)
 			m.Score += 10
+			// Track correct answer
+			m.CharStats[k.Char]++
 			return
 		}
 	}
@@ -118,7 +125,7 @@ func (m *Model) spawnKana() {
 	kana := &Kana{
 		Char:   char,
 		Romaji: romaji,
-		X:      rand.Intn(m.Width-10) + 5,
+		X:      rand.Intn(m.GameWidth-10) + 5, // Spawn only in game area
 		Y:      0,
 		Speed:  0.15 + rand.Float64()*0.1,
 	}
