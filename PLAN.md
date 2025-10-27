@@ -28,6 +28,10 @@ This document outlines planned improvements and features for the Kana learning g
 - Implementation: Increase falling speed slightly when incorrect romaji is typed
 - Prevents players from randomly typing in hopes of hitting something
 
+**Spawn Distribution**
+- Replace simple RNG with a shuffled “bag” system so each enabled kana appears before repeats
+- Optional weighting layer to surface characters the learner has seen less often
+
 ## Training Modes
 
 ### Priority: Medium
