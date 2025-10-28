@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -16,10 +18,13 @@ import (
 const (
 	selectedRowsKey   = "selected_rows"
 	autoProgressKey   = "auto_progress"
+	scoreLimitKey     = "score_limit"
 	databaseFilePerm  = 0o644
 	databaseDirPerm   = 0o755
 	defaultOpenTimout = 5 * time.Second
 )
+
+const DefaultScoreLimit = 1000
 
 // Store provides persisted access to user settings and kana statistics.
 type Store struct {
@@ -120,6 +125,33 @@ func (s *Store) SaveAutoProgress(enabled bool) error {
 		return s.setSetting(autoProgressKey, "1")
 	}
 	return s.setSetting(autoProgressKey, "0")
+}
+
+// ScoreLimit returns the configured score threshold for ending a session.
+func (s *Store) ScoreLimit() (int, error) {
+	value, err := s.getSetting(scoreLimitKey)
+	if errors.Is(err, sql.ErrNoRows) || strings.TrimSpace(value) == "" {
+		return DefaultScoreLimit, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+	limit, err := strconv.Atoi(strings.TrimSpace(value))
+	if err != nil {
+		return DefaultScoreLimit, nil
+	}
+	if limit < 0 {
+		limit = 0
+	}
+	return limit, nil
+}
+
+// SaveScoreLimit persists the score limit. Values less than zero become endless (0).
+func (s *Store) SaveScoreLimit(limit int) error {
+	if limit < 0 {
+		limit = 0
+	}
+	return s.setSetting(scoreLimitKey, strconv.Itoa(limit))
 }
 
 // IncrementCorrect increments the correct counter and streak for the given kana.

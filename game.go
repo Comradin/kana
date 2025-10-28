@@ -10,22 +10,24 @@ import (
 
 // Model holds the game state
 type Model struct {
-	Kanas        []*Kana
-	CharacterSet CharacterSet
-	Width        int
-	Height       int
-	GameWidth    int // Width of the playing field (1/3 of total)
-	Score        int
-	Missed       int
-	Input        string
-	GameOver     bool
-	LastSpawn    time.Time
-	LastUpdate   time.Time
-	MissedKanas  []Kana         // Track kanas that reached the bottom
-	CharStats    map[string]int // Count of correct answers per character
-	Store        *store.Store
-	SelectedRows map[string]bool
-	AutoProgress bool
+	Kanas          []*Kana
+	CharacterSet   CharacterSet
+	Width          int
+	Height         int
+	GameWidth      int // Width of the playing field (1/3 of total)
+	Score          int
+	ScoreLimit     int
+	Missed         int
+	Input          string
+	GameOver       bool
+	GameOverReason string
+	LastSpawn      time.Time
+	LastUpdate     time.Time
+	MissedKanas    []Kana         // Track kanas that reached the bottom
+	CharStats      map[string]int // Count of correct answers per character
+	Store          *store.Store
+	SelectedRows   map[string]bool
+	AutoProgress   bool
 }
 
 // Message types for the Bubble Tea update loop
@@ -42,6 +44,7 @@ func InitialModel(st *store.Store) Model {
 		GameWidth:    26, // 1/3 of 80
 		LastSpawn:    time.Now(),
 		LastUpdate:   time.Now(),
+		ScoreLimit:   store.DefaultScoreLimit,
 		MissedKanas:  make([]Kana, 0),
 		CharStats:    make(map[string]int),
 		Store:        st,
@@ -57,6 +60,13 @@ func InitialModel(st *store.Store) Model {
 
 		if auto, err := st.AutoProgress(); err == nil {
 			model.AutoProgress = auto
+		}
+
+		if limit, err := st.ScoreLimit(); err == nil {
+			if limit < 0 {
+				limit = 0
+			}
+			model.ScoreLimit = limit
 		}
 
 		if stats, err := st.KanaStatistics(); err == nil {
@@ -98,7 +108,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "ctrl+c", "esc":
+		case "ctrl+c":
+			return m, tea.Quit
+		case "esc":
+			if !m.GameOver {
+				m.GameOver = true
+				if m.GameOverReason == "" {
+					m.GameOverReason = "quit"
+				}
+				return m, nil
+			}
 			return m, tea.Quit
 		case "enter":
 			m.checkAnswer()
@@ -135,6 +154,10 @@ func (m *Model) checkAnswer() {
 		if k.Romaji == m.Input {
 			m.Kanas = append(m.Kanas[:i], m.Kanas[i+1:]...)
 			m.Score += 10
+			if m.ScoreLimit > 0 && m.Score >= m.ScoreLimit {
+				m.GameOver = true
+				m.GameOverReason = "score"
+			}
 			// Track correct answer
 			m.CharStats[k.Char]++
 			if m.Store != nil {
@@ -179,6 +202,9 @@ func (m *Model) update() {
 			}
 			if m.Missed >= 10 {
 				m.GameOver = true
+				if m.GameOverReason == "" {
+					m.GameOverReason = "misses"
+				}
 			}
 		}
 	}
@@ -220,6 +246,16 @@ func (m *Model) SetAutoProgress(enabled bool) {
 	m.AutoProgress = enabled
 	if m.Store != nil {
 		_ = m.Store.SaveAutoProgress(enabled)
+	}
+}
+
+func (m *Model) SetScoreLimit(limit int) {
+	if limit < 0 {
+		limit = 0
+	}
+	m.ScoreLimit = limit
+	if m.Store != nil {
+		_ = m.Store.SaveScoreLimit(limit)
 	}
 }
 

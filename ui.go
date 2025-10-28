@@ -85,10 +85,31 @@ func renderGameScreen(m Model) string {
 }
 
 func renderGameOverScreen(m Model) string {
+	title := "GAME OVER!"
+	if m.GameOverReason == "score" {
+		title = "SESSION COMPLETE!"
+	}
+
+	scoreLine := fmt.Sprintf("Final Score: %d", m.Score)
+	if m.ScoreLimit > 0 {
+		scoreLine = fmt.Sprintf("Final Score: %d/%d", m.Score, m.ScoreLimit)
+	}
+
 	lines := []string{
-		"GAME OVER!",
-		fmt.Sprintf("Final Score: %d", m.Score),
-		fmt.Sprintf("Missed: %d", m.Missed),
+		title,
+		scoreLine,
+		fmt.Sprintf("Missed: %d/10", m.Missed),
+	}
+
+	switch m.GameOverReason {
+	case "score":
+		lines = append(lines, "", "You reached your target score. Nice work!")
+	case "misses":
+		lines = append(lines, "", "10 kana slipped through. Review them and try again.")
+	case "quit":
+		lines = append(lines, "", "You ended the session early. Review your progress below.")
+	default:
+		lines = append(lines, "", "Session ended.")
 	}
 
 	unique := make(map[string]Kana)
@@ -194,9 +215,16 @@ func renderVerticalBorder(height int) string {
 }
 
 func renderStatus(m Model) string {
-	statusLine := statusStyle.Render(fmt.Sprintf("Score: %d | Missed: %d/10 | Type: %s",
-		m.Score, m.Missed, inputStyle.Render(m.Input)))
+	scoreDisplay := fmt.Sprintf("%d", m.Score)
+	if m.ScoreLimit > 0 {
+		scoreDisplay = fmt.Sprintf("%d/%d", m.Score, m.ScoreLimit)
+	}
+	statusLine := statusStyle.Render(fmt.Sprintf("Score: %s | Missed: %d/10 | Type: %s",
+		scoreDisplay, m.Missed, inputStyle.Render(m.Input)))
 	instructions := "Type the romaji and press ENTER | ESC to quit"
+	if m.ScoreLimit > 0 {
+		instructions = fmt.Sprintf("Goal: %d points | %s", m.ScoreLimit, instructions)
+	}
 	return lipgloss.JoinVertical(lipgloss.Left, statusLine, instructions)
 }
 

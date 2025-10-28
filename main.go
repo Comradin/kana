@@ -22,7 +22,7 @@ func main() {
 	}
 	defer st.Close()
 
-	rows, autoProgress, err := setupSettingsForm(st)
+	rows, autoProgress, scoreLimit, err := setupSettingsForm(st)
 	if err != nil {
 		if errors.Is(err, huh.ErrUserAborted) {
 			fmt.Println("Setup cancelled. Goodbye!")
@@ -37,6 +37,7 @@ func main() {
 		model.SetSelectedRows(rows)
 	}
 	model.SetAutoProgress(autoProgress)
+	model.SetScoreLimit(scoreLimit)
 
 	p := tea.NewProgram(model, tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
