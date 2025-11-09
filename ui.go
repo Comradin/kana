@@ -255,7 +255,7 @@ func renderInfoArea(m Model) string {
 			case char == "":
 				rowBuilder.WriteString(tableCellStyle.Render("   |"))
 			default:
-				count := m.CharStats[char]
+				count := m.sessionCorrectCount(char)
 				if count > 0 {
 					rowBuilder.WriteString(tableCellStyle.Render(fmt.Sprintf(" %2d|", count)))
 				} else {

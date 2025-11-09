@@ -154,6 +154,34 @@ func (s *Store) SaveScoreLimit(limit int) error {
 	return s.setSetting(scoreLimitKey, strconv.Itoa(limit))
 }
 
+// SaveKanaStats upserts the aggregated statistics for the provided kana.
+func (s *Store) SaveKanaStats(char string, correctCount, missCount, streak int) error {
+	if char == "" {
+		return errors.New("store: char is required")
+	}
+	if correctCount < 0 {
+		correctCount = 0
+	}
+	if missCount < 0 {
+		missCount = 0
+	}
+	if streak < 0 {
+		streak = 0
+	}
+	_, err := s.db.Exec(`
+		INSERT INTO kana_stats (char, correct_count, miss_count, streak)
+		VALUES (?, ?, ?, ?)
+		ON CONFLICT(char) DO UPDATE SET
+			correct_count = excluded.correct_count,
+			miss_count = excluded.miss_count,
+			streak = excluded.streak
+	`, char, correctCount, missCount, streak)
+	if err != nil {
+		return fmt.Errorf("store: save kana stats %s: %w", char, err)
+	}
+	return nil
+}
+
 // IncrementCorrect increments the correct counter and streak for the given kana.
 func (s *Store) IncrementCorrect(char string) error {
 	_, err := s.db.Exec(`

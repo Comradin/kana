@@ -23,8 +23,11 @@ type Model struct {
 	GameOverReason string
 	LastSpawn      time.Time
 	LastUpdate     time.Time
-	MissedKanas    []Kana         // Track kanas that reached the bottom
-	CharStats      map[string]int // Count of correct answers per character
+	MissedKanas    []Kana
+	OverallStats   map[string]store.KanaStats
+	SessionStats   map[string]store.KanaStats
+	CurrentStreak  map[string]int
+	SessionDirty   bool
 	Store          *store.Store
 	SelectedRows   map[string]bool
 	AutoProgress   bool
@@ -37,18 +40,20 @@ type spawnMsg time.Time
 // InitialModel creates a new game model with default values
 func InitialModel(st *store.Store) Model {
 	model := Model{
-		Kanas:        make([]*Kana, 0),
-		CharacterSet: Hiragana(),
-		Width:        80,
-		Height:       24,
-		GameWidth:    26, // 1/3 of 80
-		LastSpawn:    time.Now(),
-		LastUpdate:   time.Now(),
-		ScoreLimit:   store.DefaultScoreLimit,
-		MissedKanas:  make([]Kana, 0),
-		CharStats:    make(map[string]int),
-		Store:        st,
-		SelectedRows: make(map[string]bool),
+		Kanas:         make([]*Kana, 0),
+		CharacterSet:  Hiragana(),
+		Width:         80,
+		Height:        24,
+		GameWidth:     26, // 1/3 of 80
+		LastSpawn:     time.Now(),
+		LastUpdate:    time.Now(),
+		ScoreLimit:    store.DefaultScoreLimit,
+		MissedKanas:   make([]Kana, 0),
+		OverallStats:  make(map[string]store.KanaStats),
+		SessionStats:  make(map[string]store.KanaStats),
+		CurrentStreak: make(map[string]int),
+		Store:         st,
+		SelectedRows:  make(map[string]bool),
 	}
 
 	model.applySelectedRows(defaultRowIDs())
@@ -71,7 +76,9 @@ func InitialModel(st *store.Store) Model {
 
 		if stats, err := st.KanaStatistics(); err == nil {
 			for _, stat := range stats {
-				model.CharStats[stat.Char] = stat.CorrectCount
+				copied := stat
+				model.OverallStats[stat.Char] = copied
+				model.CurrentStreak[stat.Char] = stat.Streak
 			}
 		}
 	}
@@ -109,15 +116,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+c":
+			m.mergeSessionStats()
 			return m, tea.Quit
 		case "esc":
 			if !m.GameOver {
-				m.GameOver = true
-				if m.GameOverReason == "" {
-					m.GameOverReason = "quit"
-				}
+				m.endGame("quit")
 				return m, nil
 			}
+			m.mergeSessionStats()
 			return m, tea.Quit
 		case "enter":
 			m.checkAnswer()
@@ -154,14 +160,9 @@ func (m *Model) checkAnswer() {
 		if k.Romaji == m.Input {
 			m.Kanas = append(m.Kanas[:i], m.Kanas[i+1:]...)
 			m.Score += 10
+			m.recordCorrect(k.Char)
 			if m.ScoreLimit > 0 && m.Score >= m.ScoreLimit {
-				m.GameOver = true
-				m.GameOverReason = "score"
-			}
-			// Track correct answer
-			m.CharStats[k.Char]++
-			if m.Store != nil {
-				_ = m.Store.IncrementCorrect(k.Char)
+				m.endGame("score")
 			}
 			return
 		}
@@ -190,21 +191,17 @@ func (m *Model) spawnKana() {
 // update moves all falling kanas and checks for misses
 func (m *Model) update() {
 	for i := len(m.Kanas) - 1; i >= 0; i-- {
-		m.Kanas[i].Y += m.Kanas[i].Speed
+		k := m.Kanas[i]
+		k.Y += k.Speed
+		m.Kanas[i] = k
 
-		if int(m.Kanas[i].Y) >= m.Height {
-			// Store the missed kana before removing it
-			m.MissedKanas = append(m.MissedKanas, *m.Kanas[i])
+		if int(k.Y) >= m.Height {
+			m.recordMiss(k.Char)
+			m.MissedKanas = append(m.MissedKanas, *k)
 			m.Kanas = append(m.Kanas[:i], m.Kanas[i+1:]...)
 			m.Missed++
-			if m.Store != nil {
-				_ = m.Store.IncrementMiss(m.MissedKanas[len(m.MissedKanas)-1].Char)
-			}
 			if m.Missed >= 10 {
-				m.GameOver = true
-				if m.GameOverReason == "" {
-					m.GameOverReason = "misses"
-				}
+				m.endGame("misses")
 			}
 		}
 	}
@@ -257,6 +254,69 @@ func (m *Model) SetScoreLimit(limit int) {
 	if m.Store != nil {
 		_ = m.Store.SaveScoreLimit(limit)
 	}
+}
+
+func (m *Model) recordCorrect(char string) {
+	streak := m.CurrentStreak[char] + 1
+	m.CurrentStreak[char] = streak
+
+	stat := m.SessionStats[char]
+	stat.Char = char
+	stat.CorrectCount++
+	stat.Streak = streak
+	m.SessionStats[char] = stat
+	m.SessionDirty = true
+}
+
+func (m *Model) recordMiss(char string) {
+	m.CurrentStreak[char] = 0
+
+	stat := m.SessionStats[char]
+	stat.Char = char
+	stat.MissCount++
+	stat.Streak = 0
+	m.SessionStats[char] = stat
+	m.SessionDirty = true
+}
+
+func (m *Model) endGame(reason string) {
+	if !m.GameOver {
+		m.GameOver = true
+		if m.GameOverReason == "" {
+			m.GameOverReason = reason
+		}
+	}
+	m.mergeSessionStats()
+}
+
+func (m *Model) mergeSessionStats() {
+	if !m.SessionDirty {
+		return
+	}
+
+	for char, session := range m.SessionStats {
+		if session.CorrectCount == 0 && session.MissCount == 0 && session.Streak == 0 && m.CurrentStreak[char] == 0 {
+			continue
+		}
+		base := m.OverallStats[char]
+		base.Char = char
+		base.CorrectCount += session.CorrectCount
+		base.MissCount += session.MissCount
+		base.Streak = m.CurrentStreak[char]
+		if m.Store != nil {
+			_ = m.Store.SaveKanaStats(char, base.CorrectCount, base.MissCount, base.Streak)
+		}
+		m.OverallStats[char] = base
+	}
+
+	m.SessionDirty = false
+}
+
+func (m *Model) sessionCorrectCount(char string) int {
+	if stat, ok := m.SessionStats[char]; ok {
+		return stat.CorrectCount
+	}
+	return 0
 }
 
 func (m *Model) availableCharacters() []string {
