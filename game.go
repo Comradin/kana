@@ -10,27 +10,30 @@ import (
 
 // Model holds the game state
 type Model struct {
-	Kanas          []*Kana
-	CharacterSet   CharacterSet
-	Width          int
-	Height         int
-	GameWidth      int // Width of the playing field (1/3 of total)
-	Score          int
-	ScoreLimit     int
-	Missed         int
-	Input          string
-	GameOver       bool
-	GameOverReason string
-	LastSpawn      time.Time
-	LastUpdate     time.Time
-	MissedKanas    []Kana
-	OverallStats   map[string]store.KanaStats
-	SessionStats   map[string]store.KanaStats
-	CurrentStreak  map[string]int
-	SessionDirty   bool
-	Store          *store.Store
-	SelectedRows   map[string]bool
-	AutoProgress   bool
+	Kanas           []*Kana
+	CharacterSet    CharacterSet
+	Width           int
+	Height          int
+	GameWidth       int // Width of the playing field (1/3 of total)
+	Score           int
+	ScoreLimit      int
+	Missed          int
+	Input           string
+	GameOver        bool
+	GameOverReason  string
+	LastSpawn       time.Time
+	LastUpdate      time.Time
+	MissedKanas     []Kana
+	OverallStats    map[string]store.KanaStats
+	SessionStats    map[string]store.KanaStats
+	CurrentStreak   map[string]int
+	SessionDirty    bool
+	Store           *store.Store
+	SelectedRows    map[string]bool
+	AutoProgress    bool
+	NewlyUnlocked   []string // Row IDs unlocked during current session
+	UnlockMessage   string   // Message to display when rows are unlocked
+	UnlockMessageAt time.Time
 }
 
 // Message types for the Bubble Tea update loop
@@ -240,7 +243,30 @@ func (m *Model) SelectedRowIDs() []string {
 }
 
 func (m *Model) SetAutoProgress(enabled bool) {
+	wasEnabled := m.AutoProgress
 	m.AutoProgress = enabled
+
+	// When enabling auto-progression for the first time, start with just the first row
+	// if the user currently has all rows selected
+	if enabled && !wasEnabled {
+		allSelected := len(m.SelectedRows) == len(AllKanaRows)
+		if allSelected {
+			// Check if we have any statistics - if not, start fresh with first row only
+			hasStats := false
+			for _, stats := range m.OverallStats {
+				if stats.CorrectCount > 0 || stats.MissCount > 0 {
+					hasStats = true
+					break
+				}
+			}
+			if !hasStats && len(AllKanaRows) > 0 {
+				// Start with just the first row (vowels)
+				m.SetSelectedRows([]string{AllKanaRows[0].ID})
+				return
+			}
+		}
+	}
+
 	if m.Store != nil {
 		_ = m.Store.SaveAutoProgress(enabled)
 	}
@@ -266,6 +292,19 @@ func (m *Model) recordCorrect(char string) {
 	stat.Streak = streak
 	m.SessionStats[char] = stat
 	m.SessionDirty = true
+
+	// Update overall stats immediately for auto-progression check
+	overall := m.OverallStats[char]
+	overall.Char = char
+	overall.CorrectCount++
+	overall.Streak = streak
+	m.OverallStats[char] = overall
+
+	// Check for auto-progression
+	if unlocked := m.checkAutoProgression(); len(unlocked) > 0 {
+		m.NewlyUnlocked = append(m.NewlyUnlocked, unlocked...)
+		m.showUnlockMessage(unlocked)
+	}
 }
 
 func (m *Model) recordMiss(char string) {
@@ -344,4 +383,113 @@ func (m *Model) availableCharacters() []string {
 		return chars
 	}
 	return filtered
+}
+
+// checkAutoProgression evaluates mastery and unlocks new rows if criteria are met.
+// Returns the IDs of newly unlocked rows.
+func (m *Model) checkAutoProgression() []string {
+	if !m.AutoProgress {
+		return nil
+	}
+
+	// Find the next row that isn't unlocked yet
+	var nextRow *KanaRow
+	for _, row := range AllKanaRows {
+		if !m.SelectedRows[row.ID] {
+			nextRow = &row
+			break
+		}
+	}
+
+	if nextRow == nil {
+		// All rows are already unlocked
+		return nil
+	}
+
+	// Check if all currently selected rows are mastered
+	allMastered := true
+	for _, row := range AllKanaRows {
+		if !m.SelectedRows[row.ID] {
+			continue
+		}
+		if !m.isRowMastered(row) {
+			allMastered = false
+			break
+		}
+	}
+
+	if allMastered {
+		// Unlock the next row
+		m.SelectedRows[nextRow.ID] = true
+		if m.Store != nil {
+			_ = m.Store.SaveSelectedRows(m.SelectedRowIDs())
+		}
+		return []string{nextRow.ID}
+	}
+
+	return nil
+}
+
+// isRowMastered checks if at least 80% of characters in a row meet mastery criteria.
+// Mastery criteria: at least 3 correct answers.
+func (m *Model) isRowMastered(row KanaRow) bool {
+	if len(row.Characters) == 0 {
+		return true
+	}
+
+	masteredCount := 0
+	for _, char := range row.Characters {
+		stats := m.OverallStats[char]
+		// Consider a character mastered if it has at least 3 correct answers
+		if stats.CorrectCount >= 3 {
+			masteredCount++
+		}
+	}
+
+	// At least 80% of characters must be mastered
+	threshold := int(float64(len(row.Characters)) * 0.8)
+	if threshold == 0 {
+		threshold = 1
+	}
+
+	return masteredCount >= threshold
+}
+
+// showUnlockMessage creates a notification message for newly unlocked rows.
+func (m *Model) showUnlockMessage(rowIDs []string) {
+	if len(rowIDs) == 0 {
+		return
+	}
+
+	// Find the row labels
+	labels := make([]string, 0, len(rowIDs))
+	for _, id := range rowIDs {
+		for _, row := range AllKanaRows {
+			if row.ID == id {
+				labels = append(labels, row.Label)
+				break
+			}
+		}
+	}
+
+	if len(labels) == 1 {
+		m.UnlockMessage = "🎉 New row unlocked: " + labels[0]
+	} else if len(labels) > 1 {
+		m.UnlockMessage = "🎉 New rows unlocked: " + labels[0]
+		for i := 1; i < len(labels); i++ {
+			m.UnlockMessage += ", " + labels[i]
+		}
+	}
+	m.UnlockMessageAt = time.Now()
+}
+
+// getActiveRowLabels returns formatted labels for currently selected rows.
+func (m *Model) getActiveRowLabels() []string {
+	labels := make([]string, 0)
+	for _, row := range AllKanaRows {
+		if m.SelectedRows[row.ID] {
+			labels = append(labels, row.Label)
+		}
+	}
+	return labels
 }

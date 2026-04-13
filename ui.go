@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/lipgloss"
 )
@@ -221,10 +222,20 @@ func renderStatus(m Model) string {
 	}
 	statusLine := statusStyle.Render(fmt.Sprintf("Score: %s | Missed: %d/10 | Type: %s",
 		scoreDisplay, m.Missed, inputStyle.Render(m.Input)))
+
+	// Show unlock message for 5 seconds after it's set
 	instructions := "Type the romaji and press ENTER | ESC to quit"
-	if m.ScoreLimit > 0 {
+	if m.UnlockMessage != "" && time.Since(m.UnlockMessageAt) < 5*time.Second {
+		unlockStyle := lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("#00FF00")).
+			Background(lipgloss.Color("#444444")).
+			Padding(0, 1)
+		instructions = unlockStyle.Render(m.UnlockMessage)
+	} else if m.ScoreLimit > 0 {
 		instructions = fmt.Sprintf("Goal: %d points | %s", m.ScoreLimit, instructions)
 	}
+
 	return lipgloss.JoinVertical(lipgloss.Left, statusLine, instructions)
 }
 
@@ -264,6 +275,19 @@ func renderInfoArea(m Model) string {
 			}
 		}
 		lines = append(lines, rowBuilder.String())
+	}
+
+	// Display active rows if using auto-progression or custom selection
+	if m.AutoProgress || len(m.SelectedRows) > 0 {
+		lines = append(lines, "", tableHeaderStyle.Render("ACTIVE ROWS"), "")
+		activeLabels := m.getActiveRowLabels()
+		if len(activeLabels) > 0 {
+			for _, label := range activeLabels {
+				lines = append(lines, tableCellStyle.Render("• "+label))
+			}
+		} else {
+			lines = append(lines, tableCellStyle.Render("All rows"))
+		}
 	}
 
 	lines = append(lines, "", tableHeaderStyle.Render("MISSED CHARACTERS"), "")
