@@ -280,9 +280,9 @@ type KanaTheme struct {
 
 `KanaTheme` implements `fyne.Theme`. All components resolve colours from the active theme. A theme selector can be added to the settings dialog later; switching theme calls `app.Settings().SetTheme(newTheme)` and refreshes all widgets.
 
-## Out of Scope
+## Out of Scope (this spec)
 
-- Katakana support
+- **Katakana support** — explicitly the next milestone after this rewrite ships. The `kanacore/` package should be designed to accommodate a second `CharacterSet` without structural changes (i.e. no hiragana-specific assumptions in `GameState` or the UI).
 - Sound effects
 - Animated tile effects (rounded corners, gradients, particles) — possible later via raster images
 - Cloud sync of stats
