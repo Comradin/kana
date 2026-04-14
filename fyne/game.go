@@ -136,6 +136,12 @@ func (gs *GameState) Reset() {
 		close(gs.stopCh)
 	}
 	gs.stopCh = make(chan struct{})
+	// Close old event channel so any watchEvents goroutine exits cleanly.
+	// Guard against double-close if Reset() is called repeatedly.
+	func() {
+		defer func() { _ = recover() }()
+		close(gs.eventCh)
+	}()
 	gs.eventCh = make(chan gameEvent, 4)
 
 	gs.tiles = nil
