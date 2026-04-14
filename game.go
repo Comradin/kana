@@ -330,9 +330,13 @@ func (m *Model) mergeSessionStats() {
 	// Load baseline from the store to prevent double-counting
 	var baseline map[string]store.KanaStats
 	if m.Store != nil {
-		if stats, err := m.Store.KanaStatistics(); err == nil {
-			baseline = stats
+		stats, err := m.Store.KanaStatistics()
+		if err != nil {
+			// Don't clobber persisted totals with session-only data.
+			// Leave SessionDirty true so the next merge retries.
+			return
 		}
+		baseline = stats
 	}
 	if baseline == nil {
 		baseline = make(map[string]store.KanaStats)
@@ -348,9 +352,13 @@ func (m *Model) mergeSessionStats() {
 		base.MissCount += session.MissCount
 		base.Streak = m.CurrentStreak[char]
 		if m.Store != nil {
-			_ = m.Store.SaveKanaStats(char, base.CorrectCount, base.MissCount, base.Streak)
+			if err := m.Store.SaveKanaStats(char, base.CorrectCount, base.MissCount, base.Streak); err != nil {
+				// don't clear session — try again next merge
+				continue
+			}
 		}
 		m.OverallStats[char] = base
+		delete(m.SessionStats, char)
 	}
 
 	m.SessionDirty = false
