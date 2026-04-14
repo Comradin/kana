@@ -128,6 +128,9 @@ func (gs *GameState) Start(canvas *GameCanvas) {
 // Reset clears state and prepares for a new session. Caller must call Start().
 func (gs *GameState) Reset() {
 	gs.mu.Lock()
+	// Flush any pending session data to the store before wiping state.
+	// mergeSessionStats requires the lock to be held.
+	gs.mergeSessionStats()
 	// close old channels
 	select {
 	case <-gs.stopCh:
@@ -290,10 +293,11 @@ func (gs *GameState) spawnKana() {
 }
 
 // checkAnswer processes an input string and removes a matching tile if found.
+// Acquires the lock itself; releases before triggering canvas.Refresh() so the
+// UI updates immediately on correct answers instead of waiting for the next tick.
 func (gs *GameState) checkAnswer(input string) {
 	gs.mu.Lock()
-	defer gs.mu.Unlock()
-
+	matched := false
 	for i, tile := range gs.tiles {
 		if tile.kana.Romaji == input {
 			gs.tiles = append(gs.tiles[:i], gs.tiles[i+1:]...)
@@ -303,8 +307,15 @@ func (gs *GameState) checkAnswer(input string) {
 				gs.endGame("score")
 			}
 			gs.buildSnapshot()
-			return
+			matched = true
+			break
 		}
+	}
+	canvas := gs.canvas
+	gs.mu.Unlock()
+
+	if matched && canvas != nil {
+		canvas.Refresh()
 	}
 }
 
