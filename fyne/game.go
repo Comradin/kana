@@ -11,12 +11,6 @@ import (
 	"kana/store"
 )
 
-// GameCanvas is a stub; replaced in Task 6.
-type GameCanvas struct{}
-
-// Refresh is a stub; replaced in Task 6.
-func (*GameCanvas) Refresh() {}
-
 // StatsPanel is a stub; replaced in Task 7.
 type StatsPanel struct{}
 
