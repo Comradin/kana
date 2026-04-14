@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
+	"kana/kanacore"
 )
 
 const kanaCellWidth = 4
@@ -113,7 +114,7 @@ func renderGameOverScreen(m Model) string {
 		lines = append(lines, "", "Session ended.")
 	}
 
-	unique := make(map[string]Kana)
+	unique := make(map[string]kanacore.Kana)
 	for _, k := range m.MissedKanas {
 		if _, exists := unique[k.Char]; !exists {
 			unique[k.Char] = k
@@ -159,13 +160,13 @@ func renderGameArea(m Model) string {
 	}
 
 	rows := make([]string, m.Height)
-	rowKanas := make(map[int][]*Kana)
+	rowKanas := make(map[int][]*kanacore.Kana)
 	for _, k := range m.Kanas {
 		y := int(k.Y)
 		if y < 0 || y >= m.Height {
 			continue
 		}
-		if k.X < 0 || k.X >= m.GameWidth {
+		if int(k.X) < 0 || int(k.X) >= m.GameWidth {
 			continue
 		}
 		rowKanas[y] = append(rowKanas[y], k)
@@ -173,12 +174,12 @@ func renderGameArea(m Model) string {
 
 	for row := 0; row < m.Height; row++ {
 		kanas := rowKanas[row]
-		sort.Slice(kanas, func(i, j int) bool { return kanas[i].X < kanas[j].X })
+		sort.Slice(kanas, func(i, j int) bool { return int(kanas[i].X) < int(kanas[j].X) })
 
 		var builder strings.Builder
 		current := 0
 		for _, k := range kanas {
-			x := k.X
+			x := int(k.X)
 			if x > m.GameWidth-kanaCellWidth {
 				x = m.GameWidth - kanaCellWidth
 			}

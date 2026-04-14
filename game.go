@@ -5,13 +5,14 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"kana/kanacore"
 	"kana/store"
 )
 
 // Model holds the game state
 type Model struct {
-	Kanas           []*Kana
-	CharacterSet    CharacterSet
+	Kanas           []*kanacore.Kana
+	CharacterSet    kanacore.CharacterSet
 	Width           int
 	Height          int
 	GameWidth       int // Width of the playing field (1/3 of total)
@@ -23,7 +24,7 @@ type Model struct {
 	GameOverReason  string
 	LastSpawn       time.Time
 	LastUpdate      time.Time
-	MissedKanas     []Kana
+	MissedKanas     []kanacore.Kana
 	OverallStats    map[string]store.KanaStats
 	SessionStats    map[string]store.KanaStats
 	CurrentStreak   map[string]int
@@ -43,15 +44,15 @@ type spawnMsg time.Time
 // InitialModel creates a new game model with default values
 func InitialModel(st *store.Store) Model {
 	model := Model{
-		Kanas:         make([]*Kana, 0),
-		CharacterSet:  Hiragana(),
+		Kanas:         make([]*kanacore.Kana, 0),
+		CharacterSet:  kanacore.Hiragana(),
 		Width:         80,
 		Height:        24,
 		GameWidth:     26, // 1/3 of 80
 		LastSpawn:     time.Now(),
 		LastUpdate:    time.Now(),
 		ScoreLimit:    store.DefaultScoreLimit,
-		MissedKanas:   make([]Kana, 0),
+		MissedKanas:   make([]kanacore.Kana, 0),
 		OverallStats:  make(map[string]store.KanaStats),
 		SessionStats:  make(map[string]store.KanaStats),
 		CurrentStreak: make(map[string]int),
@@ -59,7 +60,7 @@ func InitialModel(st *store.Store) Model {
 		SelectedRows:  make(map[string]bool),
 	}
 
-	model.applySelectedRows(defaultRowIDs())
+	model.applySelectedRows(kanacore.DefaultRowIDs())
 
 	if st != nil {
 		if rows, err := st.SelectedRows(); err == nil && len(rows) > 0 {
@@ -181,12 +182,12 @@ func (m *Model) spawnKana() {
 	char := chars[rand.Intn(len(chars))]
 	romaji, _ := m.CharacterSet.GetRomaji(char)
 
-	kana := &Kana{
+	kana := &kanacore.Kana{
 		Char:   char,
 		Romaji: romaji,
-		X:      rand.Intn(m.GameWidth-10) + 5, // Spawn only in game area
+		X:      float32(rand.Intn(m.GameWidth-10) + 5), // Spawn only in game area
 		Y:      0,
-		Speed:  0.15 + rand.Float64()*0.1,
+		Speed:  float32(0.15 + rand.Float64()*0.1),
 	}
 	m.Kanas = append(m.Kanas, kana)
 }
@@ -249,7 +250,7 @@ func (m *Model) SetAutoProgress(enabled bool) {
 	// When enabling auto-progression for the first time, start with just the first row
 	// if the user currently has all rows selected
 	if enabled && !wasEnabled {
-		allSelected := len(m.SelectedRows) == len(AllKanaRows)
+		allSelected := len(m.SelectedRows) == len(kanacore.AllKanaRows)
 		if allSelected {
 			// Check if we have any statistics - if not, start fresh with first row only
 			hasStats := false
@@ -259,9 +260,9 @@ func (m *Model) SetAutoProgress(enabled bool) {
 					break
 				}
 			}
-			if !hasStats && len(AllKanaRows) > 0 {
+			if !hasStats && len(kanacore.AllKanaRows) > 0 {
 				// Start with just the first row (vowels)
-				m.SetSelectedRows([]string{AllKanaRows[0].ID})
+				m.SetSelectedRows([]string{kanacore.AllKanaRows[0].ID})
 				return
 			}
 		}
@@ -292,13 +293,6 @@ func (m *Model) recordCorrect(char string) {
 	stat.Streak = streak
 	m.SessionStats[char] = stat
 	m.SessionDirty = true
-
-	// Update overall stats immediately for auto-progression check
-	overall := m.OverallStats[char]
-	overall.Char = char
-	overall.CorrectCount++
-	overall.Streak = streak
-	m.OverallStats[char] = overall
 
 	// Check for auto-progression
 	if unlocked := m.checkAutoProgression(); len(unlocked) > 0 {
@@ -333,11 +327,22 @@ func (m *Model) mergeSessionStats() {
 		return
 	}
 
+	// Load baseline from the store to prevent double-counting
+	var baseline map[string]store.KanaStats
+	if m.Store != nil {
+		if stats, err := m.Store.KanaStatistics(); err == nil {
+			baseline = stats
+		}
+	}
+	if baseline == nil {
+		baseline = make(map[string]store.KanaStats)
+	}
+
 	for char, session := range m.SessionStats {
 		if session.CorrectCount == 0 && session.MissCount == 0 && session.Streak == 0 && m.CurrentStreak[char] == 0 {
 			continue
 		}
-		base := m.OverallStats[char]
+		base := baseline[char]
 		base.Char = char
 		base.CorrectCount += session.CorrectCount
 		base.MissCount += session.MissCount
@@ -369,7 +374,7 @@ func (m *Model) availableCharacters() []string {
 
 	filtered := make([]string, 0, len(chars))
 	for _, char := range chars {
-		rowID, ok := charToRow[char]
+		rowID, ok := kanacore.CharToRow[char]
 		if !ok {
 			filtered = append(filtered, char)
 			continue
@@ -393,8 +398,8 @@ func (m *Model) checkAutoProgression() []string {
 	}
 
 	// Find the next row that isn't unlocked yet
-	var nextRow *KanaRow
-	for _, row := range AllKanaRows {
+	var nextRow *kanacore.KanaRow
+	for _, row := range kanacore.AllKanaRows {
 		if !m.SelectedRows[row.ID] {
 			nextRow = &row
 			break
@@ -408,7 +413,7 @@ func (m *Model) checkAutoProgression() []string {
 
 	// Check if all currently selected rows are mastered
 	allMastered := true
-	for _, row := range AllKanaRows {
+	for _, row := range kanacore.AllKanaRows {
 		if !m.SelectedRows[row.ID] {
 			continue
 		}
@@ -432,16 +437,16 @@ func (m *Model) checkAutoProgression() []string {
 
 // isRowMastered checks if at least 80% of characters in a row meet mastery criteria.
 // Mastery criteria: at least 3 correct answers.
-func (m *Model) isRowMastered(row KanaRow) bool {
+func (m *Model) isRowMastered(row kanacore.KanaRow) bool {
 	if len(row.Characters) == 0 {
 		return true
 	}
 
 	masteredCount := 0
 	for _, char := range row.Characters {
-		stats := m.OverallStats[char]
+		total := m.OverallStats[char].CorrectCount + m.sessionCorrectCount(char)
 		// Consider a character mastered if it has at least 3 correct answers
-		if stats.CorrectCount >= 3 {
+		if total >= 3 {
 			masteredCount++
 		}
 	}
@@ -464,7 +469,7 @@ func (m *Model) showUnlockMessage(rowIDs []string) {
 	// Find the row labels
 	labels := make([]string, 0, len(rowIDs))
 	for _, id := range rowIDs {
-		for _, row := range AllKanaRows {
+		for _, row := range kanacore.AllKanaRows {
 			if row.ID == id {
 				labels = append(labels, row.Label)
 				break
@@ -486,7 +491,7 @@ func (m *Model) showUnlockMessage(rowIDs []string) {
 // getActiveRowLabels returns formatted labels for currently selected rows.
 func (m *Model) getActiveRowLabels() []string {
 	labels := make([]string, 0)
-	for _, row := range AllKanaRows {
+	for _, row := range kanacore.AllKanaRows {
 		if m.SelectedRows[row.ID] {
 			labels = append(labels, row.Label)
 		}
