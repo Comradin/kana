@@ -11,9 +11,6 @@ import (
 	"kana/store"
 )
 
-// StatsPanel is a stub; replaced in Task 7.
-type StatsPanel struct{}
-
 type gameEventType int
 
 const (
@@ -606,4 +603,24 @@ func (gs *GameState) buildSnapshot() {
 	gs.objectSnapshot.Store(objs)
 }
 
-// snapshot() and statsPanel integration added in Task 7.
+// snapshot builds a StatsSnapshot. Caller MUST hold gs.mu.
+func (gs *GameState) snapshot() StatsSnapshot {
+	sessionCopy := make(map[string]store.KanaStats, len(gs.sessionStats))
+	for k, v := range gs.sessionStats {
+		sessionCopy[k] = v
+	}
+	rowsCopy := make(map[string]bool, len(gs.selectedRows))
+	for k, v := range gs.selectedRows {
+		rowsCopy[k] = v
+	}
+	return StatsSnapshot{
+		SessionStats:  sessionCopy,
+		SelectedRows:  rowsCopy,
+		MissedKanas:   append([]kanacore.Kana{}, gs.missedKanas...),
+		Score:         gs.score,
+		ScoreLimit:    gs.scoreLimit,
+		Missed:        gs.missed,
+		UnlockMessage: gs.unlockMessage,
+		UnlockAt:      gs.unlockAt,
+	}
+}
