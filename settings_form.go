@@ -7,12 +7,13 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/huh"
+	"kana/kanacore"
 	"kana/store"
 )
 
 // setupSettingsForm displays a terminal form to collect user preferences.
 func setupSettingsForm(st *store.Store) ([]string, bool, int, error) {
-	selectedRows := defaultRowIDs()
+	selectedRows := kanacore.DefaultRowIDs()
 	autoProgress := false
 	scoreLimit := store.DefaultScoreLimit
 
@@ -31,12 +32,12 @@ func setupSettingsForm(st *store.Store) ([]string, bool, int, error) {
 	selection := append([]string(nil), selectedRows...)
 	scoreLimitStr := strconv.Itoa(scoreLimit)
 
-	options := make([]huh.Option[string], 0, len(AllKanaRows))
+	options := make([]huh.Option[string], 0, len(kanacore.AllKanaRows))
 	selectedSet := make(map[string]struct{}, len(selection))
 	for _, id := range selection {
 		selectedSet[id] = struct{}{}
 	}
-	for _, row := range AllKanaRows {
+	for _, row := range kanacore.AllKanaRows {
 		option := huh.NewOption(row.Label, row.ID)
 		if _, ok := selectedSet[row.ID]; ok {
 			option = option.Selected(true)
@@ -102,7 +103,7 @@ func setupSettingsForm(st *store.Store) ([]string, bool, int, error) {
 
 func normalizeRowSelection(selection []string) []string {
 	if len(selection) == 0 {
-		return defaultRowIDs()
+		return kanacore.DefaultRowIDs()
 	}
 	unique := make(map[string]struct{}, len(selection))
 	for _, id := range selection {
@@ -114,14 +115,14 @@ func normalizeRowSelection(selection []string) []string {
 	}
 
 	normalized := make([]string, 0, len(unique))
-	for _, row := range AllKanaRows {
+	for _, row := range kanacore.AllKanaRows {
 		if _, ok := unique[row.ID]; ok {
 			normalized = append(normalized, row.ID)
 		}
 	}
 
 	if len(normalized) == 0 {
-		return defaultRowIDs()
+		return kanacore.DefaultRowIDs()
 	}
 
 	return normalized

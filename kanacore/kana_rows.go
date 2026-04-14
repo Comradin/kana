@@ -1,4 +1,4 @@
-package main
+package kanacore
 
 // KanaRow groups related kana characters by their consonant row.
 type KanaRow struct {
@@ -22,18 +22,20 @@ var AllKanaRows = []KanaRow{
 	{ID: "n-only", Label: "N (ん)", Characters: []string{"ん"}},
 }
 
-var charToRow map[string]string
+// CharToRow maps each kana character to its row ID.
+var CharToRow map[string]string
 
 func init() {
-	charToRow = make(map[string]string)
+	CharToRow = make(map[string]string)
 	for _, row := range AllKanaRows {
 		for _, char := range row.Characters {
-			charToRow[char] = row.ID
+			CharToRow[char] = row.ID
 		}
 	}
 }
 
-func defaultRowIDs() []string {
+// DefaultRowIDs returns the IDs of all kana rows.
+func DefaultRowIDs() []string {
 	ids := make([]string, 0, len(AllKanaRows))
 	for _, row := range AllKanaRows {
 		ids = append(ids, row.ID)

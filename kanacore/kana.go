@@ -1,21 +1,21 @@
-package main
+package kanacore
 
-// Kana represents a falling character in the game
+// Kana represents a falling character in the game.
 type Kana struct {
 	Char   string
 	Romaji string
-	X      int
-	Y      float64
-	Speed  float64
+	X      float32
+	Y      float32
+	Speed  float32
 }
 
-// CharacterSet represents a collection of kana characters with their romaji
+// CharacterSet represents a collection of kana characters with their romaji.
 type CharacterSet struct {
 	Name string
 	Data map[string]string
 }
 
-// Hiragana returns the basic hiragana character set
+// Hiragana returns the basic hiragana character set.
 func Hiragana() CharacterSet {
 	return CharacterSet{
 		Name: "Hiragana",
@@ -34,7 +34,7 @@ func Hiragana() CharacterSet {
 	}
 }
 
-// GetCharacters returns a slice of all characters in the set
+// GetCharacters returns a slice of all characters in the set.
 func (cs CharacterSet) GetCharacters() []string {
 	chars := make([]string, 0, len(cs.Data))
 	for char := range cs.Data {
@@ -43,7 +43,7 @@ func (cs CharacterSet) GetCharacters() []string {
 	return chars
 }
 
-// GetRomaji returns the romaji for a given character
+// GetRomaji returns the romaji for a given character.
 func (cs CharacterSet) GetRomaji(char string) (string, bool) {
 	romaji, exists := cs.Data[char]
 	return romaji, exists
