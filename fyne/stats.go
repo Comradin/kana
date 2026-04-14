@@ -28,6 +28,9 @@ type StatsPanel struct {
 	widget.BaseWidget
 
 	charLabels  map[string]*widget.Label
+	rowLabels   map[string]*widget.Label
+	missLabels  map[string]*widget.Label
+	missEmpty   *widget.Label
 	rowBox      *fyne.Container
 	missBox     *fyne.Container
 	unlockLabel *widget.Label
@@ -37,6 +40,8 @@ type StatsPanel struct {
 func newStatsPanel() *StatsPanel {
 	p := &StatsPanel{
 		charLabels:  make(map[string]*widget.Label),
+		rowLabels:   make(map[string]*widget.Label),
+		missLabels:  make(map[string]*widget.Label),
 		unlockLabel: widget.NewLabel(""),
 	}
 
@@ -51,8 +56,27 @@ func newStatsPanel() *StatsPanel {
 	}
 	grid := container.NewGridWithColumns(5, gridItems...)
 
+	// Pre-create row labels (one per known row), hidden by default.
 	p.rowBox = container.NewVBox()
+	for _, row := range kanacore.AllKanaRows {
+		lbl := widget.NewLabel("")
+		lbl.Hide()
+		p.rowLabels[row.ID] = lbl
+		p.rowBox.Add(lbl)
+	}
+
+	// Pre-create missed-kana labels (one per character), hidden by default.
 	p.missBox = container.NewVBox()
+	for _, row := range kanacore.AllKanaRows {
+		for _, char := range row.Characters {
+			lbl := widget.NewLabel("")
+			lbl.Hide()
+			p.missLabels[char] = lbl
+			p.missBox.Add(lbl)
+		}
+	}
+	p.missEmpty = widget.NewLabel("None yet!")
+	p.missBox.Add(p.missEmpty)
 
 	p.container = container.NewVScroll(container.NewVBox(
 		widget.NewLabel("PROGRESS"),
@@ -85,23 +109,40 @@ func (p *StatsPanel) Update(snap StatsSnapshot) {
 		}
 	}
 
-	p.rowBox.RemoveAll()
 	for _, row := range kanacore.AllKanaRows {
+		lbl, ok := p.rowLabels[row.ID]
+		if !ok {
+			continue
+		}
 		if snap.SelectedRows[row.ID] {
-			p.rowBox.Add(widget.NewLabel("• " + row.Label))
+			lbl.SetText("• " + row.Label)
+			lbl.Show()
+		} else {
+			lbl.SetText("")
+			lbl.Hide()
 		}
 	}
 
-	p.missBox.RemoveAll()
 	seen := make(map[string]bool)
 	for _, k := range snap.MissedKanas {
-		if !seen[k.Char] {
-			p.missBox.Add(widget.NewLabel(k.Char + " (" + k.Romaji + ")"))
-			seen[k.Char] = true
+		if seen[k.Char] {
+			continue
+		}
+		seen[k.Char] = true
+		if lbl, ok := p.missLabels[k.Char]; ok {
+			lbl.SetText(k.Char + " (" + k.Romaji + ")")
+			lbl.Show()
 		}
 	}
-	if len(snap.MissedKanas) == 0 {
-		p.missBox.Add(widget.NewLabel("None yet!"))
+	for char, lbl := range p.missLabels {
+		if !seen[char] {
+			lbl.Hide()
+		}
+	}
+	if len(seen) == 0 {
+		p.missEmpty.Show()
+	} else {
+		p.missEmpty.Hide()
 	}
 
 	if snap.UnlockMessage != "" && time.Since(snap.UnlockAt) < 5*time.Second {

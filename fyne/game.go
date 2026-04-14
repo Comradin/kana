@@ -46,8 +46,9 @@ type GameState struct {
 
 	store *store.Store
 
-	stopCh  chan struct{}
-	eventCh chan gameEvent
+	stopCh        chan struct{}
+	eventCh       chan gameEvent
+	eventChClosed bool
 
 	objectSnapshot atomic.Value // []fyne.CanvasObject
 
@@ -56,9 +57,7 @@ type GameState struct {
 
 	charSet kanacore.CharacterSet
 
-	// stub, replaced in Task 6
-	canvas *GameCanvas
-	// stub, replaced in Task 7
+	canvas     *GameCanvas
 	statsPanel *StatsPanel
 }
 
@@ -132,11 +131,12 @@ func (gs *GameState) Reset() {
 	gs.stopCh = make(chan struct{})
 	// Close old event channel so any watchEvents goroutine exits cleanly.
 	// Guard against double-close if Reset() is called repeatedly.
-	func() {
-		defer func() { _ = recover() }()
+	if !gs.eventChClosed {
 		close(gs.eventCh)
-	}()
+		gs.eventChClosed = true
+	}
 	gs.eventCh = make(chan gameEvent, 4)
+	gs.eventChClosed = false
 
 	gs.tiles = nil
 	gs.score = 0
