@@ -72,6 +72,11 @@ func showSettingsDialog(gs *GameState, statsPanel *StatsPanel, gameCanvas *GameC
 			return
 		}
 
+		if err := limitEntry.Validate(); err != nil {
+			dialog.ShowError(err, win)
+			return
+		}
+
 		// Map selected labels back to IDs
 		labelToID := make(map[string]string)
 		for _, row := range kanacore.AllKanaRows {
