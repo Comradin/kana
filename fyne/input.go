@@ -60,8 +60,3 @@ func (ib *InputBar) Update(snap StatsSnapshot) {
 	ib.scoreLabel.SetText(ib.formatScore(snap.Score, snap.ScoreLimit))
 	ib.missedLabel.SetText(fmt.Sprintf("Missed: %d/10", snap.Missed))
 }
-
-// showSettingsDialog stub — replaced in Task 9.
-func showSettingsDialog(gs *GameState, statsPanel *StatsPanel, gameCanvas *GameCanvas, win fyne.Window) {
-	// no-op until Task 9
-}
