@@ -1,10 +1,21 @@
 # Kana
 
-A terminal-based typing game for learning Japanese Hiragana characters.
+A typing game for learning Japanese Hiragana characters.
 
 ## Overview
 
-Kana is an interactive typing game that helps you learn Japanese Hiragana through practice. Characters fall from the top of your terminal screen, and you type their romaji (romanized) equivalents to score points. Track your progress, focus on specific character rows, and improve your hiragana recognition skills.
+Kana is an interactive typing game that helps you learn Japanese Hiragana through practice. Characters fall from the top of the screen, and you type their romaji (romanized) equivalents to score points. Track your progress, focus on specific character rows, and improve your hiragana recognition skills.
+
+## Apps
+
+Kana currently ships as two separate binaries:
+
+| Binary | Framework | Status |
+|--------|-----------|--------|
+| `kana` | Bubble Tea (terminal) | Maintained, likely to be dropped once the desktop app matures |
+| `kana-desktop` | Fyne v2 (desktop GUI) | Active development, intended long-term home |
+
+The terminal app will remain available while the desktop app is still finding its feet, but expect it to be retired once feature parity is solid.
 
 ## Features
 
@@ -12,93 +23,98 @@ Kana is an interactive typing game that helps you learn Japanese Hiragana throug
 - **46 Basic Hiragana Characters**: Practice all fundamental hiragana from あ (a) to ん (n)
 - **Falling Character Mechanic**: Characters spawn at the top and fall at variable speeds
 - **Romaji Input**: Type the romanized equivalent and press Enter to score
-- **Visual Feedback**: Characters are highlighted in cyan boxes with real-time positioning
-
-### Game Modes
-- **Score Limit Mode**: Set a target score (default: 1000 points) to complete a session
-- **Endless Practice**: Set score limit to 0 for unlimited practice
-- **Multiple Ending Conditions**:
-  - Reach your target score
-  - Miss 10 characters
-  - Quit anytime with ESC
+- **Score Limit Mode**: Set a target score or 0 for endless practice
+- **Miss Limit**: Game ends after 10 missed characters
 
 ### Progress Tracking
-- **Persistent Statistics**: All your progress is saved to a local SQLite database (`kana.db`)
-- **Per-Character Stats**: Track correct answers, misses, and current streak for each hiragana
-- **Session Statistics**: View your performance during the current game session
-- **Overall Statistics**: See your cumulative progress across all sessions
-- **Live Progress Table**: Real-time display of successful matches per character
+- **Persistent Statistics**: Progress is saved to a local SQLite database (`kana.db`)
+- **Per-Character Stats**: Correct answers, misses, and current streak per hiragana
+- **Session vs Overall Stats**: See how this session compares to your cumulative history
 
 ### Customization
 - **Row Selection**: Choose which hiragana rows to practice (vowels, k-row, s-row, etc.)
-- **Auto-Progression**: Automatically unlock new rows as you master previous ones
-- **Configurable Difficulty**: Adjustable score limits and character sets
-- **Setup Form**: Interactive configuration form before each session
+- **Auto-Progression**: Automatically unlock new rows as you master previous ones (80% threshold)
+- **Configurable Score Limit**: Set a target or play endlessly
 
-### User Interface
-- **Split-Screen Layout**:
-  - Left (1/3): Game playing field with falling characters
-  - Right (2/3): Hiragana progress table and statistics
-- **Game Over Screen**: Review missed characters and session performance
-- **Status Bar**: Live score, miss count, and input display
-- **Accessible Mode**: Environment variable support for accessible UI (`KANAGAME_ACCESSIBLE_UI`)
+### Desktop App (Fyne)
+- Warm paper tile aesthetic — stamp-style kana tiles on a parchment background
+- Split layout: game canvas on the left, stats panel on the right
+- In-game settings via gear icon (no pre-game setup form)
+- Game-over dialog with missed character review and Play Again
+
+### Terminal App (Bubble Tea)
+- Runs in any terminal emulator
+- Split-screen: game field left, progress table right
+- Interactive setup form before each session
+- Accessible mode via `KANAGAME_ACCESSIBLE_UI` environment variable
 
 ## Installation
 
 ### Prerequisites
+
+**Both apps:**
 - Go 1.25.1 or later
+
+**Desktop app only (Fyne requires CGO and system graphics libraries):**
+- **Linux**: `libGL`, `libX11`, `libXrandr`, `libXi`, `libXcursor` dev headers
+  - Arch/CachyOS: `sudo pacman -S mesa libx11 libxrandr libxi libxcursor`
+  - Debian/Ubuntu: `sudo apt install libgl1-mesa-dev libx11-dev libxrandr-dev libxi-dev libxcursor-dev`
+- **macOS**: Xcode Command Line Tools (`xcode-select --install`)
+- Must be compiled natively per target OS (CGO does not cross-compile easily)
 
 ### Build from Source
 
 ```bash
-# Clone the repository
 git clone <repository-url>
 cd kana
-
-# Download dependencies
 go mod tidy
 
-# Build the binary
-go build -o kana
+# Terminal app
+go build -o kana .
 
-# Run the game
-./kana
+# Desktop app
+go build -o kana-desktop ./fyne/
 ```
 
-Alternatively, run directly without building:
+### Run directly
 
 ```bash
+# Terminal app
 go run main.go
+
+# Desktop app
+go run ./fyne/
 ```
 
 ## How to Play
 
-1. **Launch the game**: Run `./kana` or `go run main.go`
-2. **Configure your session**:
-   - Select which hiragana rows to practice
-   - Enable/disable auto-progression
-   - Set your target score (or 0 for endless mode)
-3. **Type romaji equivalents**: As characters fall, type their romaji and press Enter
-4. **Score points**: Each correct answer awards 10 points
-5. **Avoid misses**: The game ends if 10 characters reach the bottom
-6. **Review your progress**: Check the real-time stats table on the right side
+1. Launch the app (`./kana` or `./kana-desktop`)
+2. **Desktop**: jump straight into the game; open the gear icon to adjust rows, auto-progression, and score limit
+   **Terminal**: configure your session in the setup form before play begins
+3. As characters fall, type their romaji equivalent and press Enter
+4. Each correct answer scores 10 points
+5. The game ends when you reach your score target, miss 10 characters, or quit
 
 ### Controls
-- **Type + Enter**: Submit your answer
-- **Backspace**: Delete last character of input
-- **ESC**: Quit current game (first press) or exit entirely (on game over screen)
+
+**Desktop app:**
+- **Type + Enter**: Submit answer
+- **Gear icon**: Open settings during a game
+- **Game-over dialog**: Play Again or Quit
+
+**Terminal app:**
+- **Type + Enter**: Submit answer
+- **Backspace**: Delete last character
+- **ESC**: Quit current game (first press) or exit (on game over screen)
 - **Ctrl+C**: Exit immediately
 
 ### Scoring
 - **+10 points** per correct answer
-- Session ends when:
-  - You reach your target score (configurable)
-  - You miss 10 characters
-  - You press ESC to quit
+- Session ends on: target score reached, 10 misses, or manual quit
 
 ## Character Set
 
-The game includes all 46 basic hiragana characters organized by rows:
+All 46 basic hiragana characters, organized by row:
 
 | Row | Characters |
 |-----|------------|
@@ -116,29 +132,47 @@ The game includes all 46 basic hiragana characters organized by rows:
 
 ## Architecture
 
-Kana is built using the Elm Architecture pattern via the Bubble Tea framework:
+### Shared Core (`kanacore/`)
 
-- **Model**: Tracks game state including falling kanas, score, statistics, and configuration
-- **Update**: Handles window sizing, keyboard input, character movement, and spawning
-- **View**: Renders the split-screen interface using Lipgloss styling
+Character data and row definitions live in `kanacore/`, shared by both apps:
 
-### Key Components
+- `kana.go`: `Kana` struct, `CharacterSet` with all 46 hiragana
+- `kana_rows.go`: `KanaRow` definitions, `AllKanaRows`, `CharToRow` lookup
 
-- `game.go`: Core game logic, state management, and statistics tracking
-- `ui.go`: Rendering logic for game area, info panel, and game over screen
-- `kana.go`: Character set definitions and data structures
-- `store/store.go`: SQLite-based persistence for settings and statistics
-- `settings_form.go`: Interactive setup form using Huh
-- `main.go`: Application entry point and initialization
+### Desktop App (`fyne/`)
+
+Built on [Fyne v2](https://fyne.io) with goroutine-based game loop:
+
+- `main.go`: Entry point, opens store, runs window
+- `app.go`: Window construction, event watcher goroutine
+- `game.go`: `GameState` — tick/spawn goroutines, answer checking, stats, auto-progression
+- `canvas.go`: `GameCanvas` widget, atomic snapshot renderer (avoids mutex/render-thread deadlock)
+- `tile.go`: `KanaTile` — shadow + face + text canvas objects
+- `stats.go`: `StatsPanel` widget with persistent label pool
+- `input.go`: `InputBar` — score, miss count, text entry
+- `settings.go`: In-game settings dialog
+- `theme.go`: `KanaTheme` — warm paper colour palette
+
+### Terminal App (``)
+
+Built on [Bubble Tea](https://github.com/charmbracelet/bubbletea) using the Elm Architecture:
+
+- `main.go`: Entry point
+- `game.go`: Model, Update, game logic
+- `ui.go`: View rendering with Lipgloss
+- `kana.go`: Character definitions (legacy; kanacore is the canonical source)
+- `settings_form.go`: Pre-game setup form using Huh
+- `store/store.go`: SQLite persistence (shared with desktop app)
 
 ### Game Timing
-- Characters fall at 0.15-0.25 units per 100ms tick
-- New characters spawn every 4 seconds
-- Update loop runs every 100ms
+- Tick loop: 100ms
+- Spawn interval: 4 seconds
+- Desktop tile speed: 3.75–6.25 px/tick
+- Terminal fall speed: 0.15–0.25 units/tick
 
 ## Data Persistence
 
-All settings and statistics are stored in `kana.db` (SQLite database) in the current directory:
+Both apps share `kana.db` (SQLite) in the current working directory:
 
 - Selected hiragana rows
 - Auto-progression setting
@@ -149,22 +183,24 @@ The database is created automatically on first run.
 
 ## Dependencies
 
-- [Bubble Tea](https://github.com/charmbracelet/bubbletea) - Terminal UI framework using Elm Architecture
-- [Lipgloss](https://github.com/charmbracelet/lipgloss) - Style definitions and terminal rendering
-- [Huh](https://github.com/charmbracelet/huh) - Interactive forms and prompts
-- [modernc.org/sqlite](https://pkg.go.dev/modernc.org/sqlite) - Pure Go SQLite implementation
+- [Fyne v2](https://fyne.io) — Desktop GUI framework (desktop app)
+- [Bubble Tea](https://github.com/charmbracelet/bubbletea) — Terminal UI framework (terminal app)
+- [Lipgloss](https://github.com/charmbracelet/lipgloss) — Terminal styling (terminal app)
+- [Huh](https://github.com/charmbracelet/huh) — Interactive forms (terminal app)
+- [modernc.org/sqlite](https://pkg.go.dev/modernc.org/sqlite) — Pure Go SQLite driver
 
 ## Development
 
 ```bash
-# Run the game in development
-go run main.go
-
-# Build for production
-go build -o kana
-
-# Run tests (if available)
+# Run tests
 go test ./...
+
+# Run tests with race detector
+go test -race ./...
+
+# Build both apps
+go build -o kana .
+go build -o kana-desktop ./fyne/
 
 # Update dependencies
 go mod tidy
