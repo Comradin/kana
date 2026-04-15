@@ -239,7 +239,7 @@ func (gs *GameState) tick() {
 	gs.mu.Unlock()
 
 	if canvas != nil {
-		canvas.Refresh()
+		fyne.Do(func() { canvas.Refresh() })
 	}
 }
 
@@ -279,7 +279,7 @@ func (gs *GameState) spawnKana() {
 	gs.mu.Unlock()
 
 	if canvas != nil {
-		canvas.Refresh()
+		fyne.Do(func() { canvas.Refresh() })
 	}
 }
 
