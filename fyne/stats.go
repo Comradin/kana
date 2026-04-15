@@ -35,6 +35,47 @@ type StatsPanel struct {
 	missBox     *fyne.Container
 	unlockLabel *widget.Label
 	container   *container.Scroll
+
+	// rowCells maps row ID to all 6 labels in that row (row-label + 5 char cells).
+	// Used to show/hide entire rows together.
+	rowCells map[string][6]*widget.Label
+}
+
+// vowelColIndex returns the column index (0–4) for a kana based on its romaji vowel ending.
+// Returns -1 if the mapping is unknown.
+func vowelColIndex(romaji string) int {
+	if len(romaji) == 0 {
+		return -1
+	}
+	switch romaji[len(romaji)-1] {
+	case 'a':
+		return 0
+	case 'i':
+		return 1
+	case 'u':
+		return 2
+	case 'e':
+		return 3
+	case 'o':
+		return 4
+	}
+	// "n" (ん) maps to column 0
+	if romaji == "n" {
+		return 0
+	}
+	return -1
+}
+
+// rowShortLabel returns the short consonant label shown at the left of each row.
+func rowShortLabel(rowID string) string {
+	switch rowID {
+	case "vowels":
+		return "–"
+	case "n-only":
+		return "n"
+	default:
+		return rowID
+	}
 }
 
 func newStatsPanel() *StatsPanel {
@@ -43,18 +84,74 @@ func newStatsPanel() *StatsPanel {
 		rowLabels:   make(map[string]*widget.Label),
 		missLabels:  make(map[string]*widget.Label),
 		unlockLabel: widget.NewLabel(""),
+		rowCells:    make(map[string][6]*widget.Label),
 	}
 
-	// Build progress grid (5 columns: a, i, u, e, o)
+	cs := kanacore.Hiragana()
+
+	// Build progress table (6 columns: row-label | a | i | u | e | o).
 	gridItems := make([]fyne.CanvasObject, 0)
+
+	// Header row: blank + vowel headers.
+	headerCells := []*widget.Label{
+		widget.NewLabel(""),
+		widget.NewLabel("a"),
+		widget.NewLabel("i"),
+		widget.NewLabel("u"),
+		widget.NewLabel("e"),
+		widget.NewLabel("o"),
+	}
+	for _, lbl := range headerCells {
+		gridItems = append(gridItems, lbl)
+	}
+
 	for _, row := range kanacore.AllKanaRows {
+		// Create the row-label cell.
+		rowLbl := widget.NewLabel(rowShortLabel(row.ID))
+
+		// Create 5 placeholder cells (one per vowel column), initially "-".
+		// cells[0..4] correspond to columns a/i/u/e/o.
+		cells := [5]*widget.Label{}
+		for i := range cells {
+			cells[i] = widget.NewLabel("")
+		}
+
+		// Place each character into the correct column slot.
 		for _, char := range row.Characters {
+			romaji, ok := cs.GetRomaji(char)
+			if !ok {
+				continue
+			}
+			col := vowelColIndex(romaji)
+			if col < 0 || col > 4 {
+				continue
+			}
 			lbl := widget.NewLabel("-")
 			p.charLabels[char] = lbl
-			gridItems = append(gridItems, lbl)
+			cells[col] = lbl
+		}
+
+		// Store all 6 cells for this row so Update can show/hide them.
+		var row6 [6]*widget.Label
+		row6[0] = rowLbl
+		for i, c := range cells {
+			row6[i+1] = c
+		}
+		p.rowCells[row.ID] = row6
+
+		// Add to grid.
+		gridItems = append(gridItems, rowLbl)
+		for _, c := range cells {
+			gridItems = append(gridItems, c)
+		}
+
+		// Initially hide all row cells; Update() will show active ones.
+		for _, lbl := range row6 {
+			lbl.Hide()
 		}
 	}
-	grid := container.NewGridWithColumns(5, gridItems...)
+
+	grid := container.NewGridWithColumns(6, gridItems...)
 
 	// Pre-create row labels (one per known row), hidden by default.
 	p.rowBox = container.NewVBox()
@@ -103,9 +200,25 @@ func (p *StatsPanel) Update(snap StatsSnapshot) {
 	for char, lbl := range p.charLabels {
 		count := snap.SessionStats[char].CorrectCount
 		if count > 0 {
-			lbl.SetText(fmt.Sprintf("%d", count))
+			lbl.SetText(fmt.Sprintf("%s:%d", char, count))
 		} else {
-			lbl.SetText("-")
+			lbl.SetText(fmt.Sprintf("%s:-", char))
+		}
+	}
+
+	for _, row := range kanacore.AllKanaRows {
+		row6, ok := p.rowCells[row.ID]
+		if !ok {
+			continue
+		}
+		if snap.SelectedRows[row.ID] {
+			for _, lbl := range row6 {
+				lbl.Show()
+			}
+		} else {
+			for _, lbl := range row6 {
+				lbl.Hide()
+			}
 		}
 	}
 
