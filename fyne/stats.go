@@ -200,9 +200,9 @@ func (p *StatsPanel) Update(snap StatsSnapshot) {
 	for char, lbl := range p.charLabels {
 		count := snap.SessionStats[char].CorrectCount
 		if count > 0 {
-			lbl.SetText(fmt.Sprintf("%s:%d", char, count))
+			lbl.SetText(fmt.Sprintf("%d", count))
 		} else {
-			lbl.SetText(fmt.Sprintf("%s:-", char))
+			lbl.SetText("-")
 		}
 	}
 
