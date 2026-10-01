@@ -10,6 +10,15 @@ This document outlines planned improvements and features for the Kana learning g
 - [x] Add Handakuten characters (ぱ、ぴ、ぷ、ぺ、ぽ)
 - [x] Add Yoon combinations (きゃ、きゅ、きょ, しゃ、しゅ、しょ, etc.)
 - [ ] Mode selector: Hiragana only, Katakana only, Mixed, Dakuten/Handakuten, Yoon
+- [ ] Extended katakana for loanwords (ティ ディ ファ フィ フェ フォ ウィ ウェ ウォ シェ チェ ジェ ヴ トゥ ドゥ ツァ …); note ティ "ti" collides with the ち alternative "ti"
+- [ ] Small っ/ッ (sokuon) and the long vowel mark ー (needed for words, see vocabulary trainer)
+
+## Vocabulary Trainer
+
+### Priority: Medium
+- [ ] Show words made only of kana the learner already knows (e.g. は + い → はい), in hiragana and katakana
+- [ ] Bundled word list derived from JMdict (EDRDG, CC BY-SA 4.0, attribution required), filtered by frequency tags
+- [ ] Import private word lists (CSV/JSON: kana, kanji, meaning, tags) from a user directory, never from the repository
 
 ## Learning Progress System
 
