@@ -84,8 +84,12 @@ func NewGameState(st *store.Store) *GameState {
 	}
 
 	if st != nil {
-		if rows, err := st.SelectedRows(); err == nil && len(rows) > 0 {
-			gs.applySelectedRows(rows)
+		if stats, err := st.KanaStatistics(); err == nil {
+			for _, stat := range stats {
+				copied := stat
+				gs.overallStats[stat.Char] = copied
+				gs.currentStreak[stat.Char] = stat.Streak
+			}
 		}
 		if auto, err := st.AutoProgress(); err == nil {
 			gs.autoProgress = auto
@@ -96,16 +100,65 @@ func NewGameState(st *store.Store) *GameState {
 			}
 			gs.scoreLimit = limit
 		}
-		if stats, err := st.KanaStatistics(); err == nil {
-			for _, stat := range stats {
-				copied := stat
-				gs.overallStats[stat.Char] = copied
-				gs.currentStreak[stat.Char] = stat.Streak
-			}
+		rows, err := st.SelectedRows()
+		switch {
+		case err != nil:
+			// Keep the basic defaults; never overwrite what we could not read.
+		case len(rows) > 0:
+			gs.applySelectedRows(rows)
+		default:
+			gs.startLearningPath()
 		}
 	}
 
 	return gs
+}
+
+// startLearningPath sets up a first launch: the first progression step plus
+// every following step the learner has already mastered, with
+// auto-progression on. Only a learner without any stats gets the intro for
+// the first step. Must be called before the game starts (no lock needed).
+func (gs *GameState) startLearningPath() {
+	gs.applySelectedRows(kanacore.ProgressionSteps[0])
+	for _, step := range kanacore.ProgressionSteps[1:] {
+		if !gs.rowsMastered(step) {
+			break
+		}
+		for _, id := range step {
+			gs.selectedRows[id] = true
+		}
+	}
+	gs.autoProgress = true
+	if gs.store != nil {
+		_ = gs.store.SaveAutoProgress(true)
+	}
+	gs.saveSelectedRows()
+
+	if !gs.hasStats() {
+		gs.pendingIntro = append([]string(nil), kanacore.ProgressionSteps[0]...)
+		gs.paused = true
+	}
+}
+
+// rowsMastered reports whether every given row is mastered. Must be called under lock.
+func (gs *GameState) rowsMastered(ids []string) bool {
+	for _, id := range ids {
+		row, ok := kanacore.RowByID(id)
+		if !ok || !gs.isRowMastered(row) {
+			return false
+		}
+	}
+	return true
+}
+
+// hasStats reports whether the learner has answered or missed anything before.
+func (gs *GameState) hasStats() bool {
+	for _, stat := range gs.overallStats {
+		if stat.CorrectCount > 0 || stat.MissCount > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // Start launches the tick and spawn goroutines.
