@@ -8,32 +8,26 @@ Kana is an interactive typing game that helps you learn Japanese Hiragana throug
 
 ## Apps
 
-Kana currently ships as two separate binaries:
-
-| Binary | Framework | Status |
-|--------|-----------|--------|
-| `kana` | Bubble Tea (terminal) | Maintained, likely to be dropped once the desktop app matures |
-| `kana-desktop` | Fyne v2 (desktop GUI) | Active development, intended long-term home |
-
-The terminal app will remain available while the desktop app is still finding its feet, but expect it to be retired once feature parity is solid.
+Kana is a Fyne v2 desktop app (`kana-desktop`).
 
 ## Features
 
 ### Core Gameplay
-- **46 Basic Hiragana Characters**: Practice all fundamental hiragana from あ (a) to ん (n)
+- **104 Hiragana: basic, Dakuon, Handakuon and Yōon**: Practice the full practical hiragana set, from あ (a) to the combined Yōon with (han)dakuten
 - **Falling Character Mechanic**: Characters spawn at the top and fall at variable speeds
 - **Romaji Input**: Type the romanized equivalent and press Enter to score
+- **Learning path**: start with あいうえお, unlock two rows at a time; each automatically unlocked row is introduced before it is asked, and the game pauses while new rows are introduced
 - **Score Limit Mode**: Set a target score or 0 for endless practice
 - **Miss Limit**: Game ends after 10 missed characters
 
 ### Progress Tracking
 - **Persistent Statistics**: Progress is saved to a local SQLite database (`kana.db`)
 - **Per-Character Stats**: Correct answers, misses, and current streak per hiragana
-- **Session vs Overall Stats**: See how this session compares to your cumulative history
+- **Session vs Overall Stats**: The stats panel shows this session's correct counts per kana; overall stats are persisted across sessions and drive progression
 
 ### Customization
-- **Row Selection**: Choose which hiragana rows to practice (vowels, k-row, s-row, etc.)
-- **Auto-Progression**: Automatically unlock new rows as you master previous ones (80% threshold)
+- **Row Selection**: Choose which hiragana rows to practice, grouped by Basic, Dakuon, Handakuon, Yōon and Yōon + Dakuten
+- **Auto-Progression**: unlocks the next learning-path step (one or two rows) once every active row is mastered: at least 80% of its kana (rounded down, at least one) answered correctly three times
 - **Configurable Score Limit**: Set a target or play endlessly
 
 ### Desktop App (Fyne)
@@ -42,25 +36,17 @@ The terminal app will remain available while the desktop app is still finding it
 - In-game settings via gear icon (no pre-game setup form)
 - Game-over dialog with missed character review and Play Again
 
-### Terminal App (Bubble Tea)
-- Runs in any terminal emulator
-- Split-screen: game field left, progress table right
-- Interactive setup form before each session
-- Accessible mode via `KANAGAME_ACCESSIBLE_UI` environment variable
-
 ## Installation
 
 ### Prerequisites
 
-**Both apps:**
 - Go 1.25.1 or later
-
-**Desktop app only (Fyne requires CGO and system graphics libraries):**
-- **Linux**: `libGL`, `libX11`, `libXrandr`, `libXi`, `libXcursor` dev headers
-  - Arch/CachyOS: `sudo pacman -S mesa libx11 libxrandr libxi libxcursor`
-  - Debian/Ubuntu: `sudo apt install libgl1-mesa-dev libx11-dev libxrandr-dev libxi-dev libxcursor-dev`
-- **macOS**: Xcode Command Line Tools (`xcode-select --install`)
-- Must be compiled natively per target OS (CGO does not cross-compile easily)
+- Fyne requires CGO and system graphics libraries:
+  - **Linux**: `libGL`, `libX11`, `libXrandr`, `libXi`, `libXcursor` dev headers
+    - Arch/CachyOS: `sudo pacman -S mesa libx11 libxrandr libxi libxcursor`
+    - Debian/Ubuntu: `sudo apt install libgl1-mesa-dev libx11-dev libxrandr-dev libxi-dev libxcursor-dev`
+  - **macOS**: Xcode Command Line Tools (`xcode-select --install`)
+  - Must be compiled natively per target OS (CGO does not cross-compile easily)
 
 ### Build from Source
 
@@ -69,44 +55,28 @@ git clone <repository-url>
 cd kana
 go mod tidy
 
-# Terminal app
-go build -o kana .
-
-# Desktop app
 go build -o kana-desktop ./fyne/
 ```
 
 ### Run directly
 
 ```bash
-# Terminal app
-go run main.go
-
-# Desktop app
 go run ./fyne/
 ```
 
 ## How to Play
 
-1. Launch the app (`./kana` or `./kana-desktop`)
-2. **Desktop**: jump straight into the game; open the gear icon to adjust rows, auto-progression, and score limit
-   **Terminal**: configure your session in the setup form before play begins
+1. Launch the app (`./kana-desktop`)
+2. Jump straight into the game; open the gear icon to adjust rows, auto-progression, and score limit
 3. As characters fall, type their romaji equivalent and press Enter
 4. Each correct answer scores 10 points
 5. The game ends when you reach your score target, miss 10 characters, or quit
 
 ### Controls
 
-**Desktop app:**
 - **Type + Enter**: Submit answer
 - **Gear icon**: Open settings during a game
 - **Game-over dialog**: Play Again or Quit
-
-**Terminal app:**
-- **Type + Enter**: Submit answer
-- **Backspace**: Delete last character
-- **ESC**: Quit current game (first press) or exit (on game over screen)
-- **Ctrl+C**: Exit immediately
 
 ### Scoring
 - **+10 points** per correct answer
@@ -114,7 +84,7 @@ go run ./fyne/
 
 ## Character Set
 
-All 46 basic hiragana characters, organized by row:
+### Basic (46)
 
 | Row | Characters |
 |-----|------------|
@@ -130,14 +100,50 @@ All 46 basic hiragana characters, organized by row:
 | W-row | わ (wa), を (wo) |
 | N | ん (n) |
 
+### Dakuon (20) and Handakuon (5)
+
+| Row ID | Label | a | i | u | e | o |
+|---|---|---|---|---|---|---|
+| `g` | G-row (が) | が ga | ぎ gi | ぐ gu | げ ge | ご go |
+| `z` | Z-row (ざ) | ざ za | じ ji (zi) | ず zu | ぜ ze | ぞ zo |
+| `d` | D-row (だ) | だ da | ぢ ji (di) | づ zu (du) | で de | ど do |
+| `b` | B-row (ば) | ば ba | び bi | ぶ bu | べ be | ぼ bo |
+| `p` | P-row (ぱ) | ぱ pa | ぴ pi | ぷ pu | ぺ pe | ぽ po |
+
+### Yōon (21)
+
+| Row ID | Label | ya | yu | yo |
+|---|---|---|---|---|
+| `ky` | KY (きゃ) | きゃ kya | きゅ kyu | きょ kyo |
+| `sy` | SH (しゃ) | しゃ sha (sya) | しゅ shu (syu) | しょ sho (syo) |
+| `ch` | CH (ちゃ) | ちゃ cha (tya, cya) | ちゅ chu (tyu, cyu) | ちょ cho (tyo, cyo) |
+| `ny` | NY (にゃ) | にゃ nya | にゅ nyu | にょ nyo |
+| `hy` | HY (ひゃ) | ひゃ hya | ひゅ hyu | ひょ hyo |
+| `my` | MY (みゃ) | みゃ mya | みゅ myu | みょ myo |
+| `ry` | RY (りゃ) | りゃ rya | りゅ ryu | りょ ryo |
+
+### Yōon with (han)dakuten (12)
+
+| Row ID | Label | ya | yu | yo |
+|---|---|---|---|---|
+| `gy` | GY (ぎゃ) | ぎゃ gya | ぎゅ gyu | ぎょ gyo |
+| `j` | J (じゃ) | じゃ ja (zya, jya) | じゅ ju (zyu, jyu) | じょ jo (zyo, jyo) |
+| `by` | BY (びゃ) | びゃ bya | びゅ byu | びょ byo |
+| `py` | PY (ぴゃ) | ぴゃ pya | ぴゅ pyu | ぴょ pyo |
+
+Hepburn romaji is canonical and is what the UI shows. Common alternatives are also
+accepted: si, ti, tu, hu, zi, di, du, sya, cya, jya, nn (and the others shown in
+parentheses above). じ/ぢ (ji) and ず/づ (zu) share an answer; typing di or du
+matches the ぢ/づ tile unambiguously.
+
 ## Architecture
 
-### Shared Core (`kanacore/`)
+### Character Data (`kanacore/`)
 
-Character data and row definitions live in `kanacore/`, shared by both apps:
+Character data and row definitions live in `kanacore/`:
 
-- `kana.go`: `Kana` struct, `CharacterSet` with all 46 hiragana
-- `kana_rows.go`: `KanaRow` definitions, `AllKanaRows`, `CharToRow` lookup
+- `kana.go`: `Kana` struct, `CharacterSet`, `NewCharacterSet`, `Matches` (canonical romaji plus accepted alternatives)
+- `kana_rows.go`: groups, rows with entries and alternative romaji, `ProgressionSteps`
 
 ### Desktop App (`fyne/`)
 
@@ -148,31 +154,24 @@ Built on [Fyne v2](https://fyne.io) with goroutine-based game loop:
 - `game.go`: `GameState` — tick/spawn goroutines, answer checking, stats, auto-progression
 - `canvas.go`: `GameCanvas` widget, atomic snapshot renderer (avoids mutex/render-thread deadlock)
 - `tile.go`: `KanaTile` — shadow + face + text canvas objects
-- `stats.go`: `StatsPanel` widget with persistent label pool
+- `intro.go`: Intro dialog introducing newly unlocked rows as large tiles before they are asked
+- `stats.go`: `StatsPanel` widget with a progress table grouped by Basic, Dakuon, Handakuon, Yōon and Yōon + Dakuten
 - `input.go`: `InputBar` — score, miss count, text entry
-- `settings.go`: In-game settings dialog
+- `settings.go`: In-game settings dialog with grouped row selection (per-group "all" toggle)
 - `theme.go`: `KanaTheme` — warm paper colour palette
 
-### Terminal App (``)
+### Persistence (`store/`)
 
-Built on [Bubble Tea](https://github.com/charmbracelet/bubbletea) using the Elm Architecture:
-
-- `main.go`: Entry point
-- `game.go`: Model, Update, game logic
-- `ui.go`: View rendering with Lipgloss
-- `kana.go`: Character definitions (legacy; kanacore is the canonical source)
-- `settings_form.go`: Pre-game setup form using Huh
-- `store/store.go`: SQLite persistence (shared with desktop app)
+- `store/store.go`: SQLite persistence
 
 ### Game Timing
 - Tick loop: 100ms
 - Spawn interval: 4 seconds
 - Desktop tile speed: 3.75–6.25 px/tick
-- Terminal fall speed: 0.15–0.25 units/tick
 
 ## Data Persistence
 
-Both apps share `kana.db` (SQLite) in the current working directory:
+The app stores `kana.db` (SQLite) in the current working directory:
 
 - Selected hiragana rows
 - Auto-progression setting
@@ -183,10 +182,7 @@ The database is created automatically on first run.
 
 ## Dependencies
 
-- [Fyne v2](https://fyne.io) — Desktop GUI framework (desktop app)
-- [Bubble Tea](https://github.com/charmbracelet/bubbletea) — Terminal UI framework (terminal app)
-- [Lipgloss](https://github.com/charmbracelet/lipgloss) — Terminal styling (terminal app)
-- [Huh](https://github.com/charmbracelet/huh) — Interactive forms (terminal app)
+- [Fyne v2](https://fyne.io) — Desktop GUI framework
 - [modernc.org/sqlite](https://pkg.go.dev/modernc.org/sqlite) — Pure Go SQLite driver
 
 ## Development
@@ -198,8 +194,7 @@ go test ./...
 # Run tests with race detector
 go test -race ./...
 
-# Build both apps
-go build -o kana .
+# Build the desktop app
 go build -o kana-desktop ./fyne/
 
 # Update dependencies

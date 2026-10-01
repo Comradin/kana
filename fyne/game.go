@@ -15,10 +15,12 @@ type gameEventType int
 
 const (
 	gameOverEvent gameEventType = iota
+	rowsUnlockedEvent
 )
 
 type gameEvent struct {
 	kind gameEventType
+	rows []string // rowsUnlockedEvent: IDs to introduce
 }
 
 // GameState holds all game state for the Fyne desktop game.
@@ -38,11 +40,11 @@ type GameState struct {
 	currentStreak map[string]int
 	sessionDirty  bool
 
-	selectedRows  map[string]bool
-	autoProgress  bool
-	newlyUnlocked []string
-	unlockMessage string
-	unlockAt      time.Time
+	selectedRows map[string]bool
+	autoProgress bool
+
+	paused       bool     // tick, spawn and answers are suspended
+	pendingIntro []string // row IDs waiting to be introduced
 
 	store *store.Store
 
@@ -57,8 +59,7 @@ type GameState struct {
 
 	charSet kanacore.CharacterSet
 
-	canvas     *GameCanvas
-	statsPanel *StatsPanel
+	canvas *GameCanvas
 }
 
 // NewGameState constructs a new GameState, loading persisted state if store is non-nil.
@@ -82,8 +83,12 @@ func NewGameState(st *store.Store) *GameState {
 	}
 
 	if st != nil {
-		if rows, err := st.SelectedRows(); err == nil && len(rows) > 0 {
-			gs.applySelectedRows(rows)
+		if stats, err := st.KanaStatistics(); err == nil {
+			for _, stat := range stats {
+				copied := stat
+				gs.overallStats[stat.Char] = copied
+				gs.currentStreak[stat.Char] = stat.Streak
+			}
 		}
 		if auto, err := st.AutoProgress(); err == nil {
 			gs.autoProgress = auto
@@ -94,16 +99,66 @@ func NewGameState(st *store.Store) *GameState {
 			}
 			gs.scoreLimit = limit
 		}
-		if stats, err := st.KanaStatistics(); err == nil {
-			for _, stat := range stats {
-				copied := stat
-				gs.overallStats[stat.Char] = copied
-				gs.currentStreak[stat.Char] = stat.Streak
-			}
+		rows, err := st.SelectedRows()
+		switch {
+		case err != nil:
+			// Keep the basic defaults; never overwrite what we could not read.
+		case len(rows) > 0:
+			gs.applySelectedRows(rows)
+		default:
+			gs.startLearningPath()
 		}
 	}
 
 	return gs
+}
+
+// startLearningPath sets up a first launch: the first progression step plus
+// every following step the learner has already mastered, with
+// auto-progression on. Only a learner without any stats gets the intro for
+// the first step. Must be called before the game starts (no lock needed).
+func (gs *GameState) startLearningPath() {
+	gs.applySelectedRows(kanacore.ProgressionSteps[0])
+	for _, step := range kanacore.ProgressionSteps[1:] {
+		if !gs.rowsMastered(step) {
+			break
+		}
+		for _, id := range step {
+			gs.selectedRows[id] = true
+		}
+	}
+	gs.autoProgress = true
+	if gs.store != nil {
+		_ = gs.store.SaveAutoProgress(true)
+	}
+	gs.saveSelectedRows()
+
+	if !gs.hasStats() {
+		gs.pendingIntro = append([]string(nil), kanacore.ProgressionSteps[0]...)
+		gs.paused = true
+	}
+}
+
+// rowsMastered reports whether every given row is mastered. Must be called
+// under lock, or before Start.
+func (gs *GameState) rowsMastered(ids []string) bool {
+	for _, id := range ids {
+		row, ok := kanacore.RowByID(id)
+		if !ok || !gs.isRowMastered(row) {
+			return false
+		}
+	}
+	return true
+}
+
+// hasStats reports whether the learner has answered or missed anything before.
+func (gs *GameState) hasStats() bool {
+	for _, stat := range gs.overallStats {
+		if stat.CorrectCount > 0 || stat.MissCount > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // Start launches the tick and spawn goroutines.
@@ -147,9 +202,8 @@ func (gs *GameState) Reset() {
 	gs.sessionStats = make(map[string]store.KanaStats)
 	gs.currentStreak = make(map[string]int)
 	gs.sessionDirty = false
-	gs.newlyUnlocked = nil
-	gs.unlockMessage = ""
-	gs.unlockAt = time.Time{}
+	// An intro dropped by game over is shown before the new game starts.
+	gs.paused = len(gs.pendingIntro) > 0
 
 	// reload overall stats
 	gs.overallStats = make(map[string]store.KanaStats)
@@ -216,7 +270,7 @@ func (gs *GameState) spawnLoop() {
 
 func (gs *GameState) tick() {
 	gs.mu.Lock()
-	if gs.over {
+	if gs.over || gs.paused {
 		gs.mu.Unlock()
 		return
 	}
@@ -245,7 +299,7 @@ func (gs *GameState) tick() {
 
 func (gs *GameState) spawnKana() {
 	gs.mu.Lock()
-	if gs.over {
+	if gs.over || gs.paused {
 		gs.mu.Unlock()
 		return
 	}
@@ -259,18 +313,18 @@ func (gs *GameState) spawnKana() {
 	romaji, _ := gs.charSet.GetRomaji(char)
 
 	speed := 3.75 + rand.Float32()*2.5
-	maxX := gs.canvasW - tileW
-	if maxX < 0 {
-		maxX = 0
-	}
-	x := rand.Float32() * maxX
-
 	kana := kanacore.Kana{
 		Char:   char,
 		Romaji: romaji,
 		Speed:  speed,
 	}
 	tile := newKanaTile(kana)
+
+	maxX := gs.canvasW - tile.Width()
+	if maxX < 0 {
+		maxX = 0
+	}
+	x := rand.Float32() * maxX
 	tile.Move(fyne.NewPos(x, 0))
 	gs.tiles = append(gs.tiles, tile)
 
@@ -283,24 +337,34 @@ func (gs *GameState) spawnKana() {
 	}
 }
 
-// checkAnswer processes an input string and removes a matching tile if found.
-// Acquires the lock itself; releases before triggering canvas.Refresh() so the
-// UI updates immediately on correct answers instead of waiting for the next tick.
+// checkAnswer removes the lowest tile whose kana matches input (canonical or
+// alternative romaji). Acquires the lock itself; releases before triggering
+// canvas.Refresh() so the UI updates immediately on correct answers.
 func (gs *GameState) checkAnswer(input string) {
 	gs.mu.Lock()
-	matched := false
+	if gs.paused || gs.over {
+		gs.mu.Unlock()
+		return
+	}
+	best := -1
 	for i, tile := range gs.tiles {
-		if tile.kana.Romaji == input {
-			gs.tiles = append(gs.tiles[:i], gs.tiles[i+1:]...)
-			gs.score += 10
-			gs.recordCorrect(tile.kana.Char)
-			if gs.scoreLimit > 0 && gs.score >= gs.scoreLimit {
-				gs.endGame("score")
-			}
-			gs.buildSnapshot()
-			matched = true
-			break
+		if !gs.charSet.Matches(tile.kana.Char, input) {
+			continue
 		}
+		if best < 0 || tile.pos.Y > gs.tiles[best].pos.Y {
+			best = i
+		}
+	}
+	matched := best >= 0
+	if matched {
+		tile := gs.tiles[best]
+		gs.tiles = append(gs.tiles[:best], gs.tiles[best+1:]...)
+		gs.score += 10
+		gs.recordCorrect(tile.kana.Char)
+		if gs.scoreLimit > 0 && gs.score >= gs.scoreLimit {
+			gs.endGame("score")
+		}
+		gs.buildSnapshot()
 	}
 	canvas := gs.canvas
 	gs.mu.Unlock()
@@ -348,8 +412,7 @@ func (gs *GameState) recordCorrect(char string) {
 	gs.sessionDirty = true
 
 	if unlocked := gs.checkAutoProgression(); len(unlocked) > 0 {
-		gs.newlyUnlocked = append(gs.newlyUnlocked, unlocked...)
-		gs.showUnlockMessage(unlocked)
+		gs.announceRows(unlocked)
 	}
 }
 
@@ -445,31 +508,19 @@ func (gs *GameState) applySelectedRows(rows []string) {
 	}
 }
 
+// setSelectedRowsLocked applies a new row selection, persists it and prunes
+// any pending intro of rows no longer selected. Must be called under lock.
+func (gs *GameState) setSelectedRowsLocked(rows []string) {
+	gs.applySelectedRows(rows)
+	gs.saveSelectedRows()
+	gs.prunePendingIntro()
+}
+
 // SetSelectedRows updates selection and persists to store.
 func (gs *GameState) SetSelectedRows(rows []string) {
 	gs.mu.Lock()
-	gs.applySelectedRows(rows)
-	st := gs.store
+	gs.setSelectedRowsLocked(rows)
 	gs.mu.Unlock()
-	if st != nil {
-		_ = st.SaveSelectedRows(rows)
-	}
-}
-
-// SelectedRowIDs returns the currently selected row IDs.
-func (gs *GameState) SelectedRowIDs() []string {
-	gs.mu.Lock()
-	defer gs.mu.Unlock()
-	if len(gs.selectedRows) == 0 {
-		return nil
-	}
-	rows := make([]string, 0, len(gs.selectedRows))
-	for id, ok := range gs.selectedRows {
-		if ok {
-			rows = append(rows, id)
-		}
-	}
-	return rows
 }
 
 // SetAutoProgress toggles auto-progression and persists.
@@ -497,100 +548,147 @@ func (gs *GameState) SetScoreLimit(limit int) {
 	}
 }
 
-// checkAutoProgression unlocks the next row when selected rows are all mastered.
-// Must be called under lock. Returns the IDs unlocked.
+// checkAutoProgression unlocks the rest of the next progression step when all
+// selected rows are mastered. Must be called under lock. Returns the IDs unlocked.
 func (gs *GameState) checkAutoProgression() []string {
 	if !gs.autoProgress {
 		return nil
 	}
-
-	var nextRow *kanacore.KanaRow
-	for i := range kanacore.AllKanaRows {
-		row := kanacore.AllKanaRows[i]
-		if !gs.selectedRows[row.ID] {
-			nextRow = &row
-			break
-		}
-	}
-	if nextRow == nil {
+	next := gs.nextStepRows()
+	if len(next) == 0 || !gs.selectedRowsMastered() {
 		return nil
 	}
-
-	allMastered := true
-	for _, row := range kanacore.AllKanaRows {
-		if !gs.selectedRows[row.ID] {
-			continue
-		}
-		if !gs.isRowMastered(row) {
-			allMastered = false
-			break
-		}
+	for _, id := range next {
+		gs.selectedRows[id] = true
 	}
+	gs.saveSelectedRows()
+	return next
+}
 
-	if allMastered {
-		gs.selectedRows[nextRow.ID] = true
-		if gs.store != nil {
-			ids := make([]string, 0, len(gs.selectedRows))
-			for id, ok := range gs.selectedRows {
-				if ok {
-					ids = append(ids, id)
-				}
+// nextStepRows returns the unselected rows of the first incomplete progression
+// step. Must be called under lock.
+func (gs *GameState) nextStepRows() []string {
+	for _, step := range kanacore.ProgressionSteps {
+		var missing []string
+		for _, id := range step {
+			if !gs.selectedRows[id] {
+				missing = append(missing, id)
 			}
-			_ = gs.store.SaveSelectedRows(ids)
 		}
-		return []string{nextRow.ID}
+		if len(missing) > 0 {
+			return missing
+		}
 	}
-
 	return nil
+}
+
+// selectedRowsMastered reports whether every selected row is mastered. Must be
+// called under lock.
+func (gs *GameState) selectedRowsMastered() bool {
+	for _, row := range kanacore.AllKanaRows {
+		if gs.selectedRows[row.ID] && !gs.isRowMastered(row) {
+			return false
+		}
+	}
+	return true
+}
+
+// saveSelectedRows persists the selection in row order. Must be called under lock.
+func (gs *GameState) saveSelectedRows() {
+	if gs.store == nil {
+		return
+	}
+	ids := make([]string, 0, len(gs.selectedRows))
+	for _, row := range kanacore.AllKanaRows {
+		if gs.selectedRows[row.ID] {
+			ids = append(ids, row.ID)
+		}
+	}
+	_ = gs.store.SaveSelectedRows(ids)
+}
+
+// prunePendingIntro removes any pending-intro row ID no longer selected,
+// clearing pendingIntro to nil if nothing remains. Must be called under lock.
+func (gs *GameState) prunePendingIntro() {
+	if len(gs.pendingIntro) == 0 {
+		return
+	}
+	pruned := make([]string, 0, len(gs.pendingIntro))
+	for _, id := range gs.pendingIntro {
+		if gs.selectedRows[id] {
+			pruned = append(pruned, id)
+		}
+	}
+	if len(pruned) == 0 {
+		gs.pendingIntro = nil
+		return
+	}
+	gs.pendingIntro = pruned
 }
 
 // isRowMastered returns true when at least 80% of the row's characters have a
 // combined (overall+session) correct count of 3 or more.
 func (gs *GameState) isRowMastered(row kanacore.KanaRow) bool {
-	if len(row.Characters) == 0 {
+	chars := row.Characters()
+	if len(chars) == 0 {
 		return true
 	}
 
 	masteredCount := 0
-	for _, char := range row.Characters {
+	for _, char := range chars {
 		total := gs.overallStats[char].CorrectCount + gs.sessionStats[char].CorrectCount
 		if total >= 3 {
 			masteredCount++
 		}
 	}
 
-	threshold := int(float64(len(row.Characters)) * 0.8)
+	threshold := int(float64(len(chars)) * 0.8)
 	if threshold == 0 {
 		threshold = 1
 	}
 	return masteredCount >= threshold
 }
 
-// showUnlockMessage composes an "unlocked" notification. Must be called under lock.
-func (gs *GameState) showUnlockMessage(rowIDs []string) {
-	if len(rowIDs) == 0 {
-		return
+// announceRows queues an intro for newly unlocked rows and pauses the game
+// until it is dismissed. If the event cannot be delivered the game keeps
+// running. Must be called under lock.
+func (gs *GameState) announceRows(ids []string) {
+	rows := append([]string(nil), ids...)
+	select {
+	case gs.eventCh <- gameEvent{kind: rowsUnlockedEvent, rows: rows}:
+		gs.paused = true
+		gs.pendingIntro = rows
+	default:
 	}
+}
 
-	labels := make([]string, 0, len(rowIDs))
-	for _, id := range rowIDs {
-		for _, row := range kanacore.AllKanaRows {
-			if row.ID == id {
-				labels = append(labels, row.Label)
-				break
-			}
-		}
-	}
+// Pause suspends ticking, spawning and answer checking.
+func (gs *GameState) Pause() {
+	gs.mu.Lock()
+	gs.paused = true
+	gs.mu.Unlock()
+}
 
-	if len(labels) == 1 {
-		gs.unlockMessage = "New row unlocked: " + labels[0]
-	} else if len(labels) > 1 {
-		gs.unlockMessage = "New rows unlocked: " + labels[0]
-		for i := 1; i < len(labels); i++ {
-			gs.unlockMessage += ", " + labels[i]
-		}
-	}
-	gs.unlockAt = time.Now()
+// Resume continues a paused game.
+func (gs *GameState) Resume() {
+	gs.mu.Lock()
+	gs.paused = false
+	gs.mu.Unlock()
+}
+
+// FinishIntro clears the pending intro and resumes the game.
+func (gs *GameState) FinishIntro() {
+	gs.mu.Lock()
+	gs.pendingIntro = nil
+	gs.paused = false
+	gs.mu.Unlock()
+}
+
+// PendingIntro returns a copy of the row IDs waiting to be introduced.
+func (gs *GameState) PendingIntro() []string {
+	gs.mu.Lock()
+	defer gs.mu.Unlock()
+	return append([]string(nil), gs.pendingIntro...)
 }
 
 // buildSnapshot rebuilds the atomic snapshot of canvas objects.
@@ -614,13 +712,11 @@ func (gs *GameState) snapshot() StatsSnapshot {
 		rowsCopy[k] = v
 	}
 	return StatsSnapshot{
-		SessionStats:  sessionCopy,
-		SelectedRows:  rowsCopy,
-		MissedKanas:   append([]kanacore.Kana{}, gs.missedKanas...),
-		Score:         gs.score,
-		ScoreLimit:    gs.scoreLimit,
-		Missed:        gs.missed,
-		UnlockMessage: gs.unlockMessage,
-		UnlockAt:      gs.unlockAt,
+		SessionStats: sessionCopy,
+		SelectedRows: rowsCopy,
+		MissedKanas:  append([]kanacore.Kana{}, gs.missedKanas...),
+		Score:        gs.score,
+		ScoreLimit:   gs.scoreLimit,
+		Missed:       gs.missed,
 	}
 }

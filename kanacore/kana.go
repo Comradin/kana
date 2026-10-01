@@ -1,37 +1,42 @@
 package kanacore
 
+import "strings"
+
 // Kana represents a falling character in the game.
 type Kana struct {
 	Char   string
 	Romaji string
-	X      float32
-	Y      float32
 	Speed  float32
 }
 
 // CharacterSet represents a collection of kana characters with their romaji.
 type CharacterSet struct {
 	Name string
-	Data map[string]string
+	Data map[string]string // char → canonical romaji
+	alts map[string][]string
 }
 
-// Hiragana returns the basic hiragana character set.
-func Hiragana() CharacterSet {
-	return CharacterSet{
-		Name: "Hiragana",
-		Data: map[string]string{
-			"あ": "a", "い": "i", "う": "u", "え": "e", "お": "o",
-			"か": "ka", "き": "ki", "く": "ku", "け": "ke", "こ": "ko",
-			"さ": "sa", "し": "shi", "す": "su", "せ": "se", "そ": "so",
-			"た": "ta", "ち": "chi", "つ": "tsu", "て": "te", "と": "to",
-			"な": "na", "に": "ni", "ぬ": "nu", "ね": "ne", "の": "no",
-			"は": "ha", "ひ": "hi", "ふ": "fu", "へ": "he", "ほ": "ho",
-			"ま": "ma", "み": "mi", "む": "mu", "め": "me", "も": "mo",
-			"や": "ya", "ゆ": "yu", "よ": "yo",
-			"ら": "ra", "り": "ri", "る": "ru", "れ": "re", "ろ": "ro",
-			"わ": "wa", "を": "wo", "ん": "n",
-		},
+// NewCharacterSet builds a character set from the entries of the given rows.
+func NewCharacterSet(name string, rows []KanaRow) CharacterSet {
+	cs := CharacterSet{
+		Name: name,
+		Data: make(map[string]string),
+		alts: make(map[string][]string),
 	}
+	for _, row := range rows {
+		for _, e := range row.Entries {
+			cs.Data[e.Char] = e.Romaji
+			if len(e.Alt) > 0 {
+				cs.alts[e.Char] = e.Alt
+			}
+		}
+	}
+	return cs
+}
+
+// Hiragana returns the character set of all hiragana rows.
+func Hiragana() CharacterSet {
+	return NewCharacterSet("Hiragana", AllKanaRows)
 }
 
 // GetCharacters returns a slice of all characters in the set.
@@ -43,8 +48,30 @@ func (cs CharacterSet) GetCharacters() []string {
 	return chars
 }
 
-// GetRomaji returns the romaji for a given character.
+// GetRomaji returns the canonical romaji for a given character.
 func (cs CharacterSet) GetRomaji(char string) (string, bool) {
 	romaji, exists := cs.Data[char]
 	return romaji, exists
+}
+
+// Matches reports whether input is the canonical romaji or an accepted
+// alternative for char. Input is trimmed and lower-cased first.
+func (cs CharacterSet) Matches(char, input string) bool {
+	in := strings.ToLower(strings.TrimSpace(input))
+	if in == "" {
+		return false
+	}
+	romaji, ok := cs.Data[char]
+	if !ok {
+		return false
+	}
+	if in == romaji {
+		return true
+	}
+	for _, alt := range cs.alts[char] {
+		if in == alt {
+			return true
+		}
+	}
+	return false
 }

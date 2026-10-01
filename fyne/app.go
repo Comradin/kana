@@ -23,8 +23,6 @@ func buildWindow(a fyne.App, st *store.Store) fyne.Window {
 
 	statsPanel := newStatsPanel()
 	gameCanvas := newGameCanvas(gs)
-	gs.statsPanel = statsPanel
-	gs.canvas = gameCanvas
 
 	inputBar := newInputBar(gs, statsPanel, gameCanvas, w)
 
@@ -49,8 +47,22 @@ func buildWindow(a fyne.App, st *store.Store) fyne.Window {
 	// Start game loop
 	gs.Start(gameCanvas)
 
-	// Watch for game events
-	go watchEvents(gs, statsPanel, gameCanvas, inputBar, w)
+	// Watch for game events. Capture the current channel under the lock so
+	// this watcher is tied to this game's channel, not whatever gs.eventCh
+	// points to later (Reset() swaps it in for Play Again).
+	gs.mu.Lock()
+	ch := gs.eventCh
+	gs.mu.Unlock()
+	go watchEvents(ch, gs, statsPanel, gameCanvas, inputBar, w)
+
+	// buildWindow owns the app's started hook; nothing else may call
+	// SetOnStarted without clobbering this callback.
+	// First launch: introduce the first row once the window is up.
+	a.Lifecycle().SetOnStarted(func() {
+		if rows := gs.PendingIntro(); len(rows) > 0 {
+			showIntroDialog(gs, rows, inputBar, w)
+		}
+	})
 
 	w.SetOnClosed(func() {
 		gs.Stop() // closes stopCh; safe if already stopped
@@ -62,18 +74,49 @@ func buildWindow(a fyne.App, st *store.Store) fyne.Window {
 	return w
 }
 
-func watchEvents(gs *GameState, statsPanel *StatsPanel, gameCanvas *GameCanvas, inputBar *InputBar, w fyne.Window) {
-	for event := range gs.eventCh {
+// watchEvents drains a single game's event channel. ch is captured by the
+// caller under gs.mu at goroutine-start time; it identifies which game this
+// watcher belongs to. Reset() swaps gs.eventCh for a new channel on Play
+// Again, so any event arriving after that swap (drained from the old,
+// closed channel) is stale and must be ignored rather than acted on for the
+// new game.
+func watchEvents(ch chan gameEvent, gs *GameState, statsPanel *StatsPanel, gameCanvas *GameCanvas, inputBar *InputBar, w fyne.Window) {
+	for event := range ch {
+		gs.mu.Lock()
+		stale := ch != gs.eventCh
+		over := gs.over
+		gs.mu.Unlock()
+		if stale {
+			continue
+		}
+
 		switch event.kind {
+		case rowsUnlockedEvent:
+			fyne.Do(func() {
+				// PendingIntro, not the event payload, is the source of
+				// truth: it reflects FinishIntro/Reset that may have run
+				// since the event was queued.
+				if over {
+					return
+				}
+				// Paused must always mean an intro is pending or showing:
+				// if nothing is pending, resume rather than leaving the
+				// game stuck paused.
+				rows := gs.PendingIntro()
+				if len(rows) == 0 {
+					gs.Resume()
+					return
+				}
+				showIntroDialog(gs, rows, inputBar, w)
+			})
 		case gameOverEvent:
 			gs.mu.Lock()
 			snap := gs.snapshot()
 			reason := gs.overReason
 			gs.mu.Unlock()
-
-			// Run on a new goroutine so this watcher loop isn't blocked by the dialog.
-			// Fyne dialog calls schedule themselves on the main thread internally.
-			go showGameOverDialog(gs, snap, reason, statsPanel, gameCanvas, inputBar, w)
+			fyne.Do(func() {
+				showGameOverDialog(gs, snap, reason, statsPanel, gameCanvas, inputBar, w)
+			})
 		}
 	}
 }
@@ -140,9 +183,12 @@ func showGameOverDialog(gs *GameState, snap StatsSnapshot, reason string, statsP
 			w.Close()
 			return
 		}
-		gs.Reset()                                              // closes old stopCh and eventCh; old watcher exits
-		gs.Start(gameCanvas)                                    // launches new tick/spawn goroutines
-		go watchEvents(gs, statsPanel, gameCanvas, inputBar, w) // new watcher on new eventCh
+		gs.Reset()           // closes old stopCh and eventCh; old watcher drains and exits on stale events
+		gs.Start(gameCanvas) // launches new tick/spawn goroutines
+		gs.mu.Lock()
+		ch := gs.eventCh
+		gs.mu.Unlock()
+		go watchEvents(ch, gs, statsPanel, gameCanvas, inputBar, w) // new watcher tied to the new eventCh
 
 		gs.mu.Lock()
 		snap := gs.snapshot()
@@ -150,5 +196,8 @@ func showGameOverDialog(gs *GameState, snap StatsSnapshot, reason string, statsP
 		statsPanel.Update(snap)
 		inputBar.Update(snap)
 		gameCanvas.Refresh()
+		if rows := gs.PendingIntro(); len(rows) > 0 {
+			showIntroDialog(gs, rows, inputBar, w)
+		}
 	}, w)
 }
