@@ -16,18 +16,18 @@ Kana is a Fyne v2 desktop app (`kana-desktop`).
 - **104 Hiragana: basic, Dakuon, Handakuon and Yōon**: Practice the full practical hiragana set, from あ (a) to the combined Yōon with (han)dakuten
 - **Falling Character Mechanic**: Characters spawn at the top and fall at variable speeds
 - **Romaji Input**: Type the romanized equivalent and press Enter to score
-- **Learning path**: start with あいうえお, unlock two rows at a time, each new row introduced before it is asked; the game pauses while new rows are introduced
+- **Learning path**: start with あいうえお, unlock two rows at a time; each automatically unlocked row is introduced before it is asked, and the game pauses while new rows are introduced
 - **Score Limit Mode**: Set a target score or 0 for endless practice
 - **Miss Limit**: Game ends after 10 missed characters
 
 ### Progress Tracking
 - **Persistent Statistics**: Progress is saved to a local SQLite database (`kana.db`)
 - **Per-Character Stats**: Correct answers, misses, and current streak per hiragana
-- **Session vs Overall Stats**: See how this session compares to your cumulative history
+- **Session vs Overall Stats**: The stats panel shows this session's correct counts per kana; overall stats are persisted across sessions and drive progression
 
 ### Customization
 - **Row Selection**: Choose which hiragana rows to practice, grouped by Basic, Dakuon, Handakuon, Yōon and Yōon + Dakuten
-- **Auto-Progression**: unlocks the next step (two rows) once 80% of each active row is mastered
+- **Auto-Progression**: unlocks the next learning-path step (one or two rows) once every active row is mastered: at least 80% of its kana (rounded down, at least one) answered correctly three times
 - **Configurable Score Limit**: Set a target or play endlessly
 
 ### Desktop App (Fyne)
@@ -155,7 +155,7 @@ Built on [Fyne v2](https://fyne.io) with goroutine-based game loop:
 - `canvas.go`: `GameCanvas` widget, atomic snapshot renderer (avoids mutex/render-thread deadlock)
 - `tile.go`: `KanaTile` — shadow + face + text canvas objects
 - `intro.go`: Intro dialog introducing newly unlocked rows as large tiles before they are asked
-- `stats.go`: `StatsPanel` widget with a progress table grouped by Basic, Dakuon, Handakuon and Yōon
+- `stats.go`: `StatsPanel` widget with a progress table grouped by Basic, Dakuon, Handakuon, Yōon and Yōon + Dakuten
 - `input.go`: `InputBar` — score, miss count, text entry
 - `settings.go`: In-game settings dialog with grouped row selection (per-group "all" toggle)
 - `theme.go`: `KanaTheme` — warm paper colour palette
