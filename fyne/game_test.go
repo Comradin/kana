@@ -3,6 +3,7 @@ package main
 import (
 	"testing"
 
+	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/test"
 	"kana/kanacore"
 	"kana/store"
@@ -100,6 +101,41 @@ func TestMissLimitEndsGame(t *testing.T) {
 	gs.checkMissedLimit()
 	if !gs.over {
 		t.Error("expected game over at 10 misses")
+	}
+}
+
+func tileAt(char, romaji string, y float32) *KanaTile {
+	tile := newKanaTile(kanacore.Kana{Char: char, Romaji: romaji, Speed: 5})
+	tile.Move(fyne.NewPos(10, y))
+	return tile
+}
+
+func TestCheckAnswerAcceptsAlternative(t *testing.T) {
+	gs := newTestState()
+	gs.tiles = []*KanaTile{tileAt("し", "shi", 0)}
+	gs.checkAnswer("si")
+	if len(gs.tiles) != 0 {
+		t.Fatalf("expected し removed by 'si', %d tiles left", len(gs.tiles))
+	}
+}
+
+func TestCheckAnswerNormalisesInput(t *testing.T) {
+	gs := newTestState()
+	gs.tiles = []*KanaTile{tileAt("か", "ka", 0)}
+	gs.checkAnswer("  KA ")
+	if len(gs.tiles) != 0 {
+		t.Fatalf("expected か removed by '  KA ', %d tiles left", len(gs.tiles))
+	}
+}
+
+func TestCheckAnswerRemovesLowestMatchingTile(t *testing.T) {
+	gs := newTestState()
+	high := tileAt("じ", "ji", 100)
+	low := tileAt("ぢ", "ji", 300)
+	gs.tiles = []*KanaTile{high, low}
+	gs.checkAnswer("ji")
+	if len(gs.tiles) != 1 || gs.tiles[0] != high {
+		t.Fatalf("expected only the upper じ tile to remain")
 	}
 }
 
