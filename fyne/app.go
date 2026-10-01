@@ -52,6 +52,13 @@ func buildWindow(a fyne.App, st *store.Store) fyne.Window {
 	// Watch for game events
 	go watchEvents(gs, statsPanel, gameCanvas, inputBar, w)
 
+	// First launch: introduce the first row once the window is up.
+	a.Lifecycle().SetOnStarted(func() {
+		if rows := gs.PendingIntro(); len(rows) > 0 {
+			showIntroDialog(gs, rows, inputBar, w)
+		}
+	})
+
 	w.SetOnClosed(func() {
 		gs.Stop() // closes stopCh; safe if already stopped
 		gs.mu.Lock()
@@ -65,15 +72,24 @@ func buildWindow(a fyne.App, st *store.Store) fyne.Window {
 func watchEvents(gs *GameState, statsPanel *StatsPanel, gameCanvas *GameCanvas, inputBar *InputBar, w fyne.Window) {
 	for event := range gs.eventCh {
 		switch event.kind {
+		case rowsUnlockedEvent:
+			gs.mu.Lock()
+			over := gs.over
+			gs.mu.Unlock()
+			if over {
+				// Game over wins; the intro stays pending for Play Again.
+				continue
+			}
+			rows := event.rows
+			fyne.Do(func() { showIntroDialog(gs, rows, inputBar, w) })
 		case gameOverEvent:
 			gs.mu.Lock()
 			snap := gs.snapshot()
 			reason := gs.overReason
 			gs.mu.Unlock()
-
-			// Run on a new goroutine so this watcher loop isn't blocked by the dialog.
-			// Fyne dialog calls schedule themselves on the main thread internally.
-			go showGameOverDialog(gs, snap, reason, statsPanel, gameCanvas, inputBar, w)
+			fyne.Do(func() {
+				showGameOverDialog(gs, snap, reason, statsPanel, gameCanvas, inputBar, w)
+			})
 		}
 	}
 }
@@ -150,5 +166,8 @@ func showGameOverDialog(gs *GameState, snap StatsSnapshot, reason string, statsP
 		statsPanel.Update(snap)
 		inputBar.Update(snap)
 		gameCanvas.Refresh()
+		if rows := gs.PendingIntro(); len(rows) > 0 {
+			showIntroDialog(gs, rows, inputBar, w)
+		}
 	}, w)
 }
