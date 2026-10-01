@@ -13,9 +13,10 @@ Kana is a Fyne v2 desktop app (`kana-desktop`).
 ## Features
 
 ### Core Gameplay
-- **46 Basic Hiragana Characters**: Practice all fundamental hiragana from あ (a) to ん (n)
+- **104 Hiragana: basic, Dakuon, Handakuon and Yōon**: Practice the full practical hiragana set, from あ (a) to the combined Yōon with (han)dakuten
 - **Falling Character Mechanic**: Characters spawn at the top and fall at variable speeds
 - **Romaji Input**: Type the romanized equivalent and press Enter to score
+- **Learning path**: start with あいうえお, unlock two rows at a time, each new row introduced before it is asked; the game pauses while new rows are introduced
 - **Score Limit Mode**: Set a target score or 0 for endless practice
 - **Miss Limit**: Game ends after 10 missed characters
 
@@ -25,8 +26,8 @@ Kana is a Fyne v2 desktop app (`kana-desktop`).
 - **Session vs Overall Stats**: See how this session compares to your cumulative history
 
 ### Customization
-- **Row Selection**: Choose which hiragana rows to practice (vowels, k-row, s-row, etc.)
-- **Auto-Progression**: Automatically unlock new rows as you master previous ones (80% threshold)
+- **Row Selection**: Choose which hiragana rows to practice, grouped by Basic, Dakuon, Handakuon, Yōon and Yōon + Dakuten
+- **Auto-Progression**: unlocks the next step (two rows) once 80% of each active row is mastered
 - **Configurable Score Limit**: Set a target or play endlessly
 
 ### Desktop App (Fyne)
@@ -83,7 +84,7 @@ go run ./fyne/
 
 ## Character Set
 
-All 46 basic hiragana characters, organized by row:
+### Basic (46)
 
 | Row | Characters |
 |-----|------------|
@@ -99,14 +100,50 @@ All 46 basic hiragana characters, organized by row:
 | W-row | わ (wa), を (wo) |
 | N | ん (n) |
 
+### Dakuon (20) and Handakuon (5)
+
+| Row ID | Label | a | i | u | e | o |
+|---|---|---|---|---|---|---|
+| `g` | G-row (が) | が ga | ぎ gi | ぐ gu | げ ge | ご go |
+| `z` | Z-row (ざ) | ざ za | じ ji (zi) | ず zu | ぜ ze | ぞ zo |
+| `d` | D-row (だ) | だ da | ぢ ji (di) | づ zu (du) | で de | ど do |
+| `b` | B-row (ば) | ば ba | び bi | ぶ bu | べ be | ぼ bo |
+| `p` | P-row (ぱ) | ぱ pa | ぴ pi | ぷ pu | ぺ pe | ぽ po |
+
+### Yōon (21)
+
+| Row ID | Label | ya | yu | yo |
+|---|---|---|---|---|
+| `ky` | KY (きゃ) | きゃ kya | きゅ kyu | きょ kyo |
+| `sy` | SH (しゃ) | しゃ sha (sya) | しゅ shu (syu) | しょ sho (syo) |
+| `ch` | CH (ちゃ) | ちゃ cha (tya, cya) | ちゅ chu (tyu, cyu) | ちょ cho (tyo, cyo) |
+| `ny` | NY (にゃ) | にゃ nya | にゅ nyu | にょ nyo |
+| `hy` | HY (ひゃ) | ひゃ hya | ひゅ hyu | ひょ hyo |
+| `my` | MY (みゃ) | みゃ mya | みゅ myu | みょ myo |
+| `ry` | RY (りゃ) | りゃ rya | りゅ ryu | りょ ryo |
+
+### Yōon with (han)dakuten (12)
+
+| Row ID | Label | ya | yu | yo |
+|---|---|---|---|---|
+| `gy` | GY (ぎゃ) | ぎゃ gya | ぎゅ gyu | ぎょ gyo |
+| `j` | J (じゃ) | じゃ ja (zya, jya) | じゅ ju (zyu, jyu) | じょ jo (zyo, jyo) |
+| `by` | BY (びゃ) | びゃ bya | びゅ byu | びょ byo |
+| `py` | PY (ぴゃ) | ぴゃ pya | ぴゅ pyu | ぴょ pyo |
+
+Hepburn romaji is canonical and is what the UI shows. Common alternatives are also
+accepted: si, ti, tu, hu, zi, di, du, sya, cya, jya, nn (and the others shown in
+parentheses above). じ/ぢ (ji) and ず/づ (zu) share an answer; typing di or du
+matches the ぢ/づ tile unambiguously.
+
 ## Architecture
 
-### Shared Core (`kanacore/`)
+### Character Data (`kanacore/`)
 
 Character data and row definitions live in `kanacore/`:
 
-- `kana.go`: `Kana` struct, `CharacterSet` with all 46 hiragana
-- `kana_rows.go`: `KanaRow` definitions, `AllKanaRows`, `CharToRow` lookup
+- `kana.go`: `Kana` struct, `CharacterSet`, `NewCharacterSet`, `Matches` (canonical romaji plus accepted alternatives)
+- `kana_rows.go`: groups, rows with entries and alternative romaji, `ProgressionSteps`
 
 ### Desktop App (`fyne/`)
 
@@ -117,9 +154,10 @@ Built on [Fyne v2](https://fyne.io) with goroutine-based game loop:
 - `game.go`: `GameState` — tick/spawn goroutines, answer checking, stats, auto-progression
 - `canvas.go`: `GameCanvas` widget, atomic snapshot renderer (avoids mutex/render-thread deadlock)
 - `tile.go`: `KanaTile` — shadow + face + text canvas objects
-- `stats.go`: `StatsPanel` widget with persistent label pool
+- `intro.go`: Intro dialog introducing newly unlocked rows as large tiles before they are asked
+- `stats.go`: `StatsPanel` widget with a progress table grouped by Basic, Dakuon, Handakuon and Yōon
 - `input.go`: `InputBar` — score, miss count, text entry
-- `settings.go`: In-game settings dialog
+- `settings.go`: In-game settings dialog with grouped row selection (per-group "all" toggle)
 - `theme.go`: `KanaTheme` — warm paper colour palette
 
 ### Persistence (`store/`)
