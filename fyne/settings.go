@@ -26,21 +26,9 @@ func showSettingsDialog(gs *GameState, statsPanel *StatsPanel, gameCanvas *GameC
 	sections := container.NewVBox()
 	for _, g := range kanacore.Groups() {
 		groupRows := kanacore.RowsInGroup(g.Group)
-		checks := make([]*widget.Check, 0, len(groupRows))
-		grid := container.NewGridWithColumns(2)
-		for _, row := range groupRows {
-			c := widget.NewCheck(row.Label, nil)
-			c.SetChecked(selected[row.ID])
-			rowChecks[row.ID] = c
-			checks = append(checks, c)
-			grid.Add(c)
-		}
-		all := widget.NewCheck("all", nil)
-		all.SetChecked(allChecked(checks))
-		all.OnChanged = func(on bool) {
-			for _, c := range checks {
-				c.SetChecked(on)
-			}
+		all, checks, grid := newGroupChecks(groupRows, selected)
+		for id, c := range checks {
+			rowChecks[id] = c
 		}
 		sections.Add(container.NewHBox(
 			widget.NewLabelWithStyle(g.Label, fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
@@ -98,9 +86,7 @@ func showSettingsDialog(gs *GameState, statsPanel *StatsPanel, gameCanvas *GameC
 
 		// Apply under lock
 		gs.mu.Lock()
-		gs.applySelectedRows(newRows)
-		gs.saveSelectedRows()
-		gs.prunePendingIntro()
+		gs.setSelectedRowsLocked(newRows)
 		gs.autoProgress = newAuto
 		gs.scoreLimit = newLimit
 
@@ -128,6 +114,53 @@ func showSettingsDialog(gs *GameState, statsPanel *StatsPanel, gameCanvas *GameC
 		statsPanel.Update(snap)
 		gameCanvas.Refresh()
 	}, win)
+}
+
+// newGroupChecks builds the per-row checks and the "all" check for one kana
+// group, keeping them in sync: checking/unchecking "all" sets every row, and
+// checking/unchecking a row updates "all" to match. A per-group syncing flag
+// guards against the two handlers recursing into each other.
+func newGroupChecks(rows []kanacore.KanaRow, selected map[string]bool) (all *widget.Check, checks map[string]*widget.Check, grid *fyne.Container) {
+	checks = make(map[string]*widget.Check, len(rows))
+	checkList := make([]*widget.Check, 0, len(rows))
+	grid = container.NewGridWithColumns(2)
+
+	for _, row := range rows {
+		c := widget.NewCheck(row.Label, nil)
+		c.SetChecked(selected[row.ID])
+		checks[row.ID] = c
+		checkList = append(checkList, c)
+		grid.Add(c)
+	}
+
+	all = widget.NewCheck("all", nil)
+	all.SetChecked(allChecked(checkList))
+
+	syncing := false
+
+	all.OnChanged = func(on bool) {
+		if syncing {
+			return
+		}
+		syncing = true
+		for _, c := range checkList {
+			c.SetChecked(on)
+		}
+		syncing = false
+	}
+
+	for _, c := range checkList {
+		c.OnChanged = func(bool) {
+			if syncing {
+				return
+			}
+			syncing = true
+			all.SetChecked(allChecked(checkList))
+			syncing = false
+		}
+	}
+
+	return all, checks, grid
 }
 
 // checkedRowIDs returns the IDs of checked rows in progression order.
