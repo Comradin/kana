@@ -4,8 +4,6 @@ package kanacore
 type Kana struct {
 	Char   string
 	Romaji string
-	X      float32
-	Y      float32
 	Speed  float32
 }
 
