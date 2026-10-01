@@ -503,51 +503,63 @@ func (gs *GameState) SetScoreLimit(limit int) {
 	}
 }
 
-// checkAutoProgression unlocks the next row when selected rows are all mastered.
-// Must be called under lock. Returns the IDs unlocked.
+// checkAutoProgression unlocks the rest of the next progression step when all
+// selected rows are mastered. Must be called under lock. Returns the IDs unlocked.
 func (gs *GameState) checkAutoProgression() []string {
 	if !gs.autoProgress {
 		return nil
 	}
-
-	var nextRow *kanacore.KanaRow
-	for i := range kanacore.AllKanaRows {
-		row := kanacore.AllKanaRows[i]
-		if !gs.selectedRows[row.ID] {
-			nextRow = &row
-			break
-		}
-	}
-	if nextRow == nil {
+	next := gs.nextStepRows()
+	if len(next) == 0 || !gs.selectedRowsMastered() {
 		return nil
 	}
-
-	allMastered := true
-	for _, row := range kanacore.AllKanaRows {
-		if !gs.selectedRows[row.ID] {
-			continue
-		}
-		if !gs.isRowMastered(row) {
-			allMastered = false
-			break
-		}
+	for _, id := range next {
+		gs.selectedRows[id] = true
 	}
+	gs.saveSelectedRows()
+	return next
+}
 
-	if allMastered {
-		gs.selectedRows[nextRow.ID] = true
-		if gs.store != nil {
-			ids := make([]string, 0, len(gs.selectedRows))
-			for id, ok := range gs.selectedRows {
-				if ok {
-					ids = append(ids, id)
-				}
+// nextStepRows returns the unselected rows of the first incomplete progression
+// step. Must be called under lock.
+func (gs *GameState) nextStepRows() []string {
+	for _, step := range kanacore.ProgressionSteps {
+		var missing []string
+		for _, id := range step {
+			if !gs.selectedRows[id] {
+				missing = append(missing, id)
 			}
-			_ = gs.store.SaveSelectedRows(ids)
 		}
-		return []string{nextRow.ID}
+		if len(missing) > 0 {
+			return missing
+		}
 	}
-
 	return nil
+}
+
+// selectedRowsMastered reports whether every selected row is mastered. Must be
+// called under lock.
+func (gs *GameState) selectedRowsMastered() bool {
+	for _, row := range kanacore.AllKanaRows {
+		if gs.selectedRows[row.ID] && !gs.isRowMastered(row) {
+			return false
+		}
+	}
+	return true
+}
+
+// saveSelectedRows persists the selection in row order. Must be called under lock.
+func (gs *GameState) saveSelectedRows() {
+	if gs.store == nil {
+		return
+	}
+	ids := make([]string, 0, len(gs.selectedRows))
+	for _, row := range kanacore.AllKanaRows {
+		if gs.selectedRows[row.ID] {
+			ids = append(ids, row.ID)
+		}
+	}
+	_ = gs.store.SaveSelectedRows(ids)
 }
 
 // isRowMastered returns true when at least 80% of the row's characters have a
