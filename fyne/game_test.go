@@ -165,3 +165,63 @@ func TestIsRowMastered(t *testing.T) {
 		t.Error("expected row to be mastered at 80% threshold")
 	}
 }
+
+func masterRows(gs *GameState, ids ...string) {
+	for _, id := range ids {
+		row, _ := kanacore.RowByID(id)
+		for _, char := range row.Characters() {
+			gs.overallStats[char] = store.KanaStats{Char: char, CorrectCount: 3}
+		}
+	}
+}
+
+func selectRows(gs *GameState, ids ...string) {
+	gs.selectedRows = make(map[string]bool)
+	for _, id := range ids {
+		gs.selectedRows[id] = true
+	}
+}
+
+func equalIDs(got, want []string) bool {
+	if len(got) != len(want) {
+		return false
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func TestProgressionCrossesIntoDakuon(t *testing.T) {
+	gs := newTestState()
+	gs.autoProgress = true
+	basic := kanacore.DefaultRowIDs()
+	selectRows(gs, basic...)
+	masterRows(gs, basic...)
+	if got := gs.checkAutoProgression(); !equalIDs(got, []string{"g", "z"}) {
+		t.Fatalf("unlocked %v, want [g z]", got)
+	}
+}
+
+func TestProgressionAfterHandakuonUnlocksYoon(t *testing.T) {
+	gs := newTestState()
+	gs.autoProgress = true
+	ids := append(kanacore.DefaultRowIDs(), "g", "z", "d", "b", "p")
+	selectRows(gs, ids...)
+	masterRows(gs, ids...)
+	if got := gs.checkAutoProgression(); !equalIDs(got, []string{"ky", "sy"}) {
+		t.Fatalf("unlocked %v, want [ky sy]", got)
+	}
+}
+
+func TestProgressionCompletesPartialStep(t *testing.T) {
+	gs := newTestState()
+	gs.autoProgress = true
+	selectRows(gs, "vowels", "k")
+	masterRows(gs, "vowels", "k")
+	if got := gs.checkAutoProgression(); !equalIDs(got, []string{"s"}) {
+		t.Fatalf("unlocked %v, want [s]", got)
+	}
+}

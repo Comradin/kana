@@ -141,29 +141,21 @@ func TestResetClosesEventCh(t *testing.T) {
 	gs.Stop()
 }
 
-// TestCheckAutoProgressionUnlocksNextRow verifies that when all selected rows
-// are mastered the next locked row is unlocked.
-func TestCheckAutoProgressionUnlocksNextRow(t *testing.T) {
+// TestCheckAutoProgressionUnlocksNextStep verifies that when all selected rows
+// are mastered the whole next progression step is unlocked.
+func TestCheckAutoProgressionUnlocksNextStep(t *testing.T) {
 	test.NewApp()
 	gs := newTestState()
 	gs.autoProgress = true
-
-	// Replace default (all) selection with only the vowels row.
 	gs.selectedRows = map[string]bool{"vowels": true}
-
-	for _, char := range []string{"あ", "い", "う", "え", "お"} {
-		gs.overallStats[char] = store.KanaStats{Char: char, CorrectCount: 3}
-	}
+	masterRows(gs, "vowels")
 
 	unlocked := gs.checkAutoProgression()
-	if len(unlocked) != 1 {
-		t.Fatalf("expected 1 row unlocked, got %d (%v)", len(unlocked), unlocked)
+	if !equalIDs(unlocked, []string{"k", "s"}) {
+		t.Fatalf("unlocked %v, want [k s]", unlocked)
 	}
-	if unlocked[0] != "k" {
-		t.Errorf("expected k-row unlocked, got %q", unlocked[0])
-	}
-	if !gs.selectedRows["k"] {
-		t.Error("expected k-row selected after unlock")
+	if !gs.selectedRows["k"] || !gs.selectedRows["s"] {
+		t.Error("expected k and s selected after unlock")
 	}
 }
 
