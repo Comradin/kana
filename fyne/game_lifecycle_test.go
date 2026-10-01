@@ -269,6 +269,22 @@ func TestSavedSelectionIsKept(t *testing.T) {
 	}
 }
 
+func TestSetSelectedRowsPersistsInRowOrder(t *testing.T) {
+	test.NewApp()
+	st := openTestStore(t)
+
+	gs := NewGameState(st)
+	gs.SetSelectedRows([]string{"ky", "vowels", "g"})
+
+	rows, err := st.SelectedRows()
+	if err != nil {
+		t.Fatalf("SelectedRows: %v", err)
+	}
+	if !equalIDs(rows, []string{"vowels", "g", "ky"}) {
+		t.Fatalf("persisted rows = %v, want [vowels g ky]", rows)
+	}
+}
+
 func TestStoreErrorDoesNotTriggerFreshStart(t *testing.T) {
 	test.NewApp()
 	st, err := store.Open(filepath.Join(t.TempDir(), "test.db"))
