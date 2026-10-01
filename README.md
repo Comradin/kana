@@ -8,14 +8,7 @@ Kana is an interactive typing game that helps you learn Japanese Hiragana throug
 
 ## Apps
 
-Kana currently ships as two separate binaries:
-
-| Binary | Framework | Status |
-|--------|-----------|--------|
-| `kana` | Bubble Tea (terminal) | Maintained, likely to be dropped once the desktop app matures |
-| `kana-desktop` | Fyne v2 (desktop GUI) | Active development, intended long-term home |
-
-The terminal app will remain available while the desktop app is still finding its feet, but expect it to be retired once feature parity is solid.
+Kana is a Fyne v2 desktop app (`kana-desktop`).
 
 ## Features
 
@@ -42,25 +35,17 @@ The terminal app will remain available while the desktop app is still finding it
 - In-game settings via gear icon (no pre-game setup form)
 - Game-over dialog with missed character review and Play Again
 
-### Terminal App (Bubble Tea)
-- Runs in any terminal emulator
-- Split-screen: game field left, progress table right
-- Interactive setup form before each session
-- Accessible mode via `KANAGAME_ACCESSIBLE_UI` environment variable
-
 ## Installation
 
 ### Prerequisites
 
-**Both apps:**
 - Go 1.25.1 or later
-
-**Desktop app only (Fyne requires CGO and system graphics libraries):**
-- **Linux**: `libGL`, `libX11`, `libXrandr`, `libXi`, `libXcursor` dev headers
-  - Arch/CachyOS: `sudo pacman -S mesa libx11 libxrandr libxi libxcursor`
-  - Debian/Ubuntu: `sudo apt install libgl1-mesa-dev libx11-dev libxrandr-dev libxi-dev libxcursor-dev`
-- **macOS**: Xcode Command Line Tools (`xcode-select --install`)
-- Must be compiled natively per target OS (CGO does not cross-compile easily)
+- Fyne requires CGO and system graphics libraries:
+  - **Linux**: `libGL`, `libX11`, `libXrandr`, `libXi`, `libXcursor` dev headers
+    - Arch/CachyOS: `sudo pacman -S mesa libx11 libxrandr libxi libxcursor`
+    - Debian/Ubuntu: `sudo apt install libgl1-mesa-dev libx11-dev libxrandr-dev libxi-dev libxcursor-dev`
+  - **macOS**: Xcode Command Line Tools (`xcode-select --install`)
+  - Must be compiled natively per target OS (CGO does not cross-compile easily)
 
 ### Build from Source
 
@@ -69,44 +54,28 @@ git clone <repository-url>
 cd kana
 go mod tidy
 
-# Terminal app
-go build -o kana .
-
-# Desktop app
 go build -o kana-desktop ./fyne/
 ```
 
 ### Run directly
 
 ```bash
-# Terminal app
-go run main.go
-
-# Desktop app
 go run ./fyne/
 ```
 
 ## How to Play
 
-1. Launch the app (`./kana` or `./kana-desktop`)
-2. **Desktop**: jump straight into the game; open the gear icon to adjust rows, auto-progression, and score limit
-   **Terminal**: configure your session in the setup form before play begins
+1. Launch the app (`./kana-desktop`)
+2. Jump straight into the game; open the gear icon to adjust rows, auto-progression, and score limit
 3. As characters fall, type their romaji equivalent and press Enter
 4. Each correct answer scores 10 points
 5. The game ends when you reach your score target, miss 10 characters, or quit
 
 ### Controls
 
-**Desktop app:**
 - **Type + Enter**: Submit answer
 - **Gear icon**: Open settings during a game
 - **Game-over dialog**: Play Again or Quit
-
-**Terminal app:**
-- **Type + Enter**: Submit answer
-- **Backspace**: Delete last character
-- **ESC**: Quit current game (first press) or exit (on game over screen)
-- **Ctrl+C**: Exit immediately
 
 ### Scoring
 - **+10 points** per correct answer
@@ -134,7 +103,7 @@ All 46 basic hiragana characters, organized by row:
 
 ### Shared Core (`kanacore/`)
 
-Character data and row definitions live in `kanacore/`, shared by both apps:
+Character data and row definitions live in `kanacore/`:
 
 - `kana.go`: `Kana` struct, `CharacterSet` with all 46 hiragana
 - `kana_rows.go`: `KanaRow` definitions, `AllKanaRows`, `CharToRow` lookup
@@ -153,26 +122,18 @@ Built on [Fyne v2](https://fyne.io) with goroutine-based game loop:
 - `settings.go`: In-game settings dialog
 - `theme.go`: `KanaTheme` — warm paper colour palette
 
-### Terminal App (``)
+### Persistence (`store/`)
 
-Built on [Bubble Tea](https://github.com/charmbracelet/bubbletea) using the Elm Architecture:
-
-- `main.go`: Entry point
-- `game.go`: Model, Update, game logic
-- `ui.go`: View rendering with Lipgloss
-- `kana.go`: Character definitions (legacy; kanacore is the canonical source)
-- `settings_form.go`: Pre-game setup form using Huh
-- `store/store.go`: SQLite persistence (shared with desktop app)
+- `store/store.go`: SQLite persistence
 
 ### Game Timing
 - Tick loop: 100ms
 - Spawn interval: 4 seconds
 - Desktop tile speed: 3.75–6.25 px/tick
-- Terminal fall speed: 0.15–0.25 units/tick
 
 ## Data Persistence
 
-Both apps share `kana.db` (SQLite) in the current working directory:
+The app stores `kana.db` (SQLite) in the current working directory:
 
 - Selected hiragana rows
 - Auto-progression setting
@@ -183,10 +144,7 @@ The database is created automatically on first run.
 
 ## Dependencies
 
-- [Fyne v2](https://fyne.io) — Desktop GUI framework (desktop app)
-- [Bubble Tea](https://github.com/charmbracelet/bubbletea) — Terminal UI framework (terminal app)
-- [Lipgloss](https://github.com/charmbracelet/lipgloss) — Terminal styling (terminal app)
-- [Huh](https://github.com/charmbracelet/huh) — Interactive forms (terminal app)
+- [Fyne v2](https://fyne.io) — Desktop GUI framework
 - [modernc.org/sqlite](https://pkg.go.dev/modernc.org/sqlite) — Pure Go SQLite driver
 
 ## Development
@@ -198,8 +156,7 @@ go test ./...
 # Run tests with race detector
 go test -race ./...
 
-# Build both apps
-go build -o kana .
+# Build the desktop app
 go build -o kana-desktop ./fyne/
 
 # Update dependencies

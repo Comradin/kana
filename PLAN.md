@@ -78,7 +78,6 @@ This document outlines planned improvements and features for the Kana learning g
 
 ### Priority: Low
 - [ ] Power-ups (slow time, clear screen, reveal romaji)
-- [ ] Sound effects via terminal bell
 - [ ] Particle effects for matched characters
 
 ## Difficulty & Progression
