@@ -41,6 +41,20 @@ func TestCheckAnswerRemovesTile(t *testing.T) {
 	}
 }
 
+func TestCheckAnswerIgnoredAfterGameOver(t *testing.T) {
+	gs := newTestState()
+	tile := newKanaTile(kanacore.Kana{Char: "か", Romaji: "ka"})
+	gs.tiles = []*KanaTile{tile}
+	gs.over = true
+	gs.checkAnswer("ka")
+	if len(gs.tiles) != 1 {
+		t.Fatalf("expected tile to remain after game over, got %d tiles", len(gs.tiles))
+	}
+	if gs.score != 0 {
+		t.Fatalf("expected score unchanged after game over, got %d", gs.score)
+	}
+}
+
 func TestCheckAnswerNoMatchLeavestTile(t *testing.T) {
 	gs := newTestState()
 	tile := newKanaTile(kanacore.Kana{Char: "か", Romaji: "ka"})
