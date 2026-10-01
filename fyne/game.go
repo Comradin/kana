@@ -512,11 +512,8 @@ func (gs *GameState) applySelectedRows(rows []string) {
 func (gs *GameState) SetSelectedRows(rows []string) {
 	gs.mu.Lock()
 	gs.applySelectedRows(rows)
-	st := gs.store
+	gs.saveSelectedRows()
 	gs.mu.Unlock()
-	if st != nil {
-		_ = st.SaveSelectedRows(rows)
-	}
 }
 
 // SelectedRowIDs returns the currently selected row IDs.
@@ -617,6 +614,25 @@ func (gs *GameState) saveSelectedRows() {
 		}
 	}
 	_ = gs.store.SaveSelectedRows(ids)
+}
+
+// prunePendingIntro removes any pending-intro row ID no longer selected,
+// clearing pendingIntro to nil if nothing remains. Must be called under lock.
+func (gs *GameState) prunePendingIntro() {
+	if len(gs.pendingIntro) == 0 {
+		return
+	}
+	pruned := make([]string, 0, len(gs.pendingIntro))
+	for _, id := range gs.pendingIntro {
+		if gs.selectedRows[id] {
+			pruned = append(pruned, id)
+		}
+	}
+	if len(pruned) == 0 {
+		gs.pendingIntro = nil
+		return
+	}
+	gs.pendingIntro = pruned
 }
 
 // isRowMastered returns true when at least 80% of the row's characters have a

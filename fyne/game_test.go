@@ -348,3 +348,23 @@ func TestResetWithoutPendingIntroUnpauses(t *testing.T) {
 		t.Fatal("expected Reset to clear pause without a pending intro")
 	}
 }
+
+func TestPrunePendingIntroDropsDeselectedRows(t *testing.T) {
+	gs := newTestState()
+	gs.pendingIntro = []string{"k", "s"}
+	selectRows(gs, "vowels", "k")
+	gs.prunePendingIntro()
+	if !equalIDs(gs.pendingIntro, []string{"k"}) {
+		t.Fatalf("pendingIntro = %v, want [k]", gs.pendingIntro)
+	}
+}
+
+func TestPrunePendingIntroClearsWhenAllDeselected(t *testing.T) {
+	gs := newTestState()
+	gs.pendingIntro = []string{"k", "s"}
+	selectRows(gs, "vowels")
+	gs.prunePendingIntro()
+	if gs.pendingIntro != nil {
+		t.Fatalf("pendingIntro = %v, want nil", gs.pendingIntro)
+	}
+}
