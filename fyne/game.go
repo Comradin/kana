@@ -259,7 +259,7 @@ func (gs *GameState) spawnKana() {
 	romaji, _ := gs.charSet.GetRomaji(char)
 
 	speed := 3.75 + rand.Float32()*2.5
-	maxX := gs.canvasW - tileW
+	maxX := gs.canvasW - tileWidthFor(char)
 	if maxX < 0 {
 		maxX = 0
 	}

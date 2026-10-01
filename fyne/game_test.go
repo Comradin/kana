@@ -139,6 +139,21 @@ func TestCheckAnswerRemovesLowestMatchingTile(t *testing.T) {
 	}
 }
 
+func TestSpawnKeepsWideTilesInsideCanvas(t *testing.T) {
+	gs := newTestState()
+	gs.selectedRows = map[string]bool{"ky": true}
+	gs.canvasW = 100
+	for i := 0; i < 50; i++ {
+		gs.spawnKana()
+	}
+	for _, tile := range gs.tiles {
+		if tile.pos.X < 0 || tile.pos.X+tile.Width() > gs.canvasW {
+			t.Fatalf("tile %s at x=%.1f width %.1f exceeds canvas width %.1f",
+				tile.kana.Char, tile.pos.X, tile.Width(), gs.canvasW)
+		}
+	}
+}
+
 func TestIsRowMastered(t *testing.T) {
 	gs := newTestState()
 	row := kanacore.AllKanaRows[0] // vowels

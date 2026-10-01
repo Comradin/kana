@@ -32,3 +32,30 @@ func TestKanaTileObjectsReturnsThree(t *testing.T) {
 		t.Errorf("expected 3 canvas objects, got %d", len(tile.Objects()))
 	}
 }
+
+func TestWideTileForYoon(t *testing.T) {
+	test.NewApp()
+	narrow := newKanaTile(kanacore.Kana{Char: "き", Romaji: "ki"})
+	wide := newKanaTile(kanacore.Kana{Char: "きゃ", Romaji: "kya"})
+	if wide.Width() <= narrow.Width() {
+		t.Fatalf("wide tile %.0f should be wider than narrow tile %.0f", wide.Width(), narrow.Width())
+	}
+}
+
+func TestTileTextCentredInsideFace(t *testing.T) {
+	test.NewApp()
+	for _, char := range []string{"か", "きゃ"} {
+		tile := newKanaTile(kanacore.Kana{Char: char})
+		tile.Move(fyne.NewPos(40, 20))
+		textX := tile.text.Position().X
+		textW := tile.text.Size().Width
+		left := textX - 40
+		right := 40 + tile.Width() - (textX + textW)
+		if left < 0 || right < 0 {
+			t.Fatalf("%s: text outside face (left %.1f, right %.1f)", char, left, right)
+		}
+		if diff := left - right; diff > 1 || diff < -1 {
+			t.Fatalf("%s: text not centred (left %.1f, right %.1f)", char, left, right)
+		}
+	}
+}
