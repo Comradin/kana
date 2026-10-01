@@ -129,8 +129,9 @@ func newStatsPanel() *StatsPanel {
 			// Create the row-label cell.
 			rowLbl := widget.NewLabel(rowShortLabel(row.ID))
 
-			// Create 5 placeholder cells (one per vowel column), initially "-".
-			// cells[0..4] correspond to columns a/i/u/e/o.
+			// Create 5 placeholder cells (one per vowel column), initially "".
+			// cells[0..4] correspond to columns a/i/u/e/o; only cells that
+			// get a real kana below are replaced with a label starting "-".
 			cells := [5]*widget.Label{}
 			for i := range cells {
 				cells[i] = widget.NewLabel("")

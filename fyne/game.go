@@ -59,8 +59,7 @@ type GameState struct {
 
 	charSet kanacore.CharacterSet
 
-	canvas     *GameCanvas
-	statsPanel *StatsPanel
+	canvas *GameCanvas
 }
 
 // NewGameState constructs a new GameState, loading persisted state if store is non-nil.
@@ -140,7 +139,8 @@ func (gs *GameState) startLearningPath() {
 	}
 }
 
-// rowsMastered reports whether every given row is mastered. Must be called under lock.
+// rowsMastered reports whether every given row is mastered. Must be called
+// under lock, or before Start.
 func (gs *GameState) rowsMastered(ids []string) bool {
 	for _, id := range ids {
 		row, ok := kanacore.RowByID(id)
@@ -313,18 +313,18 @@ func (gs *GameState) spawnKana() {
 	romaji, _ := gs.charSet.GetRomaji(char)
 
 	speed := 3.75 + rand.Float32()*2.5
-	maxX := gs.canvasW - tileWidthFor(char)
-	if maxX < 0 {
-		maxX = 0
-	}
-	x := rand.Float32() * maxX
-
 	kana := kanacore.Kana{
 		Char:   char,
 		Romaji: romaji,
 		Speed:  speed,
 	}
 	tile := newKanaTile(kana)
+
+	maxX := gs.canvasW - tile.Width()
+	if maxX < 0 {
+		maxX = 0
+	}
+	x := rand.Float32() * maxX
 	tile.Move(fyne.NewPos(x, 0))
 	gs.tiles = append(gs.tiles, tile)
 
@@ -508,28 +508,19 @@ func (gs *GameState) applySelectedRows(rows []string) {
 	}
 }
 
+// setSelectedRowsLocked applies a new row selection, persists it and prunes
+// any pending intro of rows no longer selected. Must be called under lock.
+func (gs *GameState) setSelectedRowsLocked(rows []string) {
+	gs.applySelectedRows(rows)
+	gs.saveSelectedRows()
+	gs.prunePendingIntro()
+}
+
 // SetSelectedRows updates selection and persists to store.
 func (gs *GameState) SetSelectedRows(rows []string) {
 	gs.mu.Lock()
-	gs.applySelectedRows(rows)
-	gs.saveSelectedRows()
+	gs.setSelectedRowsLocked(rows)
 	gs.mu.Unlock()
-}
-
-// SelectedRowIDs returns the currently selected row IDs.
-func (gs *GameState) SelectedRowIDs() []string {
-	gs.mu.Lock()
-	defer gs.mu.Unlock()
-	if len(gs.selectedRows) == 0 {
-		return nil
-	}
-	rows := make([]string, 0, len(gs.selectedRows))
-	for id, ok := range gs.selectedRows {
-		if ok {
-			rows = append(rows, id)
-		}
-	}
-	return rows
 }
 
 // SetAutoProgress toggles auto-progression and persists.

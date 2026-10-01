@@ -23,8 +23,6 @@ func buildWindow(a fyne.App, st *store.Store) fyne.Window {
 
 	statsPanel := newStatsPanel()
 	gameCanvas := newGameCanvas(gs)
-	gs.statsPanel = statsPanel
-	gs.canvas = gameCanvas
 
 	inputBar := newInputBar(gs, statsPanel, gameCanvas, w)
 
@@ -98,8 +96,15 @@ func watchEvents(ch chan gameEvent, gs *GameState, statsPanel *StatsPanel, gameC
 				// PendingIntro, not the event payload, is the source of
 				// truth: it reflects FinishIntro/Reset that may have run
 				// since the event was queued.
+				if over {
+					return
+				}
+				// Paused must always mean an intro is pending or showing:
+				// if nothing is pending, resume rather than leaving the
+				// game stuck paused.
 				rows := gs.PendingIntro()
-				if len(rows) == 0 || over {
+				if len(rows) == 0 {
+					gs.Resume()
 					return
 				}
 				showIntroDialog(gs, rows, inputBar, w)
