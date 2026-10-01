@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
@@ -13,28 +12,25 @@ import (
 
 // StatsSnapshot is a lock-free copy of the game state fields needed by the panel.
 type StatsSnapshot struct {
-	SessionStats  map[string]store.KanaStats
-	SelectedRows  map[string]bool
-	MissedKanas   []kanacore.Kana
-	Score         int
-	ScoreLimit    int
-	Missed        int
-	UnlockMessage string
-	UnlockAt      time.Time
+	SessionStats map[string]store.KanaStats
+	SelectedRows map[string]bool
+	MissedKanas  []kanacore.Kana
+	Score        int
+	ScoreLimit   int
+	Missed       int
 }
 
 // StatsPanel shows hiragana progress, active rows, and missed characters.
 type StatsPanel struct {
 	widget.BaseWidget
 
-	charLabels  map[string]*widget.Label
-	rowLabels   map[string]*widget.Label
-	missLabels  map[string]*widget.Label
-	missEmpty   *widget.Label
-	rowBox      *fyne.Container
-	missBox     *fyne.Container
-	unlockLabel *widget.Label
-	container   *container.Scroll
+	charLabels map[string]*widget.Label
+	rowLabels  map[string]*widget.Label
+	missLabels map[string]*widget.Label
+	missEmpty  *widget.Label
+	rowBox     *fyne.Container
+	missBox    *fyne.Container
+	container  *container.Scroll
 
 	// rowCells maps row ID to all 6 labels in that row (row-label + 5 char cells).
 	// Used to show/hide entire rows together.
@@ -80,11 +76,10 @@ func rowShortLabel(rowID string) string {
 
 func newStatsPanel() *StatsPanel {
 	p := &StatsPanel{
-		charLabels:  make(map[string]*widget.Label),
-		rowLabels:   make(map[string]*widget.Label),
-		missLabels:  make(map[string]*widget.Label),
-		unlockLabel: widget.NewLabel(""),
-		rowCells:    make(map[string][6]*widget.Label),
+		charLabels: make(map[string]*widget.Label),
+		rowLabels:  make(map[string]*widget.Label),
+		missLabels: make(map[string]*widget.Label),
+		rowCells:   make(map[string][6]*widget.Label),
 	}
 
 	// Build progress table (6 columns: row-label | a | i | u | e | o).
@@ -179,7 +174,6 @@ func newStatsPanel() *StatsPanel {
 		widget.NewSeparator(),
 		widget.NewLabel("MISSED"),
 		p.missBox,
-		p.unlockLabel,
 	))
 
 	p.ExtendBaseWidget(p)
@@ -251,12 +245,6 @@ func (p *StatsPanel) Update(snap StatsSnapshot) {
 		p.missEmpty.Show()
 	} else {
 		p.missEmpty.Hide()
-	}
-
-	if snap.UnlockMessage != "" && time.Since(snap.UnlockAt) < 5*time.Second {
-		p.unlockLabel.SetText(snap.UnlockMessage)
-	} else {
-		p.unlockLabel.SetText("")
 	}
 
 	p.container.Refresh()

@@ -15,10 +15,12 @@ type gameEventType int
 
 const (
 	gameOverEvent gameEventType = iota
+	rowsUnlockedEvent
 )
 
 type gameEvent struct {
 	kind gameEventType
+	rows []string // rowsUnlockedEvent: IDs to introduce
 }
 
 // GameState holds all game state for the Fyne desktop game.
@@ -38,11 +40,11 @@ type GameState struct {
 	currentStreak map[string]int
 	sessionDirty  bool
 
-	selectedRows  map[string]bool
-	autoProgress  bool
-	newlyUnlocked []string
-	unlockMessage string
-	unlockAt      time.Time
+	selectedRows map[string]bool
+	autoProgress bool
+
+	paused       bool     // tick, spawn and answers are suspended
+	pendingIntro []string // row IDs waiting to be introduced
 
 	store *store.Store
 
@@ -147,9 +149,8 @@ func (gs *GameState) Reset() {
 	gs.sessionStats = make(map[string]store.KanaStats)
 	gs.currentStreak = make(map[string]int)
 	gs.sessionDirty = false
-	gs.newlyUnlocked = nil
-	gs.unlockMessage = ""
-	gs.unlockAt = time.Time{}
+	// An intro dropped by game over is shown before the new game starts.
+	gs.paused = len(gs.pendingIntro) > 0
 
 	// reload overall stats
 	gs.overallStats = make(map[string]store.KanaStats)
@@ -216,7 +217,7 @@ func (gs *GameState) spawnLoop() {
 
 func (gs *GameState) tick() {
 	gs.mu.Lock()
-	if gs.over {
+	if gs.over || gs.paused {
 		gs.mu.Unlock()
 		return
 	}
@@ -245,7 +246,7 @@ func (gs *GameState) tick() {
 
 func (gs *GameState) spawnKana() {
 	gs.mu.Lock()
-	if gs.over {
+	if gs.over || gs.paused {
 		gs.mu.Unlock()
 		return
 	}
@@ -288,6 +289,10 @@ func (gs *GameState) spawnKana() {
 // canvas.Refresh() so the UI updates immediately on correct answers.
 func (gs *GameState) checkAnswer(input string) {
 	gs.mu.Lock()
+	if gs.paused {
+		gs.mu.Unlock()
+		return
+	}
 	best := -1
 	for i, tile := range gs.tiles {
 		if !gs.charSet.Matches(tile.kana.Char, input) {
@@ -354,8 +359,7 @@ func (gs *GameState) recordCorrect(char string) {
 	gs.sessionDirty = true
 
 	if unlocked := gs.checkAutoProgression(); len(unlocked) > 0 {
-		gs.newlyUnlocked = append(gs.newlyUnlocked, unlocked...)
-		gs.showUnlockMessage(unlocked)
+		gs.announceRows(unlocked)
 	}
 }
 
@@ -585,31 +589,46 @@ func (gs *GameState) isRowMastered(row kanacore.KanaRow) bool {
 	return masteredCount >= threshold
 }
 
-// showUnlockMessage composes an "unlocked" notification. Must be called under lock.
-func (gs *GameState) showUnlockMessage(rowIDs []string) {
-	if len(rowIDs) == 0 {
-		return
+// announceRows queues an intro for newly unlocked rows and pauses the game
+// until it is dismissed. If the event cannot be delivered the game keeps
+// running. Must be called under lock.
+func (gs *GameState) announceRows(ids []string) {
+	rows := append([]string(nil), ids...)
+	select {
+	case gs.eventCh <- gameEvent{kind: rowsUnlockedEvent, rows: rows}:
+		gs.paused = true
+		gs.pendingIntro = rows
+	default:
 	}
+}
 
-	labels := make([]string, 0, len(rowIDs))
-	for _, id := range rowIDs {
-		for _, row := range kanacore.AllKanaRows {
-			if row.ID == id {
-				labels = append(labels, row.Label)
-				break
-			}
-		}
-	}
+// Pause suspends ticking, spawning and answer checking.
+func (gs *GameState) Pause() {
+	gs.mu.Lock()
+	gs.paused = true
+	gs.mu.Unlock()
+}
 
-	if len(labels) == 1 {
-		gs.unlockMessage = "New row unlocked: " + labels[0]
-	} else if len(labels) > 1 {
-		gs.unlockMessage = "New rows unlocked: " + labels[0]
-		for i := 1; i < len(labels); i++ {
-			gs.unlockMessage += ", " + labels[i]
-		}
-	}
-	gs.unlockAt = time.Now()
+// Resume continues a paused game.
+func (gs *GameState) Resume() {
+	gs.mu.Lock()
+	gs.paused = false
+	gs.mu.Unlock()
+}
+
+// FinishIntro clears the pending intro and resumes the game.
+func (gs *GameState) FinishIntro() {
+	gs.mu.Lock()
+	gs.pendingIntro = nil
+	gs.paused = false
+	gs.mu.Unlock()
+}
+
+// PendingIntro returns a copy of the row IDs waiting to be introduced.
+func (gs *GameState) PendingIntro() []string {
+	gs.mu.Lock()
+	defer gs.mu.Unlock()
+	return append([]string(nil), gs.pendingIntro...)
 }
 
 // buildSnapshot rebuilds the atomic snapshot of canvas objects.
@@ -633,13 +652,11 @@ func (gs *GameState) snapshot() StatsSnapshot {
 		rowsCopy[k] = v
 	}
 	return StatsSnapshot{
-		SessionStats:  sessionCopy,
-		SelectedRows:  rowsCopy,
-		MissedKanas:   append([]kanacore.Kana{}, gs.missedKanas...),
-		Score:         gs.score,
-		ScoreLimit:    gs.scoreLimit,
-		Missed:        gs.missed,
-		UnlockMessage: gs.unlockMessage,
-		UnlockAt:      gs.unlockAt,
+		SessionStats: sessionCopy,
+		SelectedRows: rowsCopy,
+		MissedKanas:  append([]kanacore.Kana{}, gs.missedKanas...),
+		Score:        gs.score,
+		ScoreLimit:   gs.scoreLimit,
+		Missed:       gs.missed,
 	}
 }
