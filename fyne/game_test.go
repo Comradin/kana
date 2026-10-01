@@ -107,7 +107,7 @@ func TestIsRowMastered(t *testing.T) {
 	gs := newTestState()
 	row := kanacore.AllKanaRows[0] // vowels
 	// Give 3 correct answers to 4 out of 5 characters (80%)
-	for _, char := range row.Characters[:4] {
+	for _, char := range row.Characters()[:4] {
 		gs.overallStats[char] = store.KanaStats{Char: char, CorrectCount: 3}
 	}
 	if !gs.isRowMastered(row) {
