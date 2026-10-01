@@ -342,7 +342,7 @@ func (gs *GameState) spawnKana() {
 // canvas.Refresh() so the UI updates immediately on correct answers.
 func (gs *GameState) checkAnswer(input string) {
 	gs.mu.Lock()
-	if gs.paused {
+	if gs.paused || gs.over {
 		gs.mu.Unlock()
 		return
 	}

@@ -18,10 +18,20 @@ const (
 	introCardH     float32 = 120
 )
 
+// introShowing guards against two intro dialogs stacking (e.g. a stale
+// rowsUnlockedEvent racing Play Again's direct showIntroDialog call).
+// Fyne-thread-only: read and written exclusively from code that runs via
+// fyne.Do or a Fyne lifecycle callback, so it needs no lock.
+var introShowing bool
+
 // showIntroDialog presents newly unlocked rows as large tiles with their
 // romaji. The game stays paused and input disabled until the dialog closes.
 // Must run on the Fyne thread.
 func showIntroDialog(gs *GameState, rowIDs []string, inputBar *InputBar, w fyne.Window) {
+	if introShowing {
+		return
+	}
+
 	labels := make([]string, 0, len(rowIDs))
 	body := container.NewVBox()
 	for _, id := range rowIDs {
@@ -41,9 +51,11 @@ func showIntroDialog(gs *GameState, rowIDs []string, inputBar *InputBar, w fyne.
 	inputBar.SetEnabled(false, w)
 	d := dialog.NewCustom("New: "+strings.Join(labels, ", "), "Let's go", body, w)
 	d.SetOnClosed(func() {
+		introShowing = false
 		gs.FinishIntro()
 		inputBar.SetEnabled(true, w)
 	})
+	introShowing = true
 	d.Show()
 }
 
