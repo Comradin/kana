@@ -182,3 +182,34 @@ func TestMatchesExtended(t *testing.T) {
 		}
 	}
 }
+
+func TestProgressionStepsCoverRowsInOrder(t *testing.T) {
+	var flat []string
+	for i, step := range ProgressionSteps {
+		if len(step) == 0 {
+			t.Fatalf("step %d is empty", i)
+		}
+		first, _ := RowByID(step[0])
+		for _, id := range step {
+			row, ok := RowByID(id)
+			if !ok {
+				t.Fatalf("step %d has unknown row %q", i, id)
+			}
+			if row.Group != first.Group {
+				t.Fatalf("step %d crosses groups: %v", i, step)
+			}
+		}
+		flat = append(flat, step...)
+	}
+	if len(flat) != len(AllKanaRows) {
+		t.Fatalf("steps cover %d rows, want %d", len(flat), len(AllKanaRows))
+	}
+	for i, row := range AllKanaRows {
+		if flat[i] != row.ID {
+			t.Fatalf("step order position %d = %s, want %s", i, flat[i], row.ID)
+		}
+	}
+	if len(ProgressionSteps[0]) != 1 || ProgressionSteps[0][0] != "vowels" {
+		t.Fatalf("first step = %v, want [vowels]", ProgressionSteps[0])
+	}
+}
