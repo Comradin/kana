@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"fyne.io/fyne/v2/test"
+	"kana/kanacore"
 	"kana/store"
 )
 
@@ -174,5 +175,110 @@ func TestCheckAutoProgressionNoUnlockWhenNotAllMastered(t *testing.T) {
 	unlocked := gs.checkAutoProgression()
 	if len(unlocked) != 0 {
 		t.Errorf("expected no unlock at 60%%, got %d rows: %v", len(unlocked), unlocked)
+	}
+}
+
+func openTestStore(t *testing.T) *store.Store {
+	t.Helper()
+	st, err := store.Open(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	return st
+}
+
+func TestFreshStartBeginsLearningPath(t *testing.T) {
+	test.NewApp()
+	st := openTestStore(t)
+
+	gs := NewGameState(st)
+
+	if len(gs.selectedRows) != 1 || !gs.selectedRows["vowels"] {
+		t.Fatalf("selected rows = %v, want only vowels", gs.selectedRows)
+	}
+	if !gs.autoProgress || !gs.paused || !equalIDs(gs.pendingIntro, []string{"vowels"}) {
+		t.Fatalf("auto=%v paused=%v pending=%v", gs.autoProgress, gs.paused, gs.pendingIntro)
+	}
+	rows, _ := st.SelectedRows()
+	auto, _ := st.AutoProgress()
+	if !equalIDs(rows, []string{"vowels"}) || !auto {
+		t.Fatalf("persisted rows=%v auto=%v", rows, auto)
+	}
+}
+
+func TestFreshStartOverridesStoredAutoProgressOff(t *testing.T) {
+	test.NewApp()
+	st := openTestStore(t)
+	_ = st.SaveAutoProgress(false)
+
+	gs := NewGameState(st)
+	if !gs.autoProgress {
+		t.Fatal("fresh start should turn auto-progression on")
+	}
+}
+
+func TestFreshStartCatchesUpMasteredSteps(t *testing.T) {
+	test.NewApp()
+	st := openTestStore(t)
+	for _, id := range []string{"vowels", "k", "s", "t", "n"} {
+		row, _ := kanacore.RowByID(id)
+		for _, char := range row.Characters() {
+			_ = st.SaveKanaStats(char, 3, 0, 3)
+		}
+	}
+
+	gs := NewGameState(st)
+
+	for _, id := range []string{"vowels", "k", "s", "t", "n"} {
+		if !gs.selectedRows[id] {
+			t.Errorf("expected %s selected by catch-up", id)
+		}
+	}
+	if gs.selectedRows["h"] {
+		t.Error("catch-up must stop at the first unmastered step")
+	}
+	if gs.paused || gs.pendingIntro != nil {
+		t.Fatalf("returning user should get no intro (paused=%v pending=%v)", gs.paused, gs.pendingIntro)
+	}
+}
+
+func TestReturningUserWithUnmasteredVowelsGetsNoIntro(t *testing.T) {
+	test.NewApp()
+	st := openTestStore(t)
+	_ = st.SaveKanaStats("あ", 1, 0, 1)
+
+	gs := NewGameState(st)
+	if len(gs.selectedRows) != 1 || !gs.selectedRows["vowels"] {
+		t.Fatalf("selected rows = %v, want only vowels", gs.selectedRows)
+	}
+	if gs.paused || gs.pendingIntro != nil {
+		t.Fatal("user with stats should start without intro")
+	}
+}
+
+func TestSavedSelectionIsKept(t *testing.T) {
+	test.NewApp()
+	st := openTestStore(t)
+	_ = st.SaveSelectedRows([]string{"vowels", "k"})
+	_ = st.SaveAutoProgress(false)
+
+	gs := NewGameState(st)
+	if len(gs.selectedRows) != 2 || !gs.selectedRows["k"] || gs.autoProgress || gs.paused {
+		t.Fatalf("rows=%v auto=%v paused=%v", gs.selectedRows, gs.autoProgress, gs.paused)
+	}
+}
+
+func TestStoreErrorDoesNotTriggerFreshStart(t *testing.T) {
+	test.NewApp()
+	st, err := store.Open(filepath.Join(t.TempDir(), "test.db"))
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	_ = st.Close() // every query now fails
+
+	gs := NewGameState(st)
+	if len(gs.selectedRows) != len(kanacore.DefaultRowIDs()) || gs.paused {
+		t.Fatalf("rows=%v paused=%v, want basic defaults without pause", gs.selectedRows, gs.paused)
 	}
 }
