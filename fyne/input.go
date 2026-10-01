@@ -60,3 +60,13 @@ func (ib *InputBar) Update(snap StatsSnapshot) {
 	ib.scoreLabel.SetText(ib.formatScore(snap.Score, snap.ScoreLimit))
 	ib.missedLabel.SetText(fmt.Sprintf("Missed: %d/10", snap.Missed))
 }
+
+// SetEnabled enables or disables romaji entry; focus returns to the entry when enabled.
+func (ib *InputBar) SetEnabled(enabled bool, win fyne.Window) {
+	if enabled {
+		ib.entry.Enable()
+		win.Canvas().Focus(ib.entry)
+		return
+	}
+	ib.entry.Disable()
+}
