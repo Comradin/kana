@@ -6,9 +6,9 @@ This document outlines planned improvements and features for the Kana learning g
 
 ### Priority: High
 - [ ] Add Katakana character set
-- [ ] Add Dakuten characters (が、ぎ、ぐ、げ、ご, etc.)
-- [ ] Add Handakuten characters (ぱ、ぴ、ぷ、ぺ、ぽ)
-- [ ] Add Yoon combinations (きゃ、きゅ、きょ, しゃ、しゅ、しょ, etc.)
+- [x] Add Dakuten characters (が、ぎ、ぐ、げ、ご, etc.)
+- [x] Add Handakuten characters (ぱ、ぴ、ぷ、ぺ、ぽ)
+- [x] Add Yoon combinations (きゃ、きゅ、きょ, しゃ、しゅ、しょ, etc.)
 - [ ] Mode selector: Hiragana only, Katakana only, Mixed, Dakuten/Handakuten, Yoon
 
 ## Learning Progress System
