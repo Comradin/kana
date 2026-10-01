@@ -35,6 +35,9 @@ type StatsPanel struct {
 	// rowCells maps row ID to all 6 labels in that row (row-label + 5 char cells).
 	// Used to show/hide entire rows together.
 	rowCells map[string][6]*widget.Label
+
+	// groupCells holds the label row shown above each non-basic group.
+	groupCells map[kanacore.Group][6]*widget.Label
 }
 
 // vowelColIndex returns the column index (0–4) for a kana based on its romaji vowel ending.
@@ -69,9 +72,20 @@ func rowShortLabel(rowID string) string {
 		return "–"
 	case "n-only":
 		return "n"
+	case "sy":
+		return "sh"
 	default:
 		return rowID
 	}
+}
+
+func groupLabel(g kanacore.Group) string {
+	for _, info := range kanacore.Groups() {
+		if info.Group == g {
+			return info.Label
+		}
+	}
+	return string(g)
 }
 
 func newStatsPanel() *StatsPanel {
@@ -80,6 +94,7 @@ func newStatsPanel() *StatsPanel {
 		rowLabels:  make(map[string]*widget.Label),
 		missLabels: make(map[string]*widget.Label),
 		rowCells:   make(map[string][6]*widget.Label),
+		groupCells: make(map[kanacore.Group][6]*widget.Label),
 	}
 
 	// Build progress table (6 columns: row-label | a | i | u | e | o).
@@ -99,6 +114,19 @@ func newStatsPanel() *StatsPanel {
 	}
 
 	for _, row := range kanacore.AllKanaRows {
+		if _, done := p.groupCells[row.Group]; !done && row.Group != kanacore.GroupBasic {
+			var g6 [6]*widget.Label
+			g6[0] = widget.NewLabelWithStyle(groupLabel(row.Group), fyne.TextAlignLeading, fyne.TextStyle{Italic: true})
+			for i := 1; i < 6; i++ {
+				g6[i] = widget.NewLabel("")
+			}
+			for _, lbl := range g6 {
+				lbl.Hide()
+				gridItems = append(gridItems, lbl)
+			}
+			p.groupCells[row.Group] = g6
+		}
+
 		// Create the row-label cell.
 		rowLbl := widget.NewLabel(rowShortLabel(row.ID))
 
@@ -222,6 +250,23 @@ func (p *StatsPanel) Update(snap StatsSnapshot) {
 		} else {
 			lbl.SetText("")
 			lbl.Hide()
+		}
+	}
+
+	for group, g6 := range p.groupCells {
+		visible := false
+		for _, row := range kanacore.RowsInGroup(group) {
+			if snap.SelectedRows[row.ID] {
+				visible = true
+				break
+			}
+		}
+		for _, lbl := range g6 {
+			if visible {
+				lbl.Show()
+			} else {
+				lbl.Hide()
+			}
 		}
 	}
 
