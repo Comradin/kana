@@ -283,24 +283,30 @@ func (gs *GameState) spawnKana() {
 	}
 }
 
-// checkAnswer processes an input string and removes a matching tile if found.
-// Acquires the lock itself; releases before triggering canvas.Refresh() so the
-// UI updates immediately on correct answers instead of waiting for the next tick.
+// checkAnswer removes the lowest tile whose kana matches input (canonical or
+// alternative romaji). Acquires the lock itself; releases before triggering
+// canvas.Refresh() so the UI updates immediately on correct answers.
 func (gs *GameState) checkAnswer(input string) {
 	gs.mu.Lock()
-	matched := false
+	best := -1
 	for i, tile := range gs.tiles {
-		if tile.kana.Romaji == input {
-			gs.tiles = append(gs.tiles[:i], gs.tiles[i+1:]...)
-			gs.score += 10
-			gs.recordCorrect(tile.kana.Char)
-			if gs.scoreLimit > 0 && gs.score >= gs.scoreLimit {
-				gs.endGame("score")
-			}
-			gs.buildSnapshot()
-			matched = true
-			break
+		if !gs.charSet.Matches(tile.kana.Char, input) {
+			continue
 		}
+		if best < 0 || tile.pos.Y > gs.tiles[best].pos.Y {
+			best = i
+		}
+	}
+	matched := best >= 0
+	if matched {
+		tile := gs.tiles[best]
+		gs.tiles = append(gs.tiles[:best], gs.tiles[best+1:]...)
+		gs.score += 10
+		gs.recordCorrect(tile.kana.Char)
+		if gs.scoreLimit > 0 && gs.score >= gs.scoreLimit {
+			gs.endGame("score")
+		}
+		gs.buildSnapshot()
 	}
 	canvas := gs.canvas
 	gs.mu.Unlock()
