@@ -70,6 +70,26 @@ var AllKanaRows = []KanaRow{
 	{ID: "r", Label: "R-row (ら)", Group: GroupBasic, Entries: []Entry{entry("ら", "ra"), entry("り", "ri"), entry("る", "ru"), entry("れ", "re"), entry("ろ", "ro")}},
 	{ID: "w", Label: "W-row (わ)", Group: GroupBasic, Entries: []Entry{entry("わ", "wa"), entry("を", "wo")}},
 	{ID: "n-only", Label: "N (ん)", Group: GroupBasic, Entries: []Entry{entry("ん", "n", "nn")}},
+	// Dakuon
+	{ID: "g", Label: "G-row (が)", Group: GroupDakuon, Entries: []Entry{entry("が", "ga"), entry("ぎ", "gi"), entry("ぐ", "gu"), entry("げ", "ge"), entry("ご", "go")}},
+	{ID: "z", Label: "Z-row (ざ)", Group: GroupDakuon, Entries: []Entry{entry("ざ", "za"), entry("じ", "ji", "zi"), entry("ず", "zu"), entry("ぜ", "ze"), entry("ぞ", "zo")}},
+	{ID: "d", Label: "D-row (だ)", Group: GroupDakuon, Entries: []Entry{entry("だ", "da"), entry("ぢ", "ji", "di"), entry("づ", "zu", "du"), entry("で", "de"), entry("ど", "do")}},
+	{ID: "b", Label: "B-row (ば)", Group: GroupDakuon, Entries: []Entry{entry("ば", "ba"), entry("び", "bi"), entry("ぶ", "bu"), entry("べ", "be"), entry("ぼ", "bo")}},
+	// Handakuon
+	{ID: "p", Label: "P-row (ぱ)", Group: GroupHandakuon, Entries: []Entry{entry("ぱ", "pa"), entry("ぴ", "pi"), entry("ぷ", "pu"), entry("ぺ", "pe"), entry("ぽ", "po")}},
+	// Yōon
+	{ID: "ky", Label: "KY (きゃ)", Group: GroupYoon, Entries: []Entry{entry("きゃ", "kya"), entry("きゅ", "kyu"), entry("きょ", "kyo")}},
+	{ID: "sy", Label: "SH (しゃ)", Group: GroupYoon, Entries: []Entry{entry("しゃ", "sha", "sya"), entry("しゅ", "shu", "syu"), entry("しょ", "sho", "syo")}},
+	{ID: "ch", Label: "CH (ちゃ)", Group: GroupYoon, Entries: []Entry{entry("ちゃ", "cha", "tya", "cya"), entry("ちゅ", "chu", "tyu", "cyu"), entry("ちょ", "cho", "tyo", "cyo")}},
+	{ID: "ny", Label: "NY (にゃ)", Group: GroupYoon, Entries: []Entry{entry("にゃ", "nya"), entry("にゅ", "nyu"), entry("にょ", "nyo")}},
+	{ID: "hy", Label: "HY (ひゃ)", Group: GroupYoon, Entries: []Entry{entry("ひゃ", "hya"), entry("ひゅ", "hyu"), entry("ひょ", "hyo")}},
+	{ID: "my", Label: "MY (みゃ)", Group: GroupYoon, Entries: []Entry{entry("みゃ", "mya"), entry("みゅ", "myu"), entry("みょ", "myo")}},
+	{ID: "ry", Label: "RY (りゃ)", Group: GroupYoon, Entries: []Entry{entry("りゃ", "rya"), entry("りゅ", "ryu"), entry("りょ", "ryo")}},
+	// Yōon with dakuten / handakuten
+	{ID: "gy", Label: "GY (ぎゃ)", Group: GroupYoonDakuon, Entries: []Entry{entry("ぎゃ", "gya"), entry("ぎゅ", "gyu"), entry("ぎょ", "gyo")}},
+	{ID: "j", Label: "J (じゃ)", Group: GroupYoonDakuon, Entries: []Entry{entry("じゃ", "ja", "zya", "jya"), entry("じゅ", "ju", "zyu", "jyu"), entry("じょ", "jo", "zyo", "jyo")}},
+	{ID: "by", Label: "BY (びゃ)", Group: GroupYoonDakuon, Entries: []Entry{entry("びゃ", "bya"), entry("びゅ", "byu"), entry("びょ", "byo")}},
+	{ID: "py", Label: "PY (ぴゃ)", Group: GroupYoonDakuon, Entries: []Entry{entry("ぴゃ", "pya"), entry("ぴゅ", "pyu"), entry("ぴょ", "pyo")}},
 }
 
 // CharToRow maps each kana character to its row ID.

@@ -14,14 +14,14 @@ func TestHiraganaGetRomaji(t *testing.T) {
 
 func TestHiraganaGetCharacters(t *testing.T) {
 	chars := Hiragana().GetCharacters()
-	if len(chars) != 46 {
-		t.Fatalf("expected 46 characters, got %d", len(chars))
+	if len(chars) != 104 {
+		t.Fatalf("expected 104 characters, got %d", len(chars))
 	}
 }
 
 func TestAllKanaRowsCount(t *testing.T) {
-	if len(AllKanaRows) != 11 {
-		t.Fatalf("expected 11 rows, got %d", len(AllKanaRows))
+	if len(AllKanaRows) != 27 {
+		t.Fatalf("expected 27 rows, got %d", len(AllKanaRows))
 	}
 }
 
@@ -90,6 +90,95 @@ func TestRowCharactersFollowEntries(t *testing.T) {
 	for i := range want {
 		if got[i] != want[i] {
 			t.Fatalf("Characters() = %v, want %v", got, want)
+		}
+	}
+}
+
+func TestAllKanaRowsHaveNoDuplicateCharacters(t *testing.T) {
+	seen := make(map[string]string)
+	total := 0
+	for _, row := range AllKanaRows {
+		for _, char := range row.Characters() {
+			if other, dup := seen[char]; dup {
+				t.Fatalf("%s appears in rows %s and %s", char, other, row.ID)
+			}
+			seen[char] = row.ID
+			total++
+		}
+	}
+	if total != 104 {
+		t.Fatalf("expected 104 characters, got %d", total)
+	}
+}
+
+func TestRowsAreOrderedByGroup(t *testing.T) {
+	order := make(map[Group]int)
+	for i, g := range Groups() {
+		order[g.Group] = i
+	}
+	last := 0
+	for _, row := range AllKanaRows {
+		idx, ok := order[row.Group]
+		if !ok {
+			t.Fatalf("row %s has unknown group %q", row.ID, row.Group)
+		}
+		if idx < last {
+			t.Fatalf("row %s (group %s) appears after a later group", row.ID, row.Group)
+		}
+		last = idx
+	}
+}
+
+func TestBasicRowsUnchanged(t *testing.T) {
+	rows := BasicRows()
+	wantIDs := []string{"vowels", "k", "s", "t", "n", "h", "m", "y", "r", "w", "n-only"}
+	if len(rows) != len(wantIDs) {
+		t.Fatalf("BasicRows() has %d rows, want %d", len(rows), len(wantIDs))
+	}
+	chars := 0
+	for i, row := range rows {
+		if row.ID != wantIDs[i] {
+			t.Errorf("BasicRows()[%d] = %s, want %s", i, row.ID, wantIDs[i])
+		}
+		chars += len(row.Entries)
+	}
+	if chars != 46 {
+		t.Errorf("BasicRows() has %d characters, want 46", chars)
+	}
+}
+
+func TestMatchesExtended(t *testing.T) {
+	cs := Hiragana()
+	cases := []struct {
+		char, input string
+		want        bool
+	}{
+		{"が", "ga", true},
+		{"じ", "ji", true},
+		{"じ", "zi", true},
+		{"じ", "di", false},
+		{"ぢ", "ji", true},
+		{"ぢ", "di", true},
+		{"ず", "zu", true},
+		{"ず", "du", false},
+		{"づ", "zu", true},
+		{"づ", "du", true},
+		{"ぱ", "pa", true},
+		{"きゃ", "kya", true},
+		{"しゃ", "sha", true},
+		{"しゃ", "sya", true},
+		{"ちゃ", "cha", true},
+		{"ちゃ", "tya", true},
+		{"ちゃ", "cya", true},
+		{"じゃ", "ja", true},
+		{"じゃ", "jya", true},
+		{"じゃ", "zya", true},
+		{"ぴょ", "pyo", true},
+		{"きゃ", "ka", false},
+	}
+	for _, c := range cases {
+		if got := cs.Matches(c.char, c.input); got != c.want {
+			t.Errorf("Matches(%q, %q) = %v, want %v", c.char, c.input, got, c.want)
 		}
 	}
 }
