@@ -225,3 +225,112 @@ func TestProgressionCompletesPartialStep(t *testing.T) {
 		t.Fatalf("unlocked %v, want [s]", got)
 	}
 }
+
+// newUnlockReadyState returns a state where one correct あ unlocks [k s].
+func newUnlockReadyState() *GameState {
+	gs := newTestState()
+	gs.autoProgress = true
+	selectRows(gs, "vowels")
+	masterRows(gs, "vowels")
+	gs.tiles = []*KanaTile{tileAt("あ", "a", 0)}
+	return gs
+}
+
+func TestUnlockPausesAndQueuesEvent(t *testing.T) {
+	gs := newUnlockReadyState()
+	gs.checkAnswer("a")
+	if !gs.paused {
+		t.Fatal("expected game paused after unlock")
+	}
+	if !equalIDs(gs.pendingIntro, []string{"k", "s"}) {
+		t.Fatalf("pendingIntro = %v, want [k s]", gs.pendingIntro)
+	}
+	select {
+	case ev := <-gs.eventCh:
+		if ev.kind != rowsUnlockedEvent || !equalIDs(ev.rows, []string{"k", "s"}) {
+			t.Fatalf("unexpected event %+v", ev)
+		}
+	default:
+		t.Fatal("expected rowsUnlockedEvent on eventCh")
+	}
+}
+
+func TestUnlockWithFullEventChannelDoesNotPause(t *testing.T) {
+	gs := newUnlockReadyState()
+	for i := 0; i < cap(gs.eventCh); i++ {
+		gs.eventCh <- gameEvent{kind: gameOverEvent}
+	}
+	gs.checkAnswer("a")
+	if gs.paused || gs.pendingIntro != nil {
+		t.Fatalf("expected no pause without a delivered event (paused=%v, pending=%v)", gs.paused, gs.pendingIntro)
+	}
+	if !gs.selectedRows["k"] || !gs.selectedRows["s"] {
+		t.Fatal("rows should still be unlocked")
+	}
+}
+
+func TestPausedGameDoesNotMoveSpawnOrScore(t *testing.T) {
+	gs := newTestState()
+	selectRows(gs, "vowels")
+	gs.tiles = []*KanaTile{tileAt("あ", "a", 0)}
+	gs.Pause()
+
+	gs.tick()
+	if y := gs.tiles[0].pos.Y; y != 0 {
+		t.Fatalf("tile moved while paused: y=%.1f", y)
+	}
+	gs.spawnKana()
+	if len(gs.tiles) != 1 {
+		t.Fatalf("spawned while paused: %d tiles", len(gs.tiles))
+	}
+	gs.checkAnswer("a")
+	if len(gs.tiles) != 1 || gs.score != 0 {
+		t.Fatal("answer accepted while paused")
+	}
+
+	gs.Resume()
+	gs.tick()
+	if y := gs.tiles[0].pos.Y; y == 0 {
+		t.Fatal("tile did not move after Resume")
+	}
+}
+
+func TestFinishIntroClearsPendingAndResumes(t *testing.T) {
+	gs := newUnlockReadyState()
+	gs.checkAnswer("a")
+	gs.FinishIntro()
+	if gs.paused || gs.pendingIntro != nil {
+		t.Fatalf("after FinishIntro paused=%v pending=%v", gs.paused, gs.pendingIntro)
+	}
+}
+
+func TestUnlockAndScoreLimitKeepIntroForPlayAgain(t *testing.T) {
+	gs := newUnlockReadyState()
+	gs.scoreLimit = 10
+	gs.checkAnswer("a")
+	if !gs.over {
+		t.Fatal("expected game over at score limit")
+	}
+	if !equalIDs(gs.pendingIntro, []string{"k", "s"}) {
+		t.Fatalf("pendingIntro = %v, want [k s]", gs.pendingIntro)
+	}
+	first := <-gs.eventCh
+	second := <-gs.eventCh
+	if first.kind != rowsUnlockedEvent || second.kind != gameOverEvent {
+		t.Fatalf("event order = %v, %v", first.kind, second.kind)
+	}
+
+	gs.Reset()
+	if !gs.paused || !equalIDs(gs.PendingIntro(), []string{"k", "s"}) {
+		t.Fatalf("after Reset paused=%v pending=%v, want paused with [k s]", gs.paused, gs.pendingIntro)
+	}
+}
+
+func TestResetWithoutPendingIntroUnpauses(t *testing.T) {
+	gs := newTestState()
+	gs.Pause()
+	gs.Reset()
+	if gs.paused {
+		t.Fatal("expected Reset to clear pause without a pending intro")
+	}
+}
