@@ -36,8 +36,12 @@ type StatsPanel struct {
 	// Used to show/hide entire rows together.
 	rowCells map[string][6]*widget.Label
 
-	// groupCells holds the label row shown above each non-basic group.
-	groupCells map[kanacore.Group][6]*widget.Label
+	// basicGrid is the always-visible 6-column grid for the basic kana group.
+	basicGrid *fyne.Container
+
+	// groupSections holds the label+grid section for each non-basic group,
+	// shown or hidden together based on whether any row in the group is selected.
+	groupSections map[kanacore.Group]*fyne.Container
 }
 
 // vowelColIndex returns the column index (0–4) for a kana based on its romaji vowel ending.
@@ -90,86 +94,94 @@ func groupLabel(g kanacore.Group) string {
 
 func newStatsPanel() *StatsPanel {
 	p := &StatsPanel{
-		charLabels: make(map[string]*widget.Label),
-		rowLabels:  make(map[string]*widget.Label),
-		missLabels: make(map[string]*widget.Label),
-		rowCells:   make(map[string][6]*widget.Label),
-		groupCells: make(map[kanacore.Group][6]*widget.Label),
+		charLabels:    make(map[string]*widget.Label),
+		rowLabels:     make(map[string]*widget.Label),
+		missLabels:    make(map[string]*widget.Label),
+		rowCells:      make(map[string][6]*widget.Label),
+		groupSections: make(map[kanacore.Group]*fyne.Container),
 	}
 
-	// Build progress table (6 columns: row-label | a | i | u | e | o).
-	gridItems := make([]fyne.CanvasObject, 0)
+	// Build one 6-column progress grid per group, so a group's label never
+	// widens another group's columns (Fyne sizes every grid cell to the
+	// widest cell in that same grid).
+	sections := container.NewVBox()
 
-	// Header row: blank + vowel headers.
-	headerCells := []*widget.Label{
-		widget.NewLabel(""),
-		widget.NewLabel("a"),
-		widget.NewLabel("i"),
-		widget.NewLabel("u"),
-		widget.NewLabel("e"),
-		widget.NewLabel("o"),
-	}
-	for _, lbl := range headerCells {
-		gridItems = append(gridItems, lbl)
-	}
+	for _, info := range kanacore.Groups() {
+		g := info.Group
+		gridItems := make([]fyne.CanvasObject, 0)
 
-	for _, row := range kanacore.AllKanaRows {
-		if _, done := p.groupCells[row.Group]; !done && row.Group != kanacore.GroupBasic {
-			var g6 [6]*widget.Label
-			g6[0] = widget.NewLabelWithStyle(groupLabel(row.Group), fyne.TextAlignLeading, fyne.TextStyle{Italic: true})
-			for i := 1; i < 6; i++ {
-				g6[i] = widget.NewLabel("")
+		if g == kanacore.GroupBasic {
+			// Header row: blank + vowel headers.
+			headerCells := []*widget.Label{
+				widget.NewLabel(""),
+				widget.NewLabel("a"),
+				widget.NewLabel("i"),
+				widget.NewLabel("u"),
+				widget.NewLabel("e"),
+				widget.NewLabel("o"),
 			}
-			for _, lbl := range g6 {
-				lbl.Hide()
+			for _, lbl := range headerCells {
 				gridItems = append(gridItems, lbl)
 			}
-			p.groupCells[row.Group] = g6
 		}
 
-		// Create the row-label cell.
-		rowLbl := widget.NewLabel(rowShortLabel(row.ID))
+		for _, row := range kanacore.RowsInGroup(g) {
+			// Create the row-label cell.
+			rowLbl := widget.NewLabel(rowShortLabel(row.ID))
 
-		// Create 5 placeholder cells (one per vowel column), initially "-".
-		// cells[0..4] correspond to columns a/i/u/e/o.
-		cells := [5]*widget.Label{}
-		for i := range cells {
-			cells[i] = widget.NewLabel("")
-		}
-
-		// Place each character into the correct column slot.
-		for _, e := range row.Entries {
-			char := e.Char
-			col := vowelColIndex(e.Romaji)
-			if col < 0 || col > 4 {
-				continue
+			// Create 5 placeholder cells (one per vowel column), initially "-".
+			// cells[0..4] correspond to columns a/i/u/e/o.
+			cells := [5]*widget.Label{}
+			for i := range cells {
+				cells[i] = widget.NewLabel("")
 			}
-			lbl := widget.NewLabel("-")
-			p.charLabels[char] = lbl
-			cells[col] = lbl
+
+			// Place each character into the correct column slot.
+			for _, e := range row.Entries {
+				char := e.Char
+				col := vowelColIndex(e.Romaji)
+				if col < 0 || col > 4 {
+					continue
+				}
+				lbl := widget.NewLabel("-")
+				p.charLabels[char] = lbl
+				cells[col] = lbl
+			}
+
+			// Store all 6 cells for this row so Update can show/hide them.
+			var row6 [6]*widget.Label
+			row6[0] = rowLbl
+			for i, c := range cells {
+				row6[i+1] = c
+			}
+			p.rowCells[row.ID] = row6
+
+			// Add to grid.
+			gridItems = append(gridItems, rowLbl)
+			for _, c := range cells {
+				gridItems = append(gridItems, c)
+			}
+
+			// Initially hide all row cells; Update() will show active ones.
+			for _, lbl := range row6 {
+				lbl.Hide()
+			}
 		}
 
-		// Store all 6 cells for this row so Update can show/hide them.
-		var row6 [6]*widget.Label
-		row6[0] = rowLbl
-		for i, c := range cells {
-			row6[i+1] = c
-		}
-		p.rowCells[row.ID] = row6
+		grid := container.NewGridWithColumns(6, gridItems...)
 
-		// Add to grid.
-		gridItems = append(gridItems, rowLbl)
-		for _, c := range cells {
-			gridItems = append(gridItems, c)
+		if g == kanacore.GroupBasic {
+			p.basicGrid = grid
+			sections.Add(grid)
+			continue
 		}
 
-		// Initially hide all row cells; Update() will show active ones.
-		for _, lbl := range row6 {
-			lbl.Hide()
-		}
+		label := widget.NewLabelWithStyle(groupLabel(g), fyne.TextAlignLeading, fyne.TextStyle{Italic: true})
+		section := container.NewVBox(label, grid)
+		section.Hide()
+		p.groupSections[g] = section
+		sections.Add(section)
 	}
-
-	grid := container.NewGridWithColumns(6, gridItems...)
 
 	// Pre-create row labels (one per known row), hidden by default.
 	p.rowBox = container.NewVBox()
@@ -195,7 +207,7 @@ func newStatsPanel() *StatsPanel {
 
 	p.container = container.NewVScroll(container.NewVBox(
 		widget.NewLabel("PROGRESS"),
-		grid,
+		sections,
 		widget.NewSeparator(),
 		widget.NewLabel("ACTIVE ROWS"),
 		p.rowBox,
@@ -253,7 +265,7 @@ func (p *StatsPanel) Update(snap StatsSnapshot) {
 		}
 	}
 
-	for group, g6 := range p.groupCells {
+	for group, section := range p.groupSections {
 		visible := false
 		for _, row := range kanacore.RowsInGroup(group) {
 			if snap.SelectedRows[row.ID] {
@@ -261,12 +273,10 @@ func (p *StatsPanel) Update(snap StatsSnapshot) {
 				break
 			}
 		}
-		for _, lbl := range g6 {
-			if visible {
-				lbl.Show()
-			} else {
-				lbl.Hide()
-			}
+		if visible {
+			section.Show()
+		} else {
+			section.Hide()
 		}
 	}
 
