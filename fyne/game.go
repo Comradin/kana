@@ -547,19 +547,20 @@ func (gs *GameState) checkAutoProgression() []string {
 // isRowMastered returns true when at least 80% of the row's characters have a
 // combined (overall+session) correct count of 3 or more.
 func (gs *GameState) isRowMastered(row kanacore.KanaRow) bool {
-	if len(row.Characters) == 0 {
+	chars := row.Characters()
+	if len(chars) == 0 {
 		return true
 	}
 
 	masteredCount := 0
-	for _, char := range row.Characters {
+	for _, char := range chars {
 		total := gs.overallStats[char].CorrectCount + gs.sessionStats[char].CorrectCount
 		if total >= 3 {
 			masteredCount++
 		}
 	}
 
-	threshold := int(float64(len(row.Characters)) * 0.8)
+	threshold := int(float64(len(chars)) * 0.8)
 	if threshold == 0 {
 		threshold = 1
 	}

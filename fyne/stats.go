@@ -87,8 +87,6 @@ func newStatsPanel() *StatsPanel {
 		rowCells:    make(map[string][6]*widget.Label),
 	}
 
-	cs := kanacore.Hiragana()
-
 	// Build progress table (6 columns: row-label | a | i | u | e | o).
 	gridItems := make([]fyne.CanvasObject, 0)
 
@@ -117,12 +115,9 @@ func newStatsPanel() *StatsPanel {
 		}
 
 		// Place each character into the correct column slot.
-		for _, char := range row.Characters {
-			romaji, ok := cs.GetRomaji(char)
-			if !ok {
-				continue
-			}
-			col := vowelColIndex(romaji)
+		for _, e := range row.Entries {
+			char := e.Char
+			col := vowelColIndex(e.Romaji)
 			if col < 0 || col > 4 {
 				continue
 			}
@@ -165,7 +160,7 @@ func newStatsPanel() *StatsPanel {
 	// Pre-create missed-kana labels (one per character), hidden by default.
 	p.missBox = container.NewVBox()
 	for _, row := range kanacore.AllKanaRows {
-		for _, char := range row.Characters {
+		for _, char := range row.Characters() {
 			lbl := widget.NewLabel("")
 			lbl.Hide()
 			p.missLabels[char] = lbl
