@@ -139,3 +139,13 @@ func DefaultRowIDs() []string {
 	}
 	return ids
 }
+
+// ProgressionSteps lists the row IDs that auto-progression unlocks together,
+// in order. A step never crosses a group boundary.
+var ProgressionSteps = [][]string{
+	{"vowels"}, {"k", "s"}, {"t", "n"}, {"h", "m"}, {"y", "r"}, {"w", "n-only"},
+	{"g", "z"}, {"d", "b"},
+	{"p"},
+	{"ky", "sy"}, {"ch", "ny"}, {"hy", "my"}, {"ry"},
+	{"gy", "j"}, {"by", "py"},
+}
