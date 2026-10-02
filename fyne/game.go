@@ -51,6 +51,8 @@ type GameState struct {
 	pendingOffer    bool // the katakana offer dialog is waiting
 	katakanaOffered bool // the offer was already made once
 
+	userPaused bool // the learner paused with the button or Esc
+
 	store *store.Store
 
 	stopCh        chan struct{}
@@ -58,6 +60,7 @@ type GameState struct {
 	eventChClosed bool
 
 	objectSnapshot atomic.Value // []fyne.CanvasObject
+	showPauseHint  atomic.Bool  // the canvas shows the "Paused" hint
 
 	canvasW float32
 	canvasH float32
@@ -272,6 +275,7 @@ func (gs *GameState) Reset() {
 	// matching settle()'s invariant (settle itself only ever unpauses, so it
 	// cannot express this one case where Reset must pause).
 	gs.pendingOffer = false
+	gs.userPaused = false
 	gs.paused = len(gs.pendingIntro) > 0
 
 	// reload overall stats
@@ -799,11 +803,38 @@ func (gs *GameState) announceRows(ids []string) {
 }
 
 // settle enforces the pause invariant: the game is paused only while a dialog
-// is pending. Must be called under lock.
+// is pending or the learner has paused. It is the only place that unpauses.
+// Must be called under lock.
 func (gs *GameState) settle() {
-	if gs.paused && len(gs.pendingIntro) == 0 && !gs.pendingOffer {
+	if gs.paused && len(gs.pendingIntro) == 0 && !gs.pendingOffer && !gs.userPaused {
 		gs.paused = false
 	}
+}
+
+// TogglePause flips the learner's pause and returns whether it is now on.
+// Turning it off resumes only if no other reason holds the pause. It does
+// nothing once the game is over.
+func (gs *GameState) TogglePause() bool {
+	gs.mu.Lock()
+	defer gs.mu.Unlock()
+	if gs.over {
+		return false
+	}
+	gs.userPaused = !gs.userPaused
+	if gs.userPaused {
+		gs.paused = true
+	} else {
+		gs.settle()
+	}
+	gs.buildSnapshot()
+	return gs.userPaused
+}
+
+// IsUserPaused reports whether the learner has paused the game.
+func (gs *GameState) IsUserPaused() bool {
+	gs.mu.Lock()
+	defer gs.mu.Unlock()
+	return gs.userPaused
 }
 
 // maybeOfferKatakana raises the one-time katakana offer once all hiragana
@@ -899,9 +930,17 @@ func (gs *GameState) FinishIntro() {
 	gs.mu.Unlock()
 }
 
-// buildSnapshot rebuilds the atomic snapshot of canvas objects.
+// buildSnapshot rebuilds the atomic snapshot of canvas objects. While the
+// learner has paused, no tiles are published, so the pause cannot be used to
+// study them, and the canvas is told to show the hint.
 // Must be called under lock.
 func (gs *GameState) buildSnapshot() {
+	hide := gs.userPaused
+	gs.showPauseHint.Store(gs.userPaused)
+	if hide {
+		gs.objectSnapshot.Store([]fyne.CanvasObject{})
+		return
+	}
 	objs := make([]fyne.CanvasObject, 0, len(gs.tiles)*3)
 	for _, tile := range gs.tiles {
 		objs = append(objs, tile.Objects()...)

@@ -38,6 +38,14 @@ func buildWindow(a fyne.App, st *store.Store) fyne.Window {
 
 	w.SetContent(layout)
 
+	// Esc pauses when nothing has focus; the focused entry handles it itself.
+	// Behind a dialog, Esc is left alone so the dialog keeps the keyboard.
+	w.Canvas().SetOnTypedKey(func(key *fyne.KeyEvent) {
+		if key.Name == fyne.KeyEscape && w.Canvas().Overlays().Top() == nil {
+			inputBar.TogglePause()
+		}
+	})
+
 	// Initial stats render
 	gs.mu.Lock()
 	snap := gs.snapshot()
@@ -184,6 +192,7 @@ func showGameOverDialog(gs *GameState, snap StatsSnapshot, reason string, statsP
 		gs.mu.Unlock()
 		statsPanel.Update(snap)
 		inputBar.Update(snap)
+		inputBar.SetPaused(false) // Reset cleared the user pause
 		gameCanvas.Refresh()
 		showPendingDialogs(gs, statsPanel, inputBar, w)
 	}, w)
