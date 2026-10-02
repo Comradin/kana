@@ -199,3 +199,78 @@ func TestCanvasShowsPauseHintOnlyWhileUserPaused(t *testing.T) {
 		t.Fatal("hint still shown after resuming")
 	}
 }
+
+func TestSettingsOpenPausesHidesTilesAndResumes(t *testing.T) {
+	gs := newTestState()
+	selectRows(gs, "vowels")
+	gs.tiles = []*KanaTile{tileAt("あ", "a", 0)}
+	gs.buildSnapshot()
+
+	gs.SetSettingsOpen(true)
+	if !gs.paused {
+		t.Fatal("opening settings should pause")
+	}
+	if n := len(tileObjects(gs)); n != 0 {
+		t.Fatalf("tiles visible while settings are open: %d objects", n)
+	}
+	if gs.showPauseHint.Load() {
+		t.Fatal("the pause hint is only for a user pause")
+	}
+	gs.tick()
+	if y := gs.tiles[0].pos.Y; y != 0 {
+		t.Fatalf("tile moved while settings are open: y=%.1f", y)
+	}
+
+	gs.SetSettingsOpen(false)
+	if gs.paused {
+		t.Fatal("closing settings should resume")
+	}
+	if n := len(tileObjects(gs)); n != 3 {
+		t.Fatalf("expected the tile's 3 objects after closing settings, got %d", n)
+	}
+}
+
+func TestClosingSettingsKeepsUserPause(t *testing.T) {
+	gs := newTestState()
+	gs.TogglePause()
+	gs.SetSettingsOpen(true)
+	gs.SetSettingsOpen(false)
+	if !gs.paused || !gs.IsUserPaused() {
+		t.Fatalf("paused=%v userPaused=%v after closing settings", gs.paused, gs.IsUserPaused())
+	}
+	if n := len(tileObjects(gs)); n != 0 || !gs.showPauseHint.Load() {
+		t.Fatalf("user pause should still hide tiles and show the hint (objects=%d)", n)
+	}
+}
+
+func TestClosingSettingsKeepsPendingDialogPause(t *testing.T) {
+	gs := newUnlockReadyState()
+	gs.checkAnswer("a") // intro pending
+	gs.SetSettingsOpen(true)
+	gs.SetSettingsOpen(false)
+	if !gs.paused {
+		t.Fatal("closing settings must not resume while an intro is pending")
+	}
+}
+
+func TestUserPauseOffKeepsSettingsPause(t *testing.T) {
+	gs := newTestState()
+	gs.SetSettingsOpen(true)
+	gs.TogglePause()
+	gs.TogglePause()
+	if !gs.paused {
+		t.Fatal("ending the user pause must not resume while settings are open")
+	}
+	if n := len(tileObjects(gs)); n != 0 {
+		t.Fatalf("tiles visible while settings are open: %d objects", n)
+	}
+}
+
+func TestResetClearsSettingsOpen(t *testing.T) {
+	gs := newTestState()
+	gs.SetSettingsOpen(true)
+	gs.Reset()
+	if gs.paused || gs.settingsOpen {
+		t.Fatalf("after Reset paused=%v settingsOpen=%v", gs.paused, gs.settingsOpen)
+	}
+}

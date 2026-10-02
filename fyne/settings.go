@@ -79,12 +79,21 @@ func showSettingsDialog(gs *GameState, statsPanel *StatsPanel, gameCanvas *GameC
 		limitEntry,
 	)
 
+	gs.SetSettingsOpen(true)
+	gameCanvas.Refresh()
 	dialog.ShowCustomConfirm("Settings", "Save", "Cancel", form, func(save bool) {
+		// Release the settings pause first on every path; showPendingDialogs
+		// then resumes the game or shows whatever is still pending.
+		gs.SetSettingsOpen(false)
 		if !save {
+			gameCanvas.Refresh()
+			showPendingDialogs(gs, statsPanel, inputBar, win)
 			return
 		}
 
 		if err := limitEntry.Validate(); err != nil {
+			gameCanvas.Refresh()
+			showPendingDialogs(gs, statsPanel, inputBar, win)
 			dialog.ShowError(err, win)
 			return
 		}
