@@ -328,3 +328,14 @@ func TestFreshStartIsHiraganaOnly(t *testing.T) {
 		t.Fatalf("fresh start activeScripts = %v, want hiragana only", gs.activeScripts)
 	}
 }
+
+func TestOfferIsPersisted(t *testing.T) {
+	test.NewApp()
+	st := openTestStore(t)
+	gs := newOfferReadyState()
+	gs.store = st
+	gs.checkAnswer("a")
+	if offered, _ := st.KatakanaOffered(); !offered {
+		t.Fatal("katakana_offered should be stored when the offer is raised")
+	}
+}
