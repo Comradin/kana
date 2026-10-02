@@ -49,7 +49,10 @@ func (t *KanaTheme) kanaColor(key themeColorKey) color.Color {
 	return color.Black
 }
 
-func (t *KanaTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) color.Color {
+// Color returns the Warm Paper palette. The palette is light, so the variant
+// the OS asks for is ignored: falling back to the dark default would put white
+// text on the beige background in dark mode.
+func (t *KanaTheme) Color(name fyne.ThemeColorName, _ fyne.ThemeVariant) color.Color {
 	switch name {
 	case theme.ColorNameBackground:
 		return t.kanaColor(colorBackground)
@@ -57,8 +60,12 @@ func (t *KanaTheme) Color(name fyne.ThemeColorName, variant fyne.ThemeVariant) c
 		return t.kanaColor(colorTileFace)
 	case theme.ColorNamePrimary:
 		return t.kanaColor(colorAccent)
+	case theme.ColorNameForeground:
+		return t.kanaColor(colorKanaText)
+	case theme.ColorNameInputBackground:
+		return t.kanaColor(colorInputBg)
 	}
-	return theme.DefaultTheme().Color(name, variant)
+	return theme.DefaultTheme().Color(name, theme.VariantLight)
 }
 
 func (t *KanaTheme) Font(style fyne.TextStyle) fyne.Resource {
