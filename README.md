@@ -14,7 +14,7 @@ Kana is a Fyne v2 desktop app (`kana-desktop`).
 
 ### Core Gameplay
 - **104 Hiragana and 104 Katakana (basic, Dakuon, Handakuon, Yōon)**: Practice the full practical hiragana and katakana sets, from あ/ア (a) to the combined Yōon with (han)dakuten
-- **Falling Character Mechanic**: Characters spawn at the top and fall at variable speeds
+- **Falling Character Mechanic**: Characters spawn at the top and fall for a fixed time (16–24 s, randomized per tile), independent of window height
 - **Romaji Input**: Type the romanized equivalent and press Enter to score
 - **Learning path**: start with あいうえお, unlock two rows at a time; each automatically unlocked row is introduced before it is asked, and the game pauses while new rows are introduced
 - **Two scripts**: hiragana and katakana progress independently; switch scripts in the settings. After the basic hiragana you are offered katakana once.
@@ -24,7 +24,7 @@ Kana is a Fyne v2 desktop app (`kana-desktop`).
 ### Progress Tracking
 - **Persistent Statistics**: Progress is saved to a local SQLite database (`kana.db`)
 - **Per-Character Stats**: Correct answers, misses, and current streak per hiragana and katakana character
-- **Session vs Overall Stats**: The stats panel shows this session's correct counts per kana; overall stats are persisted across sessions and drive progression
+- **Session vs Overall Stats**: The stats panel shows a session line (correct, missed, accuracy), a learning-path line per active script and a kana grid of each character's learning state; overall stats are persisted across sessions and drive progression
 
 ### Customization
 - **Row Selection**: Choose which hiragana and katakana rows to practice, grouped by Basic, Dakuon, Handakuon, Yōon and Yōon + Dakuten
@@ -33,7 +33,8 @@ Kana is a Fyne v2 desktop app (`kana-desktop`).
 
 ### Desktop App (Fyne)
 - Warm paper tile aesthetic — stamp-style kana tiles on a parchment background
-- Split layout: game canvas on the left, stats panel on the right
+- Split layout: game canvas on the left, stats panel on the right; window starts at 1000 × 760
+- Stats panel: a session line, one learning-path line per active script, and a side-by-side hiragana/katakana kana grid (new/learning/mastered, with a red border on a character missed this session)
 - In-game settings via gear icon (no pre-game setup form)
 - Game-over dialog with missed character review and Play Again
 
@@ -159,7 +160,9 @@ Built on [Fyne v2](https://fyne.io) with goroutine-based game loop:
 - `canvas.go`: `GameCanvas` widget, atomic snapshot renderer (avoids mutex/render-thread deadlock)
 - `tile.go`: `KanaTile` — shadow + face + text canvas objects
 - `intro.go`: Pending dialogs (katakana offer and row intros) through one entry point, `showPendingDialogs`
-- `stats.go`: `StatsPanel` widget with a progress table grouped by Basic, Dakuon, Handakuon, Yōon and Yōon + Dakuten, one section per script
+- `stats.go`: `StatsPanel` widget — a session line, one learning-path line per active script, and a side-by-side hiragana/katakana kana grid of each character's learning state
+- `progress.go`: computes each script's learning-path status (`PathStatus`) and total correct counts per character
+- `statswidgets.go`: the fixed-column grid layout and the kana cell widget used by the stats panel
 - `input.go`: `InputBar` — score, miss count, text entry
 - `settings.go`: In-game settings dialog with scripts and row selection (one tab per script, per-group "all" toggle)
 - `theme.go`: `KanaTheme` — warm paper colour palette
@@ -171,7 +174,7 @@ Built on [Fyne v2](https://fyne.io) with goroutine-based game loop:
 ### Game Timing
 - Tick loop: 100ms
 - Spawn interval: 4 seconds
-- Desktop tile speed: 3.75–6.25 px/tick
+- Fall time: each tile takes 16–24 s (randomized) to cross the canvas, independent of window height
 
 ## Data Persistence
 
