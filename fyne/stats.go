@@ -12,12 +12,13 @@ import (
 
 // StatsSnapshot is a lock-free copy of the game state fields needed by the panel.
 type StatsSnapshot struct {
-	SessionStats map[string]store.KanaStats
-	SelectedRows map[string]bool
-	MissedKanas  []kanacore.Kana
-	Score        int
-	ScoreLimit   int
-	Missed       int
+	SessionStats  map[string]store.KanaStats
+	SelectedRows  map[string]bool
+	MissedKanas   []kanacore.Kana
+	Score         int
+	ScoreLimit    int
+	Missed        int
+	ActiveScripts map[kanacore.Script]bool
 }
 
 // StatsPanel shows hiragana progress, active rows, and missed characters.

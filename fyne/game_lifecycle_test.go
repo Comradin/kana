@@ -298,3 +298,33 @@ func TestStoreErrorDoesNotTriggerFreshStart(t *testing.T) {
 		t.Fatalf("rows=%v paused=%v, want basic defaults without pause", gs.selectedRows, gs.paused)
 	}
 }
+
+func TestActiveScriptsLoadedFromStore(t *testing.T) {
+	test.NewApp()
+	st := openTestStore(t)
+	_ = st.SaveSelectedRows([]string{"vowels", "kata:vowels"})
+	_ = st.SaveActiveScripts([]string{"hiragana", "katakana"})
+	gs := NewGameState(st)
+	if !gs.activeScripts[kanacore.ScriptHiragana] || !gs.activeScripts[kanacore.ScriptKatakana] {
+		t.Fatalf("activeScripts = %v, want both", gs.activeScripts)
+	}
+}
+
+func TestUnknownScriptNamesFallBackToHiragana(t *testing.T) {
+	test.NewApp()
+	st := openTestStore(t)
+	_ = st.SaveSelectedRows([]string{"vowels"})
+	_ = st.SaveActiveScripts([]string{"klingon"})
+	gs := NewGameState(st)
+	if len(gs.activeScripts) != 1 || !gs.activeScripts[kanacore.ScriptHiragana] {
+		t.Fatalf("activeScripts = %v, want hiragana only", gs.activeScripts)
+	}
+}
+
+func TestFreshStartIsHiraganaOnly(t *testing.T) {
+	test.NewApp()
+	gs := NewGameState(openTestStore(t))
+	if len(gs.activeScripts) != 1 || !gs.activeScripts[kanacore.ScriptHiragana] {
+		t.Fatalf("fresh start activeScripts = %v, want hiragana only", gs.activeScripts)
+	}
+}
