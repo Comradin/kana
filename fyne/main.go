@@ -16,14 +16,16 @@ func main() {
 	}
 
 	if moved, err := store.MigrateLegacy("kana.db", path); err != nil {
-		fmt.Fprintf(os.Stderr, "Error moving existing database to %s: %v\n", path, err)
+		// Keep using the old database this time; the move is retried next start.
+		fmt.Fprintf(os.Stderr, "Error moving existing database to %s: %v; using ./kana.db for now\n", path, err)
+		path = "kana.db"
 	} else if moved {
 		fmt.Fprintf(os.Stderr, "Moved existing database to %s\n", path)
 	}
 
 	st, err := store.Open(path)
 	if err != nil {
-		fmt.Printf("Error opening store: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error opening store: %v\n", err)
 		os.Exit(1)
 	}
 	defer st.Close()
