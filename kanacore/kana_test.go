@@ -20,8 +20,8 @@ func TestHiraganaGetCharacters(t *testing.T) {
 }
 
 func TestAllKanaRowsCount(t *testing.T) {
-	if len(AllKanaRows) != 27 {
-		t.Fatalf("expected 27 rows, got %d", len(AllKanaRows))
+	if len(AllKanaRows) != 54 {
+		t.Fatalf("expected 54 rows, got %d", len(AllKanaRows))
 	}
 }
 
@@ -106,8 +106,8 @@ func TestAllKanaRowsHaveNoDuplicateCharacters(t *testing.T) {
 			total++
 		}
 	}
-	if total != 104 {
-		t.Fatalf("expected 104 characters, got %d", total)
+	if total != 208 {
+		t.Fatalf("expected 208 characters, got %d", total)
 	}
 }
 
@@ -116,16 +116,18 @@ func TestRowsAreOrderedByGroup(t *testing.T) {
 	for i, g := range Groups() {
 		order[g.Group] = i
 	}
-	last := 0
-	for _, row := range AllKanaRows {
-		idx, ok := order[row.Group]
-		if !ok {
-			t.Fatalf("row %s has unknown group %q", row.ID, row.Group)
+	for _, info := range Scripts() {
+		last := 0
+		for _, row := range RowsFor(info.Script) {
+			idx, ok := order[row.Group]
+			if !ok {
+				t.Fatalf("row %s has unknown group %q", row.ID, row.Group)
+			}
+			if idx < last {
+				t.Fatalf("%s row %s (group %s) appears after a later group", info.Script, row.ID, row.Group)
+			}
+			last = idx
 		}
-		if idx < last {
-			t.Fatalf("row %s (group %s) appears after a later group", row.ID, row.Group)
-		}
-		last = idx
 	}
 }
 
@@ -184,32 +186,133 @@ func TestMatchesExtended(t *testing.T) {
 }
 
 func TestProgressionStepsCoverRowsInOrder(t *testing.T) {
-	var flat []string
-	for i, step := range ProgressionSteps {
-		if len(step) == 0 {
-			t.Fatalf("step %d is empty", i)
-		}
-		first, _ := RowByID(step[0])
-		for _, id := range step {
-			row, ok := RowByID(id)
-			if !ok {
-				t.Fatalf("step %d has unknown row %q", i, id)
+	for _, info := range Scripts() {
+		steps := ProgressionStepsFor(info.Script)
+		rows := RowsFor(info.Script)
+		var flat []string
+		for i, step := range steps {
+			if len(step) == 0 {
+				t.Fatalf("%s step %d is empty", info.Script, i)
 			}
-			if row.Group != first.Group {
-				t.Fatalf("step %d crosses groups: %v", i, step)
+			first, _ := RowByID(step[0])
+			for _, id := range step {
+				row, ok := RowByID(id)
+				if !ok {
+					t.Fatalf("%s step %d has unknown row %q", info.Script, i, id)
+				}
+				if row.Group != first.Group || row.Script != info.Script {
+					t.Fatalf("%s step %d crosses groups or scripts: %v", info.Script, i, step)
+				}
+			}
+			flat = append(flat, step...)
+		}
+		if len(flat) != len(rows) {
+			t.Fatalf("%s steps cover %d rows, want %d", info.Script, len(flat), len(rows))
+		}
+		for i, row := range rows {
+			if flat[i] != row.ID {
+				t.Fatalf("%s step order position %d = %s, want %s", info.Script, i, flat[i], row.ID)
 			}
 		}
-		flat = append(flat, step...)
 	}
-	if len(flat) != len(AllKanaRows) {
-		t.Fatalf("steps cover %d rows, want %d", len(flat), len(AllKanaRows))
+	if got := ProgressionStepsFor(ScriptHiragana)[0]; len(got) != 1 || got[0] != "vowels" {
+		t.Fatalf("first hiragana step = %v, want [vowels]", got)
 	}
-	for i, row := range AllKanaRows {
-		if flat[i] != row.ID {
-			t.Fatalf("step order position %d = %s, want %s", i, flat[i], row.ID)
+	if got := ProgressionStepsFor(ScriptKatakana)[0]; len(got) != 1 || got[0] != "kata:vowels" {
+		t.Fatalf("first katakana step = %v, want [kata:vowels]", got)
+	}
+}
+
+func TestKatakanaTable(t *testing.T) {
+	cs := Katakana()
+	cases := []struct {
+		char, romaji string
+		alts         []string
+	}{
+		{"ア", "a", nil},
+		{"シ", "shi", []string{"si"}},
+		{"チ", "chi", []string{"ti"}},
+		{"ツ", "tsu", []string{"tu"}},
+		{"フ", "fu", []string{"hu"}},
+		{"ヲ", "wo", nil},
+		{"ン", "n", []string{"nn"}},
+		{"ガ", "ga", nil},
+		{"ヂ", "ji", []string{"di"}},
+		{"ヅ", "zu", []string{"du"}},
+		{"パ", "pa", nil},
+		{"キャ", "kya", nil},
+		{"シャ", "sha", []string{"sya"}},
+		{"ジャ", "ja", []string{"zya", "jya"}},
+		{"ピョ", "pyo", nil},
+	}
+	for _, c := range cases {
+		got, ok := cs.GetRomaji(c.char)
+		if !ok || got != c.romaji {
+			t.Errorf("Katakana %s = %q (%v), want %q", c.char, got, ok, c.romaji)
+		}
+		for _, alt := range c.alts {
+			if !cs.Matches(c.char, alt) {
+				t.Errorf("Katakana %s should accept %q", c.char, alt)
+			}
 		}
 	}
-	if len(ProgressionSteps[0]) != 1 || ProgressionSteps[0][0] != "vowels" {
-		t.Fatalf("first step = %v, want [vowels]", ProgressionSteps[0])
+	if len(cs.GetCharacters()) != 104 {
+		t.Fatalf("Katakana() has %d characters, want 104", len(cs.GetCharacters()))
+	}
+}
+
+func TestKatakanaRowsMirrorHiragana(t *testing.T) {
+	if len(KatakanaRows) != len(HiraganaRows) {
+		t.Fatalf("%d katakana rows, want %d", len(KatakanaRows), len(HiraganaRows))
+	}
+	for i, k := range KatakanaRows {
+		h := HiraganaRows[i]
+		if k.ID != "kata:"+h.ID || k.Group != h.Group || k.Script != ScriptKatakana || h.Script != ScriptHiragana {
+			t.Fatalf("row %d: katakana %+v does not mirror hiragana %+v", i, k, h)
+		}
+		for j, e := range k.Entries {
+			he := h.Entries[j]
+			if e.Romaji != he.Romaji || len(e.Alt) != len(he.Alt) {
+				t.Fatalf("%s: romaji/alternatives differ from %s", e.Char, he.Char)
+			}
+			for _, r := range e.Char {
+				if r < 0x30A1 || r > 0x30F6 {
+					t.Fatalf("%s contains non-katakana rune %U", e.Char, r)
+				}
+			}
+		}
+		for _, r := range k.Label {
+			if r >= 0x3041 && r <= 0x3096 {
+				t.Fatalf("label %q still contains hiragana", k.Label)
+			}
+		}
+	}
+	if row, _ := RowByID("kata:k"); row.Label != "K-row (カ)" {
+		t.Fatalf("kata:k label = %q", row.Label)
+	}
+}
+
+func TestScriptOfAndBaseRowID(t *testing.T) {
+	if ScriptOf("k") != ScriptHiragana || ScriptOf("kata:k") != ScriptKatakana {
+		t.Fatal("ScriptOf misclassifies row IDs")
+	}
+	if BaseRowID("kata:sy") != "sy" || BaseRowID("sy") != "sy" {
+		t.Fatal("BaseRowID does not strip the katakana prefix")
+	}
+}
+
+func TestAllKanaHasBothScripts(t *testing.T) {
+	cs := AllKana()
+	if len(cs.GetCharacters()) != 208 {
+		t.Fatalf("AllKana() has %d characters, want 208", len(cs.GetCharacters()))
+	}
+	if !cs.Matches("か", "ka") || !cs.Matches("カ", "ka") {
+		t.Fatal("AllKana should match both か and カ")
+	}
+	if len(BasicRows()) != 11 || BasicRows()[0].Script != ScriptHiragana {
+		t.Fatal("BasicRows must stay the 11 hiragana basic rows")
+	}
+	if got := len(RowsInGroup(ScriptKatakana, GroupBasic)); got != 11 {
+		t.Fatalf("katakana basic rows = %d, want 11", got)
 	}
 }

@@ -1,5 +1,7 @@
 package kanacore
 
+import "strings"
+
 // Group classifies rows by kind of kana; the order of Groups() is the
 // progression order.
 type Group string
@@ -29,6 +31,45 @@ func Groups() []GroupInfo {
 	}
 }
 
+// Script identifies a kana writing system.
+type Script string
+
+const (
+	ScriptHiragana Script = "hiragana"
+	ScriptKatakana Script = "katakana"
+)
+
+// ScriptInfo pairs a script with its display label.
+type ScriptInfo struct {
+	Script Script
+	Label  string
+}
+
+// Scripts returns both scripts in display order.
+func Scripts() []ScriptInfo {
+	return []ScriptInfo{
+		{ScriptHiragana, "Hiragana"},
+		{ScriptKatakana, "Katakana"},
+	}
+}
+
+// katakanaPrefix marks katakana row IDs so they never collide with the
+// hiragana IDs already stored by existing users.
+const katakanaPrefix = "kata:"
+
+// ScriptOf returns the script a row ID belongs to.
+func ScriptOf(rowID string) Script {
+	if strings.HasPrefix(rowID, katakanaPrefix) {
+		return ScriptKatakana
+	}
+	return ScriptHiragana
+}
+
+// BaseRowID strips the katakana prefix, giving the script-independent row ID.
+func BaseRowID(rowID string) string {
+	return strings.TrimPrefix(rowID, katakanaPrefix)
+}
+
 // Entry is one kana with its canonical Hepburn romaji and accepted alternatives.
 type Entry struct {
 	Char   string
@@ -41,6 +82,7 @@ type KanaRow struct {
 	ID      string
 	Label   string
 	Group   Group
+	Script  Script
 	Entries []Entry
 }
 
@@ -57,8 +99,8 @@ func entry(char, romaji string, alt ...string) Entry {
 	return Entry{Char: char, Romaji: romaji, Alt: alt}
 }
 
-// AllKanaRows lists every row in progression order.
-var AllKanaRows = []KanaRow{
+// HiraganaRows lists every hiragana row in progression order.
+var HiraganaRows = withScript(ScriptHiragana, []KanaRow{
 	{ID: "vowels", Label: "Vowels (あ)", Group: GroupBasic, Entries: []Entry{entry("あ", "a"), entry("い", "i"), entry("う", "u"), entry("え", "e"), entry("お", "o")}},
 	{ID: "k", Label: "K-row (か)", Group: GroupBasic, Entries: []Entry{entry("か", "ka"), entry("き", "ki"), entry("く", "ku"), entry("け", "ke"), entry("こ", "ko")}},
 	{ID: "s", Label: "S-row (さ)", Group: GroupBasic, Entries: []Entry{entry("さ", "sa"), entry("し", "shi", "si"), entry("す", "su"), entry("せ", "se"), entry("そ", "so")}},
@@ -90,6 +132,48 @@ var AllKanaRows = []KanaRow{
 	{ID: "j", Label: "J (じゃ)", Group: GroupYoonDakuon, Entries: []Entry{entry("じゃ", "ja", "zya", "jya"), entry("じゅ", "ju", "zyu", "jyu"), entry("じょ", "jo", "zyo", "jyo")}},
 	{ID: "by", Label: "BY (びゃ)", Group: GroupYoonDakuon, Entries: []Entry{entry("びゃ", "bya"), entry("びゅ", "byu"), entry("びょ", "byo")}},
 	{ID: "py", Label: "PY (ぴゃ)", Group: GroupYoonDakuon, Entries: []Entry{entry("ぴゃ", "pya"), entry("ぴゅ", "pyu"), entry("ぴょ", "pyo")}},
+})
+
+// KatakanaRows mirrors HiraganaRows in katakana.
+var KatakanaRows = toKatakanaRows(HiraganaRows)
+
+// AllKanaRows lists the hiragana rows followed by the katakana rows.
+var AllKanaRows = append(append([]KanaRow(nil), HiraganaRows...), KatakanaRows...)
+
+func withScript(s Script, rows []KanaRow) []KanaRow {
+	for i := range rows {
+		rows[i].Script = s
+	}
+	return rows
+}
+
+// toKatakana shifts every hiragana rune (U+3041–U+3096) to its katakana
+// counterpart 0x60 code points later; other runes are kept.
+func toKatakana(s string) string {
+	return strings.Map(func(r rune) rune {
+		if r >= 0x3041 && r <= 0x3096 {
+			return r + 0x60
+		}
+		return r
+	}, s)
+}
+
+func toKatakanaRows(rows []KanaRow) []KanaRow {
+	out := make([]KanaRow, len(rows))
+	for i, row := range rows {
+		entries := make([]Entry, len(row.Entries))
+		for j, e := range row.Entries {
+			entries[j] = Entry{Char: toKatakana(e.Char), Romaji: e.Romaji, Alt: e.Alt}
+		}
+		out[i] = KanaRow{
+			ID:      katakanaPrefix + row.ID,
+			Label:   toKatakana(row.Label),
+			Group:   row.Group,
+			Script:  ScriptKatakana,
+			Entries: entries,
+		}
+	}
+	return out
 }
 
 // CharToRow maps each kana character to its row ID.
@@ -104,20 +188,31 @@ func init() {
 	}
 }
 
-// RowsInGroup returns the rows of one group in progression order.
-func RowsInGroup(g Group) []KanaRow {
+// RowsFor returns the rows of one script in progression order.
+func RowsFor(s Script) []KanaRow {
 	rows := make([]KanaRow, 0)
 	for _, row := range AllKanaRows {
-		if row.Group == g {
+		if row.Script == s {
 			rows = append(rows, row)
 		}
 	}
 	return rows
 }
 
-// BasicRows returns the 46-character basic rows.
+// RowsInGroup returns the rows of one script and group in progression order.
+func RowsInGroup(s Script, g Group) []KanaRow {
+	rows := make([]KanaRow, 0)
+	for _, row := range AllKanaRows {
+		if row.Script == s && row.Group == g {
+			rows = append(rows, row)
+		}
+	}
+	return rows
+}
+
+// BasicRows returns the 46-character hiragana basic rows.
 func BasicRows() []KanaRow {
-	return RowsInGroup(GroupBasic)
+	return RowsInGroup(ScriptHiragana, GroupBasic)
 }
 
 // RowByID looks up a row by its ID.
@@ -140,12 +235,29 @@ func DefaultRowIDs() []string {
 	return ids
 }
 
-// ProgressionSteps lists the row IDs that auto-progression unlocks together,
-// in order. A step never crosses a group boundary.
-var ProgressionSteps = [][]string{
+// hiraganaSteps lists the hiragana row IDs that auto-progression unlocks
+// together, in order. A step never crosses a group boundary.
+var hiraganaSteps = [][]string{
 	{"vowels"}, {"k", "s"}, {"t", "n"}, {"h", "m"}, {"y", "r"}, {"w", "n-only"},
 	{"g", "z"}, {"d", "b"},
 	{"p"},
 	{"ky", "sy"}, {"ch", "ny"}, {"hy", "my"}, {"ry"},
 	{"gy", "j"}, {"by", "py"},
+}
+
+// ProgressionStepsFor returns a fresh copy of the learning-path steps for a
+// script; katakana steps are the hiragana steps with the katakana prefix.
+func ProgressionStepsFor(s Script) [][]string {
+	steps := make([][]string, len(hiraganaSteps))
+	for i, step := range hiraganaSteps {
+		ids := make([]string, len(step))
+		for j, id := range step {
+			if s == ScriptKatakana {
+				id = katakanaPrefix + id
+			}
+			ids[j] = id
+		}
+		steps[i] = ids
+	}
+	return steps
 }

@@ -25,7 +25,7 @@ func showSettingsDialog(gs *GameState, statsPanel *StatsPanel, gameCanvas *GameC
 	rowChecks := make(map[string]*widget.Check)
 	sections := container.NewVBox()
 	for _, g := range kanacore.Groups() {
-		groupRows := kanacore.RowsInGroup(g.Group)
+		groupRows := kanacore.RowsInGroup(kanacore.ScriptHiragana, g.Group)
 		all, checks, grid := newGroupChecks(groupRows, selected)
 		for id, c := range checks {
 			rowChecks[id] = c
