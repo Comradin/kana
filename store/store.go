@@ -16,12 +16,14 @@ import (
 )
 
 const (
-	selectedRowsKey   = "selected_rows"
-	autoProgressKey   = "auto_progress"
-	scoreLimitKey     = "score_limit"
-	databaseFilePerm  = 0o644
-	databaseDirPerm   = 0o755
-	defaultOpenTimout = 5 * time.Second
+	selectedRowsKey    = "selected_rows"
+	autoProgressKey    = "auto_progress"
+	scoreLimitKey      = "score_limit"
+	activeScriptsKey   = "active_scripts"
+	katakanaOfferedKey = "katakana_offered"
+	databaseFilePerm   = 0o644
+	databaseDirPerm    = 0o755
+	defaultOpenTimout  = 5 * time.Second
 )
 
 const DefaultScoreLimit = 1000
@@ -100,6 +102,53 @@ func (s *Store) SaveSelectedRows(rows []string) error {
 		return fmt.Errorf("store: encode selected rows: %w", err)
 	}
 	return s.setSetting(selectedRowsKey, string(payload))
+}
+
+// ActiveScripts loads the stored script names. Returns nil if unset; the
+// caller decides the default.
+func (s *Store) ActiveScripts() ([]string, error) {
+	value, err := s.getSetting(activeScriptsKey)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var scripts []string
+	if err := json.Unmarshal([]byte(value), &scripts); err != nil {
+		return nil, fmt.Errorf("store: decode active scripts: %w", err)
+	}
+	return scripts, nil
+}
+
+// SaveActiveScripts persists the active script names.
+func (s *Store) SaveActiveScripts(scripts []string) error {
+	payload, err := json.Marshal(scripts)
+	if err != nil {
+		return fmt.Errorf("store: encode active scripts: %w", err)
+	}
+	return s.setSetting(activeScriptsKey, string(payload))
+}
+
+// KatakanaOffered reports whether the learner was already offered katakana.
+func (s *Store) KatakanaOffered() (bool, error) {
+	value, err := s.getSetting(katakanaOfferedKey)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return value == "1", nil
+}
+
+// SaveKatakanaOffered persists whether katakana was offered.
+func (s *Store) SaveKatakanaOffered(offered bool) error {
+	value := "0"
+	if offered {
+		value = "1"
+	}
+	return s.setSetting(katakanaOfferedKey, value)
 }
 
 // AutoProgress returns the persisted auto progression flag.
