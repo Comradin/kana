@@ -69,6 +69,10 @@ type GameState struct {
 	charSet kanacore.CharacterSet
 
 	canvas *GameCanvas
+
+	// onStatsChanged refreshes the stats panel and input bar. buildWindow
+	// sets it before Start; tick calls it via fyne.Do after a miss.
+	onStatsChanged func()
 }
 
 // NewGameState constructs a new GameState, loading persisted state if store is non-nil.
@@ -366,11 +370,13 @@ func (gs *GameState) tick() {
 		return
 	}
 
+	missedNow := false
 	for i := len(gs.tiles) - 1; i >= 0; i-- {
 		tile := gs.tiles[i]
 		tile.Move(fyne.NewPos(tile.pos.X, tile.pos.Y+fallStep(gs.canvasH, tile.fallSeconds)))
 
 		if tile.pos.Y > gs.canvasH {
+			missedNow = true
 			gs.recordMiss(tile.kana.Char)
 			gs.missedKanas = append(gs.missedKanas, tile.kana)
 			gs.tiles = append(gs.tiles[:i], gs.tiles[i+1:]...)
@@ -381,10 +387,14 @@ func (gs *GameState) tick() {
 
 	gs.buildSnapshot()
 	canvas := gs.canvas
+	hook := gs.onStatsChanged
 	gs.mu.Unlock()
 
 	if canvas != nil {
 		fyne.Do(func() { canvas.Refresh() })
+	}
+	if missedNow && hook != nil {
+		fyne.Do(hook)
 	}
 }
 

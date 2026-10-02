@@ -713,3 +713,20 @@ func TestSpawnSetsFallTimeInRange(t *testing.T) {
 		}
 	}
 }
+
+func TestMissCallsStatsHookOnce(t *testing.T) {
+	gs := newTestState() // calls test.NewApp(), so fyne.Do runs the hook
+	calls := 0
+	gs.onStatsChanged = func() { calls++ }
+	gs.canvasH = 600
+	gs.tiles = []*KanaTile{tileAt("あ", "a", 599), tileAt("い", "i", 0)}
+
+	gs.tick() // あ falls out, い moves
+	if calls != 1 {
+		t.Fatalf("hook calls after a miss = %d, want 1", calls)
+	}
+	gs.tick() // nothing falls out
+	if calls != 1 {
+		t.Fatalf("hook calls after a tick without a miss = %d, want 1", calls)
+	}
+}
