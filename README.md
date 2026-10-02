@@ -13,10 +13,11 @@ Kana is a Fyne v2 desktop app (`kana-desktop`).
 ## Features
 
 ### Core Gameplay
-- **104 Hiragana: basic, Dakuon, Handakuon and Yōon**: Practice the full practical hiragana set, from あ (a) to the combined Yōon with (han)dakuten
+- **104 Hiragana and 104 Katakana (basic, Dakuon, Handakuon, Yōon)**: Practice the full practical hiragana and katakana sets, from あ/ア (a) to the combined Yōon with (han)dakuten
 - **Falling Character Mechanic**: Characters spawn at the top and fall at variable speeds
 - **Romaji Input**: Type the romanized equivalent and press Enter to score
 - **Learning path**: start with あいうえお, unlock two rows at a time; each automatically unlocked row is introduced before it is asked, and the game pauses while new rows are introduced
+- **Two scripts**: hiragana and katakana progress independently; switch scripts in the settings. After the basic hiragana you are offered katakana once.
 - **Score Limit Mode**: Set a target score or 0 for endless practice
 - **Miss Limit**: Game ends after 10 missed characters
 
@@ -136,6 +137,9 @@ accepted: si, ti, tu, hu, zi, di, du, sya, cya, jya, nn (and the others shown in
 parentheses above). じ/ぢ (ji) and ず/づ (zu) share an answer; typing di or du
 matches the ぢ/づ tile unambiguously.
 
+Katakana mirror the hiragana tables with the same romaji and alternatives, e.g.
+カ = ka, シャ = sha.
+
 ## Architecture
 
 ### Character Data (`kanacore/`)
@@ -143,7 +147,7 @@ matches the ぢ/づ tile unambiguously.
 Character data and row definitions live in `kanacore/`:
 
 - `kana.go`: `Kana` struct, `CharacterSet`, `NewCharacterSet`, `Matches` (canonical romaji plus accepted alternatives)
-- `kana_rows.go`: groups, rows with entries and alternative romaji, `ProgressionSteps`
+- `kana_rows.go`: groups, rows with entries and alternative romaji, `ProgressionSteps`; scripts (`Script`, `Scripts`), katakana rows generated from the hiragana rows by a Unicode shift, `kata:`-prefixed row IDs
 
 ### Desktop App (`fyne/`)
 
@@ -154,15 +158,15 @@ Built on [Fyne v2](https://fyne.io) with goroutine-based game loop:
 - `game.go`: `GameState` — tick/spawn goroutines, answer checking, stats, auto-progression
 - `canvas.go`: `GameCanvas` widget, atomic snapshot renderer (avoids mutex/render-thread deadlock)
 - `tile.go`: `KanaTile` — shadow + face + text canvas objects
-- `intro.go`: Intro dialog introducing newly unlocked rows as large tiles before they are asked
-- `stats.go`: `StatsPanel` widget with a progress table grouped by Basic, Dakuon, Handakuon, Yōon and Yōon + Dakuten
+- `intro.go`: Pending dialogs (katakana offer and row intros) through one entry point, `showPendingDialogs`
+- `stats.go`: `StatsPanel` widget with a progress table grouped by Basic, Dakuon, Handakuon, Yōon and Yōon + Dakuten, one section per script
 - `input.go`: `InputBar` — score, miss count, text entry
-- `settings.go`: In-game settings dialog with grouped row selection (per-group "all" toggle)
+- `settings.go`: In-game settings dialog with scripts and row selection (one tab per script, per-group "all" toggle)
 - `theme.go`: `KanaTheme` — warm paper colour palette
 
 ### Persistence (`store/`)
 
-- `store/store.go`: SQLite persistence
+- `store/store.go`: SQLite persistence, including active scripts and the katakana offer flag
 
 ### Game Timing
 - Tick loop: 100ms

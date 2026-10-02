@@ -5,7 +5,7 @@ This document outlines planned improvements and features for the Kana learning g
 ## Character Sets
 
 ### Priority: High
-- [ ] Add Katakana character set
+- [x] Add Katakana character set
 - [x] Add Dakuten characters (が、ぎ、ぐ、げ、ご, etc.)
 - [x] Add Handakuten characters (ぱ、ぴ、ぷ、ぺ、ぽ)
 - [x] Add Yoon combinations (きゃ、きゅ、きょ, しゃ、しゅ、しょ, etc.)
