@@ -40,7 +40,7 @@ func newInputBar(gs *GameState, statsPanel *StatsPanel, gameCanvas *GameCanvas, 
 	}
 
 	gearBtn := widget.NewButton("⚙", func() {
-		showSettingsDialog(gs, statsPanel, gameCanvas, win)
+		showSettingsDialog(gs, statsPanel, gameCanvas, ib, win)
 	})
 
 	rightCluster := container.NewHBox(ib.missedLabel, gearBtn)

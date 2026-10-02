@@ -147,3 +147,17 @@ func TestCheckedRowIDsFollowsRowOrder(t *testing.T) {
 		t.Fatalf("checkedRowIDs = %v, want [vowels g ky]", got)
 	}
 }
+
+func TestCheckedScriptsFollowDisplayOrder(t *testing.T) {
+	test.NewApp()
+	checks := map[kanacore.Script]*widget.Check{
+		kanacore.ScriptKatakana: widget.NewCheck("", nil),
+		kanacore.ScriptHiragana: widget.NewCheck("", nil),
+	}
+	checks[kanacore.ScriptKatakana].SetChecked(true)
+	checks[kanacore.ScriptHiragana].SetChecked(true)
+	got := checkedScripts(checks)
+	if len(got) != 2 || got[0] != kanacore.ScriptHiragana || got[1] != kanacore.ScriptKatakana {
+		t.Fatalf("checkedScripts = %v", got)
+	}
+}
