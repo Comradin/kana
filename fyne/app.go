@@ -55,6 +55,14 @@ func buildWindow(a fyne.App, st *store.Store) fyne.Window {
 	gs.mu.Unlock()
 	statsPanel.Update(snap)
 
+	gs.onStatsChanged = func() {
+		gs.mu.Lock()
+		snap := gs.snapshot()
+		gs.mu.Unlock()
+		statsPanel.Update(snap)
+		inputBar.Update(snap)
+	}
+
 	// Start game loop
 	gs.Start(gameCanvas)
 
