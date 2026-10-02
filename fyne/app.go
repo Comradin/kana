@@ -59,7 +59,7 @@ func buildWindow(a fyne.App, st *store.Store) fyne.Window {
 	// SetOnStarted without clobbering this callback.
 	// First launch: introduce the first row once the window is up.
 	a.Lifecycle().SetOnStarted(func() {
-		showPendingDialogs(gs, inputBar, w)
+		showPendingDialogs(gs, statsPanel, inputBar, w)
 	})
 
 	w.SetOnClosed(func() {
@@ -97,7 +97,7 @@ func watchEvents(ch chan gameEvent, gs *GameState, statsPanel *StatsPanel, gameC
 				// for both kinds.
 				continue
 			}
-			fyne.Do(func() { showPendingDialogs(gs, inputBar, w) })
+			fyne.Do(func() { showPendingDialogs(gs, statsPanel, inputBar, w) })
 		case gameOverEvent:
 			gs.mu.Lock()
 			snap := gs.snapshot()
@@ -185,6 +185,6 @@ func showGameOverDialog(gs *GameState, snap StatsSnapshot, reason string, statsP
 		statsPanel.Update(snap)
 		inputBar.Update(snap)
 		gameCanvas.Refresh()
-		showPendingDialogs(gs, inputBar, w)
+		showPendingDialogs(gs, statsPanel, inputBar, w)
 	}, w)
 }
