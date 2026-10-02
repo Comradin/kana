@@ -31,12 +31,13 @@ func tileWidthFor(char string) float32 {
 
 // KanaTile is a falling kana card rendered as three canvas objects.
 type KanaTile struct {
-	kana   kanacore.Kana
-	pos    fyne.Position
-	width  float32
-	shadow *canvas.Rectangle
-	face   *canvas.Rectangle
-	text   *canvas.Text
+	kana        kanacore.Kana
+	pos         fyne.Position
+	width       float32
+	shadow      *canvas.Rectangle
+	face        *canvas.Rectangle
+	text        *canvas.Text
+	fallSeconds float32 // time to cross the canvas; see fallStep
 }
 
 func newKanaTile(k kanacore.Kana) *KanaTile {
