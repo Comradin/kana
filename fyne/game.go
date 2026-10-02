@@ -1003,6 +1003,12 @@ func (gs *GameState) snapshot() StatsSnapshot {
 	for k, v := range gs.activeScripts {
 		scriptsCopy[k] = v
 	}
+	paths := make(map[kanacore.Script]PathStatus)
+	for _, info := range kanacore.Scripts() {
+		if gs.activeScripts[info.Script] {
+			paths[info.Script] = gs.pathStatus(info.Script)
+		}
+	}
 	return StatsSnapshot{
 		SessionStats:  sessionCopy,
 		SelectedRows:  rowsCopy,
@@ -1011,5 +1017,7 @@ func (gs *GameState) snapshot() StatsSnapshot {
 		ScoreLimit:    gs.scoreLimit,
 		Missed:        gs.missed,
 		ActiveScripts: scriptsCopy,
+		TotalCorrect:  gs.totalCorrect(),
+		Paths:         paths,
 	}
 }
