@@ -36,7 +36,17 @@ func NewCharacterSet(name string, rows []KanaRow) CharacterSet {
 
 // Hiragana returns the character set of all hiragana rows.
 func Hiragana() CharacterSet {
-	return NewCharacterSet("Hiragana", AllKanaRows)
+	return NewCharacterSet("Hiragana", HiraganaRows)
+}
+
+// Katakana returns the character set of all katakana rows.
+func Katakana() CharacterSet {
+	return NewCharacterSet("Katakana", KatakanaRows)
+}
+
+// AllKana returns the combined hiragana and katakana character set.
+func AllKana() CharacterSet {
+	return NewCharacterSet("Kana", AllKanaRows)
 }
 
 // GetCharacters returns a slice of all characters in the set.

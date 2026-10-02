@@ -118,8 +118,9 @@ func NewGameState(st *store.Store) *GameState {
 // auto-progression on. Only a learner without any stats gets the intro for
 // the first step. Must be called before the game starts (no lock needed).
 func (gs *GameState) startLearningPath() {
-	gs.applySelectedRows(kanacore.ProgressionSteps[0])
-	for _, step := range kanacore.ProgressionSteps[1:] {
+	steps := kanacore.ProgressionStepsFor(kanacore.ScriptHiragana)
+	gs.applySelectedRows(steps[0])
+	for _, step := range steps[1:] {
 		if !gs.rowsMastered(step) {
 			break
 		}
@@ -134,7 +135,7 @@ func (gs *GameState) startLearningPath() {
 	gs.saveSelectedRows()
 
 	if !gs.hasStats() {
-		gs.pendingIntro = append([]string(nil), kanacore.ProgressionSteps[0]...)
+		gs.pendingIntro = append([]string(nil), steps[0]...)
 		gs.paused = true
 	}
 }
@@ -568,7 +569,7 @@ func (gs *GameState) checkAutoProgression() []string {
 // nextStepRows returns the unselected rows of the first incomplete progression
 // step. Must be called under lock.
 func (gs *GameState) nextStepRows() []string {
-	for _, step := range kanacore.ProgressionSteps {
+	for _, step := range kanacore.ProgressionStepsFor(kanacore.ScriptHiragana) {
 		var missing []string
 		for _, id := range step {
 			if !gs.selectedRows[id] {
