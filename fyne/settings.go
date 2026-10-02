@@ -74,43 +74,17 @@ func showSettingsDialog(gs *GameState, statsPanel *StatsPanel, gameCanvas *GameC
 		}
 
 		newRows := checkedRowIDs(rowChecks)
-		if len(newRows) == 0 {
-			newRows = kanacore.DefaultRowIDs()
-		}
-
 		newAuto := autoCheck.Checked
 		newLimit := currentLimit
 		if n, err := strconv.Atoi(strings.TrimSpace(limitEntry.Text)); err == nil && n >= 0 {
 			newLimit = n
 		}
 
-		// Apply under lock
+		gs.applySettings(newRows, gs.ActiveScripts(), newAuto, newLimit)
+
 		gs.mu.Lock()
-		gs.setSelectedRowsLocked(newRows)
-		gs.autoProgress = newAuto
-		gs.scoreLimit = newLimit
-
-		// Remove in-flight tiles whose row is now deselected
-		filtered := gs.tiles[:0]
-		for _, t := range gs.tiles {
-			if rowID, ok := kanacore.CharToRow[t.kana.Char]; ok && !gs.selectedRows[rowID] {
-				continue
-			}
-			filtered = append(filtered, t)
-		}
-		gs.tiles = filtered
-
-		// Rebuild the canvas-object snapshot so the renderer reflects removals.
-		gs.buildSnapshot()
 		snap := gs.snapshot()
 		gs.mu.Unlock()
-
-		// Persist to store
-		if gs.store != nil {
-			_ = gs.store.SaveAutoProgress(newAuto)
-			_ = gs.store.SaveScoreLimit(newLimit)
-		}
-
 		statsPanel.Update(snap)
 		gameCanvas.Refresh()
 	}, win)

@@ -577,3 +577,53 @@ func TestResetClearsPendingOffer(t *testing.T) {
 		t.Fatalf("after Reset pendingOffer=%v paused=%v", gs.pendingOffer, gs.paused)
 	}
 }
+
+var bothScripts = []kanacore.Script{kanacore.ScriptHiragana, kanacore.ScriptKatakana}
+
+func TestApplySettingsTurningKatakanaOnIntroducesVowels(t *testing.T) {
+	gs := newTestState()
+	gs.applySettings([]string{"vowels", "k"}, bothScripts, true, 0)
+	if !gs.selectedRows["kata:vowels"] || !equalIDs(gs.pendingIntro, []string{"kata:vowels"}) || !gs.paused {
+		t.Fatalf("selected=%v pendingIntro=%v paused=%v", gs.selectedRows, gs.pendingIntro, gs.paused)
+	}
+	if !gs.katakanaOffered {
+		t.Fatal("switching katakana on must mark the offer as made")
+	}
+}
+
+func TestApplySettingsWithPreselectedKatakanaHasNoIntro(t *testing.T) {
+	gs := newTestState()
+	gs.applySettings([]string{"vowels", "kata:k"}, bothScripts, true, 0)
+	if gs.paused || gs.pendingIntro != nil || gs.selectedRows["kata:vowels"] {
+		t.Fatalf("paused=%v pendingIntro=%v", gs.paused, gs.pendingIntro)
+	}
+}
+
+func TestApplySettingsEmptyScriptsKeepsHiragana(t *testing.T) {
+	gs := newTestState()
+	gs.applySettings([]string{"vowels"}, nil, false, 0)
+	if len(gs.activeScripts) != 1 || !gs.activeScripts[kanacore.ScriptHiragana] {
+		t.Fatalf("activeScripts = %v", gs.activeScripts)
+	}
+}
+
+func TestApplySettingsKatakanaOffDropsTilesKeepsRows(t *testing.T) {
+	gs := newTestState()
+	gs.activeScripts[kanacore.ScriptKatakana] = true
+	gs.tiles = []*KanaTile{tileAt("カ", "ka", 0), tileAt("か", "ka", 0)}
+	gs.applySettings([]string{"k", "kata:k"}, []kanacore.Script{kanacore.ScriptHiragana}, false, 0)
+	if len(gs.tiles) != 1 || gs.tiles[0].kana.Char != "か" {
+		t.Fatalf("expected only か to remain, got %d tiles", len(gs.tiles))
+	}
+	if !gs.selectedRows["kata:k"] {
+		t.Fatal("katakana rows must stay selected while katakana is off")
+	}
+}
+
+func TestApplySettingsRefillsEmptyActiveScript(t *testing.T) {
+	gs := newTestState()
+	gs.applySettings(nil, bothScripts, false, 0)
+	if !gs.selectedRows["vowels"] || !gs.selectedRows["kata:vowels"] {
+		t.Fatalf("selected = %v, want vowels and kata:vowels", gs.selectedRows)
+	}
+}

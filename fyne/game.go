@@ -593,6 +593,71 @@ func (gs *GameState) SetSelectedRows(rows []string) {
 	gs.mu.Unlock()
 }
 
+// applySettings applies a saved settings dialog as one locked operation:
+// rows first, then scripts, so the katakana intro is decided against the new
+// selection. Every active script ends up with at least its first step.
+func (gs *GameState) applySettings(rows []string, scripts []kanacore.Script, auto bool, limit int) {
+	gs.mu.Lock()
+	defer gs.mu.Unlock()
+
+	katakanaWasOn := gs.activeScripts[kanacore.ScriptKatakana]
+	gs.setSelectedRowsLocked(rows)
+	gs.activeScripts = scriptSet(scripts)
+	gs.saveActiveScripts()
+	if !katakanaWasOn && gs.activeScripts[kanacore.ScriptKatakana] {
+		gs.enableKatakanaLocked()
+	}
+	for _, info := range kanacore.Scripts() {
+		if gs.activeScripts[info.Script] && !gs.hasSelectedRowOf(info.Script) {
+			for _, id := range kanacore.ProgressionStepsFor(info.Script)[0] {
+				gs.selectedRows[id] = true
+			}
+			gs.saveSelectedRows()
+		}
+	}
+
+	if limit < 0 {
+		limit = 0
+	}
+	gs.autoProgress = auto
+	gs.scoreLimit = limit
+	if gs.store != nil {
+		_ = gs.store.SaveAutoProgress(auto)
+		_ = gs.store.SaveScoreLimit(limit)
+	}
+
+	gs.dropInactiveTiles()
+	gs.buildSnapshot()
+	gs.settle()
+}
+
+// dropInactiveTiles removes tiles whose row is deselected or whose script is
+// inactive. Must be called under lock.
+func (gs *GameState) dropInactiveTiles() {
+	kept := gs.tiles[:0]
+	for _, t := range gs.tiles {
+		rowID, ok := kanacore.CharToRow[t.kana.Char]
+		if ok && (!gs.selectedRows[rowID] || !gs.activeScripts[kanacore.ScriptOf(rowID)]) {
+			continue
+		}
+		kept = append(kept, t)
+	}
+	gs.tiles = kept
+}
+
+// ActiveScripts returns the active scripts in display order.
+func (gs *GameState) ActiveScripts() []kanacore.Script {
+	gs.mu.Lock()
+	defer gs.mu.Unlock()
+	var scripts []kanacore.Script
+	for _, info := range kanacore.Scripts() {
+		if gs.activeScripts[info.Script] {
+			scripts = append(scripts, info.Script)
+		}
+	}
+	return scripts
+}
+
 // SetAutoProgress toggles auto-progression and persists.
 func (gs *GameState) SetAutoProgress(enabled bool) {
 	gs.mu.Lock()
