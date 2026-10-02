@@ -121,10 +121,11 @@ func stateFor(correct int) cellState {
 // kanaCell is one character in the stats grid.
 type kanaCell struct {
 	widget.BaseWidget
-	bg     *canvas.Rectangle
-	text   *canvas.Text
-	state  cellState
-	missed bool
+	bg      *canvas.Rectangle
+	text    *canvas.Text
+	state   cellState
+	missed  bool
+	painted bool // false until the first set call, which must always paint
 }
 
 func newKanaCell(char string) *kanaCell {
@@ -147,9 +148,14 @@ func (c *kanaCell) MinSize() fyne.Size {
 	return fyne.NewSize(cellW, cellH)
 }
 
-// set applies a learning state and the missed-this-session border.
+// set applies a learning state and the missed-this-session border. It is a
+// no-op when neither has changed since the last call, so Update doesn't
+// repaint every cell on every tick; the first call always paints.
 func (c *kanaCell) set(state cellState, missed bool) {
-	c.state, c.missed = state, missed
+	if c.painted && state == c.state && missed == c.missed {
+		return
+	}
+	c.state, c.missed, c.painted = state, missed, true
 	switch state {
 	case cellMastered:
 		c.bg.FillColor, c.text.Color = cellMasteredColor, color.White

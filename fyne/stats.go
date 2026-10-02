@@ -9,6 +9,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"kana/kanacore"
@@ -59,7 +60,7 @@ func rowShortLabel(rowID string) string {
 	case "vowels":
 		return "–"
 	case "n-only":
-		return "n"
+		return "ん"
 	case "sy":
 		return "sh"
 	default:
@@ -133,16 +134,17 @@ func newStatsPanel() *StatsPanel {
 	// One path line per script: name, 15 segments, count; "Next" below.
 	top := container.NewVBox(session)
 	for _, info := range kanacore.Scripts() {
+		steps := len(kanacore.ProgressionStepsFor(info.Script))
 		widths := []float32{62}
 		objs := []fyne.CanvasObject{smallText(info.Label, 12)}
-		for i := 0; i < 15; i++ {
+		for i := 0; i < steps; i++ {
 			seg := canvas.NewRectangle(segOpenColor)
 			seg.CornerRadius = 2
 			p.pathSegs[info.Script] = append(p.pathSegs[info.Script], seg)
 			widths = append(widths, 10)
 			objs = append(objs, seg)
 		}
-		count := smallText("0/15", 11)
+		count := smallText(fmt.Sprintf("0/%d", steps), 11)
 		count.Color = panelSubColor
 		p.pathCount[info.Script] = count
 		widths = append(widths, 30)
@@ -167,6 +169,7 @@ func newStatsPanel() *StatsPanel {
 	half := 5*cellW + 4*gridGap
 	header := container.New(&fixedColumns{widths: []float32{rowLabelW, half, halfGapW, half}, rowHeight: 14, gap: gridGap},
 		smallText("", 11), head("ひらがな"), smallText("", 11), head("カタカナ"))
+	// VBox spaces the header and each group grid by theme.Padding() (4px).
 	grids := container.NewVBox(header)
 	for _, g := range kanacore.Groups() {
 		var objs []fyne.CanvasObject
@@ -202,7 +205,11 @@ func newStatsPanel() *StatsPanel {
 		legend.Add(t)
 	}
 
-	p.content = container.NewBorder(top, legend, nil, nil, container.NewVScroll(grids))
+	// 4px right padding keeps the scroll bar off the katakana "o" column;
+	// the grid is 288px wide, so the padded content is 292px, exactly
+	// matching the panel's 300-2*theme.Padding() width.
+	padded := container.New(layout.NewCustomPaddedLayout(0, 0, 0, 4), grids)
+	p.content = container.NewBorder(top, legend, nil, nil, container.NewVScroll(padded))
 	p.ExtendBaseWidget(p)
 	return p
 }
@@ -316,7 +323,6 @@ func (p *StatsPanel) Update(snap StatsSnapshot) {
 			}
 		}
 		setVisible(p.groupGrids[g.Group], groupVisible)
-		p.groupGrids[g.Group].Refresh()
 	}
 
 	p.content.Refresh()

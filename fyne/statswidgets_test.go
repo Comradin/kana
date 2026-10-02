@@ -33,6 +33,18 @@ func TestFixedColumnsSkipsHiddenRows(t *testing.T) {
 	}
 }
 
+func TestFixedColumnsKeepsHiddenSlotPosition(t *testing.T) {
+	test.NewApp()
+	l := &fixedColumns{widths: []float32{10, 10}, rowHeight: 18, gap: 2}
+	objs := []fyne.CanvasObject{canvas.NewRectangle(nil), canvas.NewRectangle(nil)}
+	c := container.New(l, objs...)
+	objs[0].Hide()
+	c.Resize(c.MinSize())
+	if x := objs[1].Position().X; x != 12 {
+		t.Fatalf("objs[1].Position().X = %v, want 12 (hidden slot keeps its place)", x)
+	}
+}
+
 func TestKanaCellStates(t *testing.T) {
 	test.NewApp()
 	c := newKanaCell("か")
