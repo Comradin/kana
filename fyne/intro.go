@@ -25,18 +25,25 @@ var dialogShowing bool
 
 // showPendingDialogs shows whatever the game is waiting for: the katakana
 // offer first, then an intro. With nothing pending it resumes the game and
-// re-enables input, so "paused" never outlives its dialog. Must run on the
-// Fyne thread.
-func showPendingDialogs(gs *GameState, inputBar *InputBar, w fyne.Window) {
+// re-enables input, so "paused" never outlives its dialog. It also refreshes
+// the stats panel, so a change that became visible only by accepting or
+// declining a dialog (e.g. a newly active script's section) shows up without
+// waiting for the next Enter. Must run on the Fyne thread.
+func showPendingDialogs(gs *GameState, statsPanel *StatsPanel, inputBar *InputBar, w fyne.Window) {
 	if dialogShowing {
 		return
 	}
+	gs.mu.Lock()
+	snap := gs.snapshot()
+	gs.mu.Unlock()
+	statsPanel.Update(snap)
+
 	offer, intro := gs.PendingDialogs()
 	switch {
 	case offer:
-		showKatakanaOffer(gs, inputBar, w)
+		showKatakanaOffer(gs, statsPanel, inputBar, w)
 	case len(intro) > 0:
-		showIntroDialog(gs, intro, inputBar, w)
+		showIntroDialog(gs, intro, statsPanel, inputBar, w)
 	default:
 		gs.Resume()
 		if !gs.IsOver() {
@@ -46,13 +53,13 @@ func showPendingDialogs(gs *GameState, inputBar *InputBar, w fyne.Window) {
 }
 
 // continueAfterDialog chains to the next pending dialog, if any.
-func continueAfterDialog(gs *GameState, inputBar *InputBar, w fyne.Window) {
-	fyne.Do(func() { showPendingDialogs(gs, inputBar, w) })
+func continueAfterDialog(gs *GameState, statsPanel *StatsPanel, inputBar *InputBar, w fyne.Window) {
+	fyne.Do(func() { showPendingDialogs(gs, statsPanel, inputBar, w) })
 }
 
 // showIntroDialog presents newly unlocked rows as large tiles with their
 // romaji. Call it through showPendingDialogs. Must run on the Fyne thread.
-func showIntroDialog(gs *GameState, rowIDs []string, inputBar *InputBar, w fyne.Window) {
+func showIntroDialog(gs *GameState, rowIDs []string, statsPanel *StatsPanel, inputBar *InputBar, w fyne.Window) {
 	labels := make([]string, 0, len(rowIDs))
 	body := container.NewVBox()
 	for _, id := range rowIDs {
@@ -72,7 +79,7 @@ func showIntroDialog(gs *GameState, rowIDs []string, inputBar *InputBar, w fyne.
 		// callback that runs on close.
 		dialogShowing = false
 		gs.FinishIntro()
-		continueAfterDialog(gs, inputBar, w)
+		continueAfterDialog(gs, statsPanel, inputBar, w)
 	})
 	dialogShowing = true
 	d.Show()
@@ -80,7 +87,7 @@ func showIntroDialog(gs *GameState, rowIDs []string, inputBar *InputBar, w fyne.
 
 // showKatakanaOffer asks once whether to add katakana. Call it through
 // showPendingDialogs. Must run on the Fyne thread.
-func showKatakanaOffer(gs *GameState, inputBar *InputBar, w fyne.Window) {
+func showKatakanaOffer(gs *GameState, statsPanel *StatsPanel, inputBar *InputBar, w fyne.Window) {
 	body := container.NewVBox(
 		widget.NewLabel("You know the basic hiragana. Katakana use the same sounds;\nstart with ア イ ウ エ オ?"),
 	)
@@ -98,7 +105,7 @@ func showKatakanaOffer(gs *GameState, inputBar *InputBar, w fyne.Window) {
 		} else {
 			gs.DeclineKatakana()
 		}
-		continueAfterDialog(gs, inputBar, w)
+		continueAfterDialog(gs, statsPanel, inputBar, w)
 	}, w)
 	dialogShowing = true
 	d.Show()

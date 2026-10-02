@@ -103,7 +103,7 @@ func showSettingsDialog(gs *GameState, statsPanel *StatsPanel, gameCanvas *GameC
 		gs.mu.Unlock()
 		statsPanel.Update(snap)
 		gameCanvas.Refresh()
-		showPendingDialogs(gs, inputBar, win)
+		showPendingDialogs(gs, statsPanel, inputBar, win)
 	}, win)
 }
 
