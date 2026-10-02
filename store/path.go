@@ -8,9 +8,11 @@ import (
 	"path/filepath"
 )
 
-// legacySuffixes are the SQLite WAL-mode sibling files that travel with the
-// main database file.
-var legacySuffixes = []string{"", "-wal", "-shm"}
+// legacySuffixes are the database file and its SQLite WAL-mode siblings, in
+// the order they are moved: siblings first, the main file last. If a sibling
+// fails, the main file stays where it was and the move is retried on the next
+// start, so the database is never separated from its write-ahead log.
+var legacySuffixes = []string{"-wal", "-shm", ""}
 
 // DefaultPath returns the per-user location for the database:
 // $XDG_DATA_HOME/kana/kana.db when XDG_DATA_HOME is set to an absolute path,
@@ -34,10 +36,11 @@ func DefaultPath() (string, error) {
 // as needed.
 //
 // If target already exists, legacy is left untouched and moved is false. If
-// legacy does not exist, it is a no-op. Otherwise it tries os.Rename for the
-// main file and each sibling; if renaming fails (for example across
-// filesystems), it falls back to copying the bytes and leaves the originals
-// in place rather than risk losing user data.
+// legacy does not exist, it is a no-op. Otherwise it tries os.Rename for each
+// sibling and finally the main file; if renaming fails (for example across filesystems),
+// it falls back to copying the bytes and leaves the originals in place rather
+// than risk losing user data. It stops at the first file that can be neither
+// renamed nor copied.
 func MigrateLegacy(legacy, target string) (moved bool, err error) {
 	if _, err := os.Stat(target); err == nil {
 		return false, nil
@@ -56,7 +59,6 @@ func MigrateLegacy(legacy, target string) (moved bool, err error) {
 		return false, fmt.Errorf("store: ensure target directory: %w", err)
 	}
 
-	var copyErr error
 	for _, suffix := range legacySuffixes {
 		src, dst := legacy+suffix, target+suffix
 		if _, err := os.Stat(src); err != nil {
@@ -66,11 +68,8 @@ func MigrateLegacy(legacy, target string) (moved bool, err error) {
 			continue
 		}
 		if err := copyFile(src, dst); err != nil {
-			copyErr = errors.Join(copyErr, fmt.Errorf("store: copy %s: %w", src, err))
+			return false, fmt.Errorf("store: copy %s: %w", src, err)
 		}
-	}
-	if copyErr != nil {
-		return false, copyErr
 	}
 
 	return true, nil

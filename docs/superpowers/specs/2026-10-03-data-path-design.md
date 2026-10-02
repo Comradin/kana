@@ -17,7 +17,7 @@ The database moves to a per-user data directory, the same on every OS.
 | Location | `$XDG_DATA_HOME/kana/kana.db`; if `XDG_DATA_HOME` is unset or not absolute, `<home>/.local/share/kana/kana.db`. Same rule on Linux, macOS and Windows. `os.UserConfigDir()` / `~/Library/Application Support` are not used. |
 | Config files | None today; settings live in the database. `~/.config/kana/` is not created. |
 | Legacy database | If the new file does not exist and `./kana.db` exists in the working directory, move it (plus `kana.db-wal` and `kana.db-shm` if present) to the new location on start, and print one line to stderr. If the new file exists, never touch the legacy one. |
-| Move failure | Try `os.Rename`; if that fails (e.g. across filesystems), copy the files and leave the originals in place. If copying fails too, start with the new location anyway and print the error; never delete user data. |
+| Move failure | Move `-wal` and `-shm` first and the main file last, so the database is never separated from its write-ahead log. Per file, try `os.Rename`; if that fails (e.g. across filesystems), copy and leave the original in place. If a file can be neither renamed nor copied, stop: the main file stays at the old place and the move is retried on the next start, while this start opens the new location and prints the error. Never delete user data. |
 
 ## Code
 
@@ -32,6 +32,7 @@ The database moves to a per-user data directory, the same on every OS.
   - legacy present, target missing → target has the contents, legacy and its `-wal`/`-shm` are gone, `moved == true`;
   - target present → nothing changes, `moved == false`;
   - legacy missing → no-op, `moved == false`, no error;
+  - a sibling that can be neither renamed nor copied → error, `moved == false`, the legacy main file is still in place and no target main file exists;
   - target directory is created when missing.
 
 ## Docs
