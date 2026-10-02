@@ -268,6 +268,9 @@ func (gs *GameState) Reset() {
 	gs.sessionDirty = false
 	// An intro dropped by game over is shown before the new game starts; the
 	// offer cannot be pending at game over and is already marked as made.
+	// The new game stays paused only while that intro is still pending,
+	// matching settle()'s invariant (settle itself only ever unpauses, so it
+	// cannot express this one case where Reset must pause).
 	gs.pendingOffer = false
 	gs.paused = len(gs.pendingIntro) > 0
 

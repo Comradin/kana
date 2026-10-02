@@ -1,10 +1,10 @@
 # Kana
 
-A typing game for learning Japanese Hiragana characters.
+A typing game for learning Japanese Hiragana and Katakana characters.
 
 ## Overview
 
-Kana is an interactive typing game that helps you learn Japanese Hiragana through practice. Characters fall from the top of the screen, and you type their romaji (romanized) equivalents to score points. Track your progress, focus on specific character rows, and improve your hiragana recognition skills.
+Kana is an interactive typing game that helps you learn Japanese Hiragana and Katakana through practice. Characters fall from the top of the screen, and you type their romaji (romanized) equivalents to score points. Track your progress, focus on specific character rows, and improve your kana recognition skills.
 
 ## Apps
 
@@ -23,12 +23,12 @@ Kana is a Fyne v2 desktop app (`kana-desktop`).
 
 ### Progress Tracking
 - **Persistent Statistics**: Progress is saved to a local SQLite database (`kana.db`)
-- **Per-Character Stats**: Correct answers, misses, and current streak per hiragana
+- **Per-Character Stats**: Correct answers, misses, and current streak per hiragana and katakana character
 - **Session vs Overall Stats**: The stats panel shows this session's correct counts per kana; overall stats are persisted across sessions and drive progression
 
 ### Customization
-- **Row Selection**: Choose which hiragana rows to practice, grouped by Basic, Dakuon, Handakuon, Yōon and Yōon + Dakuten
-- **Auto-Progression**: unlocks the next learning-path step (one or two rows) once every active row is mastered: at least 80% of its kana (rounded down, at least one) answered correctly three times
+- **Row Selection**: Choose which hiragana and katakana rows to practice, grouped by Basic, Dakuon, Handakuon, Yōon and Yōon + Dakuten
+- **Auto-Progression**: per script, unlocks the next learning-path step (one or two rows) once every active row of that script is mastered: at least 80% of its kana (rounded down, at least one) answered correctly three times
 - **Configurable Score Limit**: Set a target or play endlessly
 
 ### Desktop App (Fyne)
@@ -147,7 +147,7 @@ Katakana mirror the hiragana tables with the same romaji and alternatives, e.g.
 Character data and row definitions live in `kanacore/`:
 
 - `kana.go`: `Kana` struct, `CharacterSet`, `NewCharacterSet`, `Matches` (canonical romaji plus accepted alternatives)
-- `kana_rows.go`: groups, rows with entries and alternative romaji, `ProgressionSteps`; scripts (`Script`, `Scripts`), katakana rows generated from the hiragana rows by a Unicode shift, `kata:`-prefixed row IDs
+- `kana_rows.go`: groups, rows with entries and alternative romaji, `ProgressionStepsFor`; scripts (`Script`, `Scripts`), katakana rows generated from the hiragana rows by a Unicode shift, `kata:`-prefixed row IDs
 
 ### Desktop App (`fyne/`)
 
@@ -177,7 +177,8 @@ Built on [Fyne v2](https://fyne.io) with goroutine-based game loop:
 
 The app stores `kana.db` (SQLite) in the current working directory:
 
-- Selected hiragana rows
+- Selected hiragana and katakana rows
+- Active scripts and whether katakana has been offered
 - Auto-progression setting
 - Score limit preference
 - Per-character statistics (correct count, miss count, current streak)

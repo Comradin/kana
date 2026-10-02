@@ -61,7 +61,7 @@ Two new settings keys, no schema change:
 
 | Key | Methods | Default when unset |
 |---|---|---|
-| `active_scripts` | `ActiveScripts() ([]string, error)`, `SaveActiveScripts([]string) error` (JSON array, like `selected_rows`) | `["hiragana"]` |
+| `active_scripts` | `ActiveScripts() ([]string, error)`, `SaveActiveScripts([]string) error` (JSON array, like `selected_rows`) | `ActiveScripts()` returns `nil`; `GameState` treats that as hiragana-only |
 | `katakana_offered` | `KatakanaOffered() (bool, error)`, `SaveKatakanaOffered(bool) error` | `false` |
 
 Stats are keyed by character, so カ and か are counted separately without any change.
@@ -73,7 +73,7 @@ Stats are keyed by character, so カ and か are counted separately without any 
 - `GameState` gains `activeScripts map[kanacore.Script]bool`, `katakanaOffered bool` and `pendingOffer bool`. `charSet` becomes `kanacore.AllKana()`.
 - **Invariant:** `paused` is true only while something is pending, i.e. `pendingOffer` is set or `pendingIntro` is non-empty.
   - A helper `settle()` (under lock) enforces it: if `paused` is true but nothing is pending, it sets `paused = false`.
-  - Every operation that can clear pending state calls `settle()` at the end: `EnableKatakana`, `DeclineKatakana`, `FinishIntro`, `applySettings` and `Reset`.
+  - Every operation that can clear pending state enforces the invariant at the end: `EnableKatakana`, `DeclineKatakana`, `FinishIntro` and `applySettings` call `settle()`; `Reset` applies the same invariant directly, since `settle()` can only unpause and `Reset` must also be able to pause (see below).
 
 ### Loading
 
@@ -137,14 +137,15 @@ Stats are keyed by character, so カ and か are counted separately without any 
 
 **`Reset`**
 - Clears `pendingOffer`. The offer is already marked as made, and it cannot be pending at game over anyway, since a paused game cannot end.
-- Then calls `settle()`, so the game stays paused only if an intro is pending.
+- Then sets `paused` to whether an intro is still pending (equivalent to `settle()`'s invariant, but expressed directly: `settle()` itself only ever unpauses, so it cannot express the case where Reset must pause because the dropped game-over intro is still pending).
 
 ## UI
 
 ### Pending dialogs: one entry point (`fyne/intro.go`)
 
-`showPendingDialogs(gs, inputBar, w)` must run on the Fyne thread. It replaces the scattered `if rows := gs.PendingIntro() …` calls and is used by `SetOnStarted`, Play Again, `watchEvents` (for both `rowsUnlockedEvent` and `katakanaOfferEvent`), the offer dialog and the settings save:
+`showPendingDialogs(gs, statsPanel, inputBar, w)` must run on the Fyne thread. It replaces the scattered `if rows := gs.PendingIntro() …` calls and is used by `SetOnStarted`, Play Again, `watchEvents` (for both `rowsUnlockedEvent` and `katakanaOfferEvent`), the offer dialog and the settings save:
 - If a dialog is already showing (`introShowing`, renamed `dialogShowing`), it does nothing.
+- Otherwise it refreshes the stats panel from a fresh snapshot, so a change that only becomes visible once a dialog is resolved (e.g. a newly active script's section) shows up immediately rather than waiting for the next Enter.
 - If `pendingOffer` is set, it shows the offer dialog.
 - Otherwise, if `pendingIntro` is non-empty, it shows the intro dialog.
 - Otherwise it calls `gs.Resume()`. This is defensive and keeps the invariant even if pending state was cleared elsewhere.
@@ -194,7 +195,7 @@ No change. Katakana glyphs render in the same tiles and cards, and the intro dia
   - `ProgressionStepsFor(ScriptKatakana)` covers `RowsFor(ScriptKatakana)` in order without crossing groups;
   - `ScriptOf` works for both kinds of ID;
   - `Matches` accepts the katakana alternatives (シ/si, ン/nn, ヂ/di).
-- `store`: `ActiveScripts` and `KatakanaOffered` round-trip, and both return their defaults when unset.
+- `store`: `ActiveScripts` and `KatakanaOffered` round-trip; `ActiveScripts` returns `nil` when unset and `KatakanaOffered` returns `false` when unset.
 - Game:
   - With only hiragana active, no katakana tile spawns, even if `kata:` rows are selected.
   - With both scripts active, both spawn.
