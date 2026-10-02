@@ -27,8 +27,8 @@ var dialogShowing bool
 // offer first, then an intro. With nothing pending it resumes the game and
 // re-enables input, so "paused" never outlives its dialog. It also refreshes
 // the stats panel, so a change that became visible only by accepting or
-// declining a dialog (e.g. a newly active script's section) shows up without
-// waiting for the next Enter. Must run on the Fyne thread.
+// declining a dialog (e.g. a newly active script's path line) shows up
+// without waiting for the next Enter. Must run on the Fyne thread.
 func showPendingDialogs(gs *GameState, statsPanel *StatsPanel, inputBar *InputBar, w fyne.Window) {
 	if dialogShowing {
 		return

@@ -56,12 +56,66 @@ func TestPanelCellStatesAndMissed(t *testing.T) {
 	}
 }
 
+func TestPanelRowHiddenWhenItsScriptInactive(t *testing.T) {
+	test.NewApp()
+	p := newStatsPanel()
+	// kata:k is selected, but katakana itself isn't active, and hiragana's
+	// k row isn't selected either: both halves of row k must stay hidden.
+	p.Update(panelSnap([]string{"kata:k"}, []kanacore.Script{kanacore.ScriptHiragana}))
+	if p.rowLabels["k"].Visible() {
+		t.Fatal("row k label shown although neither script has it selected and active")
+	}
+	if p.cells["カ"].Visible() {
+		t.Fatal("カ cell shown although katakana is inactive")
+	}
+}
+
 func TestPanelPathLineFollowsActiveScripts(t *testing.T) {
 	test.NewApp()
 	p := newStatsPanel()
 	p.Update(panelSnap([]string{"vowels"}, []kanacore.Script{kanacore.ScriptHiragana}))
 	if !p.pathLines[kanacore.ScriptHiragana].Visible() || p.pathLines[kanacore.ScriptKatakana].Visible() {
 		t.Fatal("only the hiragana path line is shown")
+	}
+}
+
+func TestPanelPathLineRendersSegmentsAndNext(t *testing.T) {
+	test.NewApp()
+	p := newStatsPanel()
+	snap := panelSnap([]string{"vowels", "k", "s"}, both)
+
+	kataSteps := make([]StepState, len(kanacore.ProgressionStepsFor(kanacore.ScriptKatakana)))
+	kataSteps[0] = StepMastered
+	kataSteps[1] = StepLearning
+	snap.Paths[kanacore.ScriptKatakana] = PathStatus{
+		Steps:    kataSteps,
+		Unlocked: 2,
+		Next:     []string{"kata:d", "kata:b"},
+	}
+	snap.Paths[kanacore.ScriptHiragana] = PathStatus{
+		Steps: make([]StepState, len(kanacore.ProgressionStepsFor(kanacore.ScriptHiragana))),
+		Next:  nil,
+	}
+	p.Update(snap)
+
+	segs := p.pathSegs[kanacore.ScriptKatakana]
+	if segs[0].FillColor != cellMasteredColor {
+		t.Fatalf("step 0 fill = %v, want mastered", segs[0].FillColor)
+	}
+	if segs[1].FillColor != cellLearningColor {
+		t.Fatalf("step 1 fill = %v, want learning", segs[1].FillColor)
+	}
+	if segs[2].FillColor != segOpenColor {
+		t.Fatalf("step 2 fill = %v, want open", segs[2].FillColor)
+	}
+	if got := p.pathCount[kanacore.ScriptKatakana].Text; got != "2/15" {
+		t.Fatalf("pathCount = %q, want 2/15", got)
+	}
+	if got := p.pathNext[kanacore.ScriptKatakana].Text; got != "Next: D-row (ダ) · B-row (バ)" {
+		t.Fatalf("pathNext = %q", got)
+	}
+	if got := p.pathNext[kanacore.ScriptHiragana].Text; got != "All rows unlocked" {
+		t.Fatalf("hiragana pathNext = %q, want All rows unlocked", got)
 	}
 }
 
@@ -105,6 +159,15 @@ func TestPanelHidesEmptyGroupsAndKeepsWidth(t *testing.T) {
 func TestRowShortLabelForSH(t *testing.T) {
 	if got := rowShortLabel("sy"); got != "sh" {
 		t.Fatalf("rowShortLabel(sy) = %q, want sh", got)
+	}
+}
+
+func TestRowShortLabelDistinguishesNRows(t *testing.T) {
+	if got := rowShortLabel("n"); got != "n" {
+		t.Fatalf("rowShortLabel(n) = %q, want n", got)
+	}
+	if got := rowShortLabel("n-only"); got != "ん" {
+		t.Fatalf("rowShortLabel(n-only) = %q, want ん", got)
 	}
 }
 
