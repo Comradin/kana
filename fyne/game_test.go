@@ -16,12 +16,13 @@ func newTestState() *GameState {
 		overallStats:  make(map[string]store.KanaStats),
 		currentStreak: make(map[string]int),
 		selectedRows:  make(map[string]bool),
+		activeScripts: map[kanacore.Script]bool{kanacore.ScriptHiragana: true},
 		eventCh:       make(chan gameEvent, 4),
 		stopCh:        make(chan struct{}),
 		canvasW:       400,
 		canvasH:       600,
 	}
-	gs.charSet = kanacore.Hiragana()
+	gs.charSet = kanacore.AllKana()
 	for _, id := range kanacore.DefaultRowIDs() {
 		gs.selectedRows[id] = true
 	}
@@ -287,7 +288,7 @@ func TestPausedGameDoesNotMoveSpawnOrScore(t *testing.T) {
 	gs := newTestState()
 	selectRows(gs, "vowels")
 	gs.tiles = []*KanaTile{tileAt("あ", "a", 0)}
-	gs.Pause()
+	gs.paused = true
 
 	gs.tick()
 	if y := gs.tiles[0].pos.Y; y != 0 {
@@ -342,7 +343,7 @@ func TestUnlockAndScoreLimitKeepIntroForPlayAgain(t *testing.T) {
 
 func TestResetWithoutPendingIntroUnpauses(t *testing.T) {
 	gs := newTestState()
-	gs.Pause()
+	gs.paused = true
 	gs.Reset()
 	if gs.paused {
 		t.Fatal("expected Reset to clear pause without a pending intro")
@@ -366,5 +367,101 @@ func TestPrunePendingIntroClearsWhenAllDeselected(t *testing.T) {
 	gs.prunePendingIntro()
 	if gs.pendingIntro != nil {
 		t.Fatalf("pendingIntro = %v, want nil", gs.pendingIntro)
+	}
+}
+
+func scriptOfChar(char string) kanacore.Script {
+	return kanacore.ScriptOf(kanacore.CharToRow[char])
+}
+
+func TestInactiveScriptDoesNotSpawn(t *testing.T) {
+	gs := newTestState()
+	selectRows(gs, "vowels", "kata:vowels")
+	for i := 0; i < 40; i++ {
+		gs.spawnKana()
+	}
+	for _, tile := range gs.tiles {
+		if scriptOfChar(tile.kana.Char) != kanacore.ScriptHiragana {
+			t.Fatalf("katakana %s spawned while katakana is inactive", tile.kana.Char)
+		}
+	}
+}
+
+func TestActiveKatakanaSpawns(t *testing.T) {
+	gs := newTestState()
+	gs.activeScripts[kanacore.ScriptKatakana] = true
+	selectRows(gs, "kata:vowels")
+	for i := 0; i < 10; i++ {
+		gs.spawnKana()
+	}
+	for _, tile := range gs.tiles {
+		if scriptOfChar(tile.kana.Char) != kanacore.ScriptKatakana {
+			t.Fatalf("%s spawned, want only katakana", tile.kana.Char)
+		}
+	}
+}
+
+func TestSpawnFallbackUsesActiveScriptBasics(t *testing.T) {
+	gs := newTestState()
+	gs.activeScripts = map[kanacore.Script]bool{kanacore.ScriptKatakana: true}
+	selectRows(gs)
+	gs.spawnKana()
+	if len(gs.tiles) != 1 {
+		t.Fatalf("expected a fallback tile, got %d", len(gs.tiles))
+	}
+	row, _ := kanacore.RowByID(kanacore.CharToRow[gs.tiles[0].kana.Char])
+	if row.Script != kanacore.ScriptKatakana || row.Group != kanacore.GroupBasic {
+		t.Fatalf("fallback spawned %s from %s", gs.tiles[0].kana.Char, row.ID)
+	}
+}
+
+func TestProgressionIsPerScript(t *testing.T) {
+	gs := newTestState()
+	gs.autoProgress = true
+	gs.activeScripts[kanacore.ScriptKatakana] = true
+	selectRows(gs, "vowels", "kata:vowels")
+	masterRows(gs, "vowels")
+	if got := gs.checkAutoProgression(); !equalIDs(got, []string{"k", "s"}) {
+		t.Fatalf("unlocked %v, want [k s]", got)
+	}
+	masterRows(gs, "kata:vowels")
+	if got := gs.checkAutoProgression(); !equalIDs(got, []string{"kata:k", "kata:s"}) {
+		t.Fatalf("unlocked %v, want [kata:k kata:s]", got)
+	}
+}
+
+func TestBothScriptsUnlockTogether(t *testing.T) {
+	gs := newTestState()
+	gs.autoProgress = true
+	gs.activeScripts[kanacore.ScriptKatakana] = true
+	selectRows(gs, "vowels", "kata:vowels")
+	masterRows(gs, "vowels", "kata:vowels")
+	if got := gs.checkAutoProgression(); !equalIDs(got, []string{"k", "s", "kata:k", "kata:s"}) {
+		t.Fatalf("unlocked %v, want hiragana first then katakana", got)
+	}
+}
+
+func TestInactiveScriptNeverUnlocks(t *testing.T) {
+	gs := newTestState()
+	gs.autoProgress = true
+	selectRows(gs, "vowels", "kata:vowels")
+	masterRows(gs, "vowels", "kata:vowels")
+	if got := gs.checkAutoProgression(); !equalIDs(got, []string{"k", "s"}) {
+		t.Fatalf("unlocked %v, want only [k s]", got)
+	}
+}
+
+func TestSettleResumesWhenNothingPending(t *testing.T) {
+	gs := newTestState()
+	gs.paused = true
+	gs.settle()
+	if gs.paused {
+		t.Fatal("settle should resume when nothing is pending")
+	}
+	gs.paused = true
+	gs.pendingIntro = []string{"k"}
+	gs.settle()
+	if !gs.paused {
+		t.Fatal("settle must keep the pause while an intro is pending")
 	}
 }

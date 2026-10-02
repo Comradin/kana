@@ -40,8 +40,9 @@ type GameState struct {
 	currentStreak map[string]int
 	sessionDirty  bool
 
-	selectedRows map[string]bool
-	autoProgress bool
+	selectedRows  map[string]bool
+	autoProgress  bool
+	activeScripts map[kanacore.Script]bool
 
 	paused       bool     // tick, spawn and answers are suspended
 	pendingIntro []string // row IDs waiting to be introduced
@@ -69,10 +70,11 @@ func NewGameState(st *store.Store) *GameState {
 		overallStats:  make(map[string]store.KanaStats),
 		currentStreak: make(map[string]int),
 		selectedRows:  make(map[string]bool),
+		activeScripts: map[kanacore.Script]bool{kanacore.ScriptHiragana: true},
 		eventCh:       make(chan gameEvent, 4),
 		stopCh:        make(chan struct{}),
 		scoreLimit:    store.DefaultScoreLimit,
-		charSet:       kanacore.Hiragana(),
+		charSet:       kanacore.AllKana(),
 		store:         st,
 		canvasW:       400,
 		canvasH:       600,
@@ -83,6 +85,9 @@ func NewGameState(st *store.Store) *GameState {
 	}
 
 	if st != nil {
+		if names, err := st.ActiveScripts(); err == nil && len(names) > 0 {
+			gs.activeScripts = scriptSet(parseScripts(names))
+		}
 		if stats, err := st.KanaStatistics(); err == nil {
 			for _, stat := range stats {
 				copied := stat
@@ -156,6 +161,57 @@ func (gs *GameState) rowsMastered(ids []string) bool {
 func (gs *GameState) hasStats() bool {
 	for _, stat := range gs.overallStats {
 		if stat.CorrectCount > 0 || stat.MissCount > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// parseScripts converts stored names to scripts, dropping unknown names.
+func parseScripts(names []string) []kanacore.Script {
+	var scripts []kanacore.Script
+	for _, name := range names {
+		for _, info := range kanacore.Scripts() {
+			if string(info.Script) == name {
+				scripts = append(scripts, info.Script)
+			}
+		}
+	}
+	return scripts
+}
+
+// scriptSet builds the active-script set; an empty list means hiragana only.
+func scriptSet(scripts []kanacore.Script) map[kanacore.Script]bool {
+	set := make(map[kanacore.Script]bool)
+	for _, s := range scripts {
+		set[s] = true
+	}
+	if len(set) == 0 {
+		set[kanacore.ScriptHiragana] = true
+	}
+	return set
+}
+
+// saveActiveScripts persists the active scripts in display order. Must be
+// called under lock.
+func (gs *GameState) saveActiveScripts() {
+	if gs.store == nil {
+		return
+	}
+	names := make([]string, 0, len(gs.activeScripts))
+	for _, info := range kanacore.Scripts() {
+		if gs.activeScripts[info.Script] {
+			names = append(names, string(info.Script))
+		}
+	}
+	_ = gs.store.SaveActiveScripts(names)
+}
+
+// hasSelectedRowOf reports whether any row of the script is selected. Must be
+// called under lock.
+func (gs *GameState) hasSelectedRowOf(s kanacore.Script) bool {
+	for _, row := range kanacore.RowsFor(s) {
+		if gs.selectedRows[row.ID] {
 			return true
 		}
 	}
@@ -469,31 +525,29 @@ func (gs *GameState) mergeSessionStats() {
 	gs.sessionDirty = false
 }
 
-// availableCharacters returns characters filtered by selectedRows. Must be called under lock.
+// availableCharacters returns the characters of selected rows whose script is
+// active, falling back to the basic rows of the first active script. Must be
+// called under lock.
 func (gs *GameState) availableCharacters() []string {
-	chars := gs.charSet.GetCharacters()
-	if len(chars) == 0 {
-		return nil
+	var chars []string
+	for _, row := range kanacore.AllKanaRows {
+		if gs.selectedRows[row.ID] && gs.activeScripts[row.Script] {
+			chars = append(chars, row.Characters()...)
+		}
 	}
-	if len(gs.selectedRows) == 0 {
+	if len(chars) > 0 {
 		return chars
 	}
-
-	filtered := make([]string, 0, len(chars))
-	for _, char := range chars {
-		rowID, ok := kanacore.CharToRow[char]
-		if !ok {
-			filtered = append(filtered, char)
+	for _, info := range kanacore.Scripts() {
+		if !gs.activeScripts[info.Script] {
 			continue
 		}
-		if gs.selectedRows[rowID] {
-			filtered = append(filtered, char)
+		for _, row := range kanacore.RowsInGroup(info.Script, kanacore.GroupBasic) {
+			chars = append(chars, row.Characters()...)
 		}
-	}
-	if len(filtered) == 0 {
 		return chars
 	}
-	return filtered
+	return nil
 }
 
 // applySelectedRows replaces the selection map.
@@ -549,27 +603,38 @@ func (gs *GameState) SetScoreLimit(limit int) {
 	}
 }
 
-// checkAutoProgression unlocks the rest of the next progression step when all
-// selected rows are mastered. Must be called under lock. Returns the IDs unlocked.
+// checkAutoProgression unlocks, for each active script, the rest of its next
+// progression step once all selected rows of that script are mastered. Must be
+// called under lock. Returns the IDs unlocked, hiragana first.
 func (gs *GameState) checkAutoProgression() []string {
 	if !gs.autoProgress {
 		return nil
 	}
-	next := gs.nextStepRows()
-	if len(next) == 0 || !gs.selectedRowsMastered() {
-		return nil
+	var unlocked []string
+	for _, info := range kanacore.Scripts() {
+		s := info.Script
+		if !gs.activeScripts[s] {
+			continue
+		}
+		next := gs.nextStepRows(s)
+		if len(next) == 0 || !gs.selectedRowsMastered(s) {
+			continue
+		}
+		for _, id := range next {
+			gs.selectedRows[id] = true
+		}
+		unlocked = append(unlocked, next...)
 	}
-	for _, id := range next {
-		gs.selectedRows[id] = true
+	if len(unlocked) > 0 {
+		gs.saveSelectedRows()
 	}
-	gs.saveSelectedRows()
-	return next
+	return unlocked
 }
 
-// nextStepRows returns the unselected rows of the first incomplete progression
-// step. Must be called under lock.
-func (gs *GameState) nextStepRows() []string {
-	for _, step := range kanacore.ProgressionStepsFor(kanacore.ScriptHiragana) {
+// nextStepRows returns the unselected rows of the script's first incomplete
+// progression step. Must be called under lock.
+func (gs *GameState) nextStepRows(s kanacore.Script) []string {
+	for _, step := range kanacore.ProgressionStepsFor(s) {
 		var missing []string
 		for _, id := range step {
 			if !gs.selectedRows[id] {
@@ -583,10 +648,10 @@ func (gs *GameState) nextStepRows() []string {
 	return nil
 }
 
-// selectedRowsMastered reports whether every selected row is mastered. Must be
-// called under lock.
-func (gs *GameState) selectedRowsMastered() bool {
-	for _, row := range kanacore.AllKanaRows {
+// selectedRowsMastered reports whether every selected row of the script is
+// mastered. Must be called under lock.
+func (gs *GameState) selectedRowsMastered(s kanacore.Script) bool {
+	for _, row := range kanacore.RowsFor(s) {
 		if gs.selectedRows[row.ID] && !gs.isRowMastered(row) {
 			return false
 		}
@@ -663,11 +728,12 @@ func (gs *GameState) announceRows(ids []string) {
 	}
 }
 
-// Pause suspends ticking, spawning and answer checking.
-func (gs *GameState) Pause() {
-	gs.mu.Lock()
-	gs.paused = true
-	gs.mu.Unlock()
+// settle enforces the pause invariant: the game is paused only while a dialog
+// is pending. Must be called under lock.
+func (gs *GameState) settle() {
+	if gs.paused && len(gs.pendingIntro) == 0 {
+		gs.paused = false
+	}
 }
 
 // Resume continues a paused game.
@@ -681,7 +747,7 @@ func (gs *GameState) Resume() {
 func (gs *GameState) FinishIntro() {
 	gs.mu.Lock()
 	gs.pendingIntro = nil
-	gs.paused = false
+	gs.settle()
 	gs.mu.Unlock()
 }
 
@@ -712,12 +778,17 @@ func (gs *GameState) snapshot() StatsSnapshot {
 	for k, v := range gs.selectedRows {
 		rowsCopy[k] = v
 	}
+	scriptsCopy := make(map[kanacore.Script]bool, len(gs.activeScripts))
+	for k, v := range gs.activeScripts {
+		scriptsCopy[k] = v
+	}
 	return StatsSnapshot{
-		SessionStats: sessionCopy,
-		SelectedRows: rowsCopy,
-		MissedKanas:  append([]kanacore.Kana{}, gs.missedKanas...),
-		Score:        gs.score,
-		ScoreLimit:   gs.scoreLimit,
-		Missed:       gs.missed,
+		SessionStats:  sessionCopy,
+		SelectedRows:  rowsCopy,
+		MissedKanas:   append([]kanacore.Kana{}, gs.missedKanas...),
+		Score:         gs.score,
+		ScoreLimit:    gs.scoreLimit,
+		Missed:        gs.missed,
+		ActiveScripts: scriptsCopy,
 	}
 }
