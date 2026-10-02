@@ -175,7 +175,11 @@ Built on [Fyne v2](https://fyne.io) with goroutine-based game loop:
 
 ## Data Persistence
 
-The app stores `kana.db` (SQLite) in the current working directory:
+The app stores `kana.db` (SQLite) in the user's data directory: `$XDG_DATA_HOME/kana/kana.db`,
+or `~/.local/share/kana/kana.db` if `XDG_DATA_HOME` is unset, on every platform (Linux, macOS
+and Windows alike). Set `XDG_DATA_HOME` to override the location.
+
+It holds:
 
 - Selected hiragana and katakana rows
 - Active scripts and whether katakana has been offered
@@ -183,7 +187,8 @@ The app stores `kana.db` (SQLite) in the current working directory:
 - Score limit preference
 - Per-character statistics (correct count, miss count, current streak)
 
-The database is created automatically on first run.
+The database is created automatically on first run. If a `kana.db` from an older version is
+found in the working directory, it is moved to the new location once on startup.
 
 ## Dependencies
 
