@@ -56,6 +56,17 @@ func TestCheckAnswerIgnoredAfterGameOver(t *testing.T) {
 	}
 }
 
+func TestIsOver(t *testing.T) {
+	gs := newTestState()
+	if gs.IsOver() {
+		t.Fatalf("expected new test state to not be over")
+	}
+	gs.over = true
+	if !gs.IsOver() {
+		t.Fatalf("expected IsOver to report true after gs.over = true")
+	}
+}
+
 func TestCheckAnswerNoMatchLeavestTile(t *testing.T) {
 	gs := newTestState()
 	tile := newKanaTile(kanacore.Kana{Char: "か", Romaji: "ka"})

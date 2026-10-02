@@ -39,7 +39,9 @@ func showPendingDialogs(gs *GameState, inputBar *InputBar, w fyne.Window) {
 		showIntroDialog(gs, intro, inputBar, w)
 	default:
 		gs.Resume()
-		inputBar.SetEnabled(true, w)
+		if !gs.IsOver() {
+			inputBar.SetEnabled(true, w)
+		}
 	}
 }
 

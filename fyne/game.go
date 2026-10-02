@@ -874,6 +874,13 @@ func (gs *GameState) PendingDialogs() (offer bool, intro []string) {
 	return gs.pendingOffer, append([]string(nil), gs.pendingIntro...)
 }
 
+// IsOver reports whether the current game has ended.
+func (gs *GameState) IsOver() bool {
+	gs.mu.Lock()
+	defer gs.mu.Unlock()
+	return gs.over
+}
+
 // Resume continues a paused game unless a dialog is still pending.
 func (gs *GameState) Resume() {
 	gs.mu.Lock()
