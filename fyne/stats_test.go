@@ -8,110 +8,103 @@ import (
 	"kana/store"
 )
 
-func TestStatsPanelUpdateDoesNotPanic(t *testing.T) {
-	test.NewApp()
-	panel := newStatsPanel()
+func panelSnap(selected []string, scripts []kanacore.Script) StatsSnapshot {
 	snap := StatsSnapshot{
-		SessionStats: map[string]store.KanaStats{
-			"か": {Char: "か", CorrectCount: 3},
-		},
-		SelectedRows: map[string]bool{"k": true},
-		MissedKanas:  []kanacore.Kana{{Char: "ぬ", Romaji: "nu"}},
-		Score:        30,
-		ScoreLimit:   100,
-		Missed:       1,
+		SessionStats:  map[string]store.KanaStats{},
+		SelectedRows:  map[string]bool{},
+		ActiveScripts: map[kanacore.Script]bool{},
+		TotalCorrect:  map[string]int{},
+		Paths:         map[kanacore.Script]PathStatus{},
 	}
-	panel.Update(snap) // must not panic
+	for _, id := range selected {
+		snap.SelectedRows[id] = true
+	}
+	for _, s := range scripts {
+		snap.ActiveScripts[s] = true
+		snap.Paths[s] = PathStatus{Steps: make([]StepState, 15)}
+	}
+	return snap
 }
 
-func TestStatsPanelShowsGroupLabelForVisibleRows(t *testing.T) {
+var both = []kanacore.Script{kanacore.ScriptHiragana, kanacore.ScriptKatakana}
+
+func TestPanelRowHalves(t *testing.T) {
 	test.NewApp()
-	panel := newStatsPanel()
-	panel.Update(StatsSnapshot{
-		SessionStats: map[string]store.KanaStats{},
-		SelectedRows: map[string]bool{"vowels": true, "g": true},
-	})
-	if !panel.groupSections[sectionKey{kanacore.ScriptHiragana, kanacore.GroupDakuon}].Visible() {
-		t.Error("expected Dakuon group section visible")
+	p := newStatsPanel()
+	p.Update(panelSnap([]string{"k"}, both))
+	if !p.cells["か"].Visible() || p.cells["カ"].Visible() {
+		t.Fatal("k selected only in hiragana: hiragana half visible, katakana half blank")
 	}
-	if panel.groupSections[sectionKey{kanacore.ScriptHiragana, kanacore.GroupYoonDakuon}].Visible() {
-		t.Error("expected Yōon + Dakuten group section hidden")
-	}
-	if _, ok := panel.groupSections[sectionKey{kanacore.ScriptHiragana, kanacore.GroupBasic}]; ok {
-		t.Error("basic group should have no section")
+	if !p.rowLabels["k"].Visible() || p.rowLabels["t"].Visible() {
+		t.Fatal("row k shown, row t (selected nowhere) hidden")
 	}
 }
 
-// TestStatsPanelBasicGridWidthUnaffectedByGroupSelection guards against the
-// regression where a single shared grid stretched every column to the
-// widest cell across all groups, including long group labels like
-// "Yōon + Dakuten". Each group now has its own grid, so selecting every
-// non-basic group (and thus showing all of their labels, including the
-// longest one) must not widen the basic grid.
-//
-// The baseline selects every basic row (not just "vowels") so both panels
-// show the exact same set of basic-grid cells; only the non-basic groups'
-// visibility differs between the two. Comparing against "vowels" alone
-// would be unreliable even on the fixed code, since different basic row
-// labels (e.g. "m" vs "w" vs "–") have slightly different glyph widths in
-// the real font — noise that has nothing to do with the regression being
-// guarded against here.
-func TestStatsPanelBasicGridWidthUnaffectedByGroupSelection(t *testing.T) {
+func TestPanelCellStatesAndMissed(t *testing.T) {
 	test.NewApp()
-
-	basicOnly := make(map[string]bool)
-	for _, row := range kanacore.BasicRows() {
-		basicOnly[row.ID] = true
+	p := newStatsPanel()
+	snap := panelSnap([]string{"k", "n"}, both)
+	snap.TotalCorrect["き"] = 2
+	snap.TotalCorrect["く"] = 3
+	snap.MissedKanas = []kanacore.Kana{{Char: "ぬ", Romaji: "nu"}}
+	p.Update(snap)
+	if p.cells["か"].state != cellNew || p.cells["き"].state != cellLearning || p.cells["く"].state != cellMastered {
+		t.Fatal("cell states must follow TotalCorrect")
 	}
-
-	narrowPanel := newStatsPanel()
-	narrowPanel.Update(StatsSnapshot{
-		SessionStats: map[string]store.KanaStats{},
-		SelectedRows: basicOnly,
-	})
-	narrowWidth := narrowPanel.basicGrids[kanacore.ScriptHiragana].MinSize().Width
-
-	widePanel := newStatsPanel()
-	allSelected := make(map[string]bool)
-	for _, row := range kanacore.AllKanaRows {
-		allSelected[row.ID] = true
+	if !p.cells["ぬ"].missed || p.cells["な"].missed {
+		t.Fatal("only ぬ carries the missed border")
 	}
-	widePanel.Update(StatsSnapshot{
-		SessionStats: map[string]store.KanaStats{},
-		SelectedRows: allSelected,
-	})
-	wideWidth := widePanel.basicGrids[kanacore.ScriptHiragana].MinSize().Width
+}
 
-	if narrowWidth != wideWidth {
-		t.Errorf("expected basic grid width unaffected by non-basic groups' selection, got %v (basic rows only) vs %v (all rows)", narrowWidth, wideWidth)
+func TestPanelPathLineFollowsActiveScripts(t *testing.T) {
+	test.NewApp()
+	p := newStatsPanel()
+	p.Update(panelSnap([]string{"vowels"}, []kanacore.Script{kanacore.ScriptHiragana}))
+	if !p.pathLines[kanacore.ScriptHiragana].Visible() || p.pathLines[kanacore.ScriptKatakana].Visible() {
+		t.Fatal("only the hiragana path line is shown")
+	}
+}
+
+func TestPanelAccuracy(t *testing.T) {
+	test.NewApp()
+	p := newStatsPanel()
+	snap := panelSnap([]string{"vowels"}, both)
+	p.Update(snap)
+	if p.accuracyText.Text != "–" {
+		t.Fatalf("accuracy with no answers = %q", p.accuracyText.Text)
+	}
+	snap.SessionStats["あ"] = store.KanaStats{Char: "あ", CorrectCount: 34}
+	snap.Missed = 4
+	p.Update(snap)
+	if p.accuracyText.Text != "89 %" {
+		t.Fatalf("accuracy 34/4 = %q", p.accuracyText.Text)
+	}
+	snap.SessionStats["あ"] = store.KanaStats{Char: "あ", CorrectCount: 2}
+	snap.Missed = 1
+	p.Update(snap)
+	if p.accuracyText.Text != "67 %" {
+		t.Fatalf("accuracy 2/1 = %q, want rounding", p.accuracyText.Text)
+	}
+}
+
+func TestPanelHidesEmptyGroupsAndKeepsWidth(t *testing.T) {
+	test.NewApp()
+	p := newStatsPanel()
+	p.Update(panelSnap([]string{"vowels", "ky"}, both))
+	if p.groupGrids[kanacore.GroupDakuon].Visible() {
+		t.Fatal("dakuon grid hidden with no dakuon rows selected")
+	}
+	if !p.groupGrids[kanacore.GroupYoon].Visible() {
+		t.Fatal("yōon grid visible")
+	}
+	if w := p.groupGrids[kanacore.GroupYoon].MinSize().Width; w != 288 {
+		t.Fatalf("yōon grid width = %v, want 288", w)
 	}
 }
 
 func TestRowShortLabelForSH(t *testing.T) {
 	if got := rowShortLabel("sy"); got != "sh" {
 		t.Fatalf("rowShortLabel(sy) = %q, want sh", got)
-	}
-}
-
-func TestStatsPanelShowsKatakanaOnlyWhenActive(t *testing.T) {
-	test.NewApp()
-	panel := newStatsPanel()
-	snap := StatsSnapshot{
-		SessionStats:  map[string]store.KanaStats{},
-		SelectedRows:  map[string]bool{"vowels": true, "kata:vowels": true},
-		ActiveScripts: map[kanacore.Script]bool{kanacore.ScriptHiragana: true},
-	}
-	panel.Update(snap)
-	if panel.scriptSections[kanacore.ScriptKatakana].Visible() {
-		t.Error("katakana section should be hidden while katakana is inactive")
-	}
-	if panel.rowLabels["kata:vowels"].Visible() {
-		t.Error("ACTIVE ROWS should hide rows of inactive scripts")
-	}
-	snap.ActiveScripts[kanacore.ScriptKatakana] = true
-	panel.Update(snap)
-	if !panel.scriptSections[kanacore.ScriptKatakana].Visible() || !panel.rowLabels["kata:vowels"].Visible() {
-		t.Error("katakana section and row should show once katakana is active")
 	}
 }
 
