@@ -127,6 +127,28 @@ func TestMigrateLegacy(t *testing.T) {
 		requireGone(t, legacy+"-shm")
 	})
 
+	t.Run("failing sibling leaves the main file in place", func(t *testing.T) {
+		srcDir := t.TempDir()
+		legacy := filepath.Join(srcDir, "kana.db")
+		writeFile(t, legacy, "main-db-contents")
+		writeFile(t, legacy+"-shm", "shm-contents")
+
+		targetDir := t.TempDir()
+		target := filepath.Join(targetDir, "kana.db")
+		// A directory where the -shm sibling should go makes both rename and
+		// copy of that sibling fail.
+		if err := os.Mkdir(target+"-shm", 0o755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+
+		moved, err := MigrateLegacy(legacy, target)
+		if err == nil || moved {
+			t.Fatalf("MigrateLegacy = %v, %v; want an error and moved=false", moved, err)
+		}
+		requireExists(t, legacy)
+		requireGone(t, target)
+	})
+
 	t.Run("target present: nothing changes", func(t *testing.T) {
 		dir := t.TempDir()
 		legacy := filepath.Join(dir, "kana.db")
