@@ -645,19 +645,6 @@ func (gs *GameState) dropInactiveTiles() {
 	gs.tiles = kept
 }
 
-// ActiveScripts returns the active scripts in display order.
-func (gs *GameState) ActiveScripts() []kanacore.Script {
-	gs.mu.Lock()
-	defer gs.mu.Unlock()
-	var scripts []kanacore.Script
-	for _, info := range kanacore.Scripts() {
-		if gs.activeScripts[info.Script] {
-			scripts = append(scripts, info.Script)
-		}
-	}
-	return scripts
-}
-
 // SetAutoProgress toggles auto-progression and persists.
 func (gs *GameState) SetAutoProgress(enabled bool) {
 	gs.mu.Lock()

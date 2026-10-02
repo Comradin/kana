@@ -12,32 +12,48 @@ import (
 	"kana/kanacore"
 )
 
-func showSettingsDialog(gs *GameState, statsPanel *StatsPanel, gameCanvas *GameCanvas, win fyne.Window) {
+func showSettingsDialog(gs *GameState, statsPanel *StatsPanel, gameCanvas *GameCanvas, inputBar *InputBar, win fyne.Window) {
 	gs.mu.Lock()
 	selected := make(map[string]bool, len(gs.selectedRows))
 	for id, ok := range gs.selectedRows {
 		selected[id] = ok
 	}
+	active := make(map[kanacore.Script]bool, len(gs.activeScripts))
+	for s, on := range gs.activeScripts {
+		active[s] = on
+	}
 	currentAuto := gs.autoProgress
 	currentLimit := gs.scoreLimit
 	gs.mu.Unlock()
 
-	rowChecks := make(map[string]*widget.Check)
-	sections := container.NewVBox()
-	for _, g := range kanacore.Groups() {
-		groupRows := kanacore.RowsInGroup(kanacore.ScriptHiragana, g.Group)
-		all, checks, grid := newGroupChecks(groupRows, selected)
-		for id, c := range checks {
-			rowChecks[id] = c
-		}
-		sections.Add(container.NewHBox(
-			widget.NewLabelWithStyle(g.Label, fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-			all,
-		))
-		sections.Add(grid)
+	scriptChecks := make(map[kanacore.Script]*widget.Check)
+	scriptRow := container.NewHBox(widget.NewLabelWithStyle("Scripts", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}))
+	for _, info := range kanacore.Scripts() {
+		c := widget.NewCheck(info.Label, nil)
+		c.SetChecked(active[info.Script])
+		scriptChecks[info.Script] = c
+		scriptRow.Add(c)
 	}
-	rowScroll := container.NewVScroll(sections)
-	rowScroll.SetMinSize(fyne.NewSize(460, 320))
+
+	rowChecks := make(map[string]*widget.Check)
+	tabs := container.NewAppTabs()
+	for _, info := range kanacore.Scripts() {
+		sections := container.NewVBox()
+		for _, g := range kanacore.Groups() {
+			all, checks, grid := newGroupChecks(kanacore.RowsInGroup(info.Script, g.Group), selected)
+			for id, c := range checks {
+				rowChecks[id] = c
+			}
+			sections.Add(container.NewHBox(
+				widget.NewLabelWithStyle(g.Label, fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+				all,
+			))
+			sections.Add(grid)
+		}
+		scroll := container.NewVScroll(sections)
+		scroll.SetMinSize(fyne.NewSize(460, 280))
+		tabs.Append(container.NewTabItem(info.Label, scroll))
+	}
 
 	autoCheck := widget.NewCheck("Enable auto-progression", nil)
 	autoCheck.SetChecked(currentAuto)
@@ -54,8 +70,8 @@ func showSettingsDialog(gs *GameState, statsPanel *StatsPanel, gameCanvas *GameC
 	}
 
 	form := container.NewVBox(
-		widget.NewLabel("Kana Rows"),
-		rowScroll,
+		scriptRow,
+		tabs,
 		widget.NewSeparator(),
 		autoCheck,
 		widget.NewSeparator(),
@@ -80,13 +96,14 @@ func showSettingsDialog(gs *GameState, statsPanel *StatsPanel, gameCanvas *GameC
 			newLimit = n
 		}
 
-		gs.applySettings(newRows, gs.ActiveScripts(), newAuto, newLimit)
+		gs.applySettings(newRows, checkedScripts(scriptChecks), newAuto, newLimit)
 
 		gs.mu.Lock()
 		snap := gs.snapshot()
 		gs.mu.Unlock()
 		statsPanel.Update(snap)
 		gameCanvas.Refresh()
+		showPendingDialogs(gs, inputBar, win)
 	}, win)
 }
 
@@ -146,6 +163,17 @@ func checkedRowIDs(checks map[string]*widget.Check) []string {
 		}
 	}
 	return ids
+}
+
+// checkedScripts returns the checked scripts in display order.
+func checkedScripts(checks map[kanacore.Script]*widget.Check) []kanacore.Script {
+	var scripts []kanacore.Script
+	for _, info := range kanacore.Scripts() {
+		if c, ok := checks[info.Script]; ok && c.Checked {
+			scripts = append(scripts, info.Script)
+		}
+	}
+	return scripts
 }
 
 func allChecked(checks []*widget.Check) bool {
