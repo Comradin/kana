@@ -2,10 +2,14 @@ package main
 
 import (
 	"fmt"
+	"image/color"
+	"math"
 	"strings"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"kana/kanacore"
 	"kana/store"
@@ -22,39 +26,6 @@ type StatsSnapshot struct {
 	ActiveScripts map[kanacore.Script]bool
 	TotalCorrect  map[string]int
 	Paths         map[kanacore.Script]PathStatus
-}
-
-// StatsPanel shows kana progress per active script, active rows, and missed characters.
-type StatsPanel struct {
-	widget.BaseWidget
-
-	charLabels map[string]*widget.Label
-	rowLabels  map[string]*widget.Label
-	missLabels map[string]*widget.Label
-	missEmpty  *widget.Label
-	rowBox     *fyne.Container
-	missBox    *fyne.Container
-	container  *container.Scroll
-
-	// rowCells maps row ID to all 6 labels in that row (row-label + 5 char cells).
-	// Used to show/hide entire rows together.
-	rowCells map[string][6]*widget.Label
-
-	// basicGrids holds each script's always-present grid for its basic rows.
-	basicGrids map[kanacore.Script]*fyne.Container
-
-	// groupSections holds the label+grid section for each non-basic group of
-	// each script, shown while any of its rows is selected.
-	groupSections map[sectionKey]*fyne.Container
-
-	// scriptSections wraps everything of one script, shown while it is active.
-	scriptSections map[kanacore.Script]*fyne.Container
-}
-
-// sectionKey identifies one group of one script in the progress table.
-type sectionKey struct {
-	Script kanacore.Script
-	Group  kanacore.Group
 }
 
 // vowelColIndex returns the column index (0–4) for a kana based on its romaji vowel ending.
@@ -96,246 +67,265 @@ func rowShortLabel(rowID string) string {
 	}
 }
 
-func groupLabel(g kanacore.Group) string {
-	for _, info := range kanacore.Groups() {
-		if info.Group == g {
-			return info.Label
-		}
-	}
-	return string(g)
+// StatsPanel shows the session, each active script's learning path and a
+// side-by-side hiragana/katakana grid of every character's learning state.
+type StatsPanel struct {
+	widget.BaseWidget
+
+	correctText, missedText, accuracyText *canvas.Text
+
+	pathLines map[kanacore.Script]*fyne.Container
+	pathSegs  map[kanacore.Script][]*canvas.Rectangle
+	pathCount map[kanacore.Script]*canvas.Text
+	pathNext  map[kanacore.Script]*canvas.Text
+
+	cells      map[string]*kanaCell           // by character
+	rowCells   map[string][]*kanaCell         // by row ID (hiragana or kata:), in column order
+	rowLabels  map[string]*canvas.Text        // by hiragana row ID
+	rowFillers map[string][]fyne.CanvasObject // spacer and empty slots of a base row
+	groupGrids map[kanacore.Group]*fyne.Container
+
+	content *fyne.Container
+}
+
+var (
+	segOpenColor  = color.RGBA{R: 0xd8, G: 0xc6, B: 0xaa, A: 0xff}
+	panelSubColor = color.RGBA{R: 0x6b, G: 0x54, B: 0x40, A: 0xff}
+)
+
+func smallText(s string, size float32) *canvas.Text {
+	t := canvas.NewText(s, kanaTextColor)
+	t.TextSize = size
+	return t
 }
 
 func newStatsPanel() *StatsPanel {
 	p := &StatsPanel{
-		charLabels:     make(map[string]*widget.Label),
-		rowLabels:      make(map[string]*widget.Label),
-		missLabels:     make(map[string]*widget.Label),
-		rowCells:       make(map[string][6]*widget.Label),
-		basicGrids:     make(map[kanacore.Script]*fyne.Container),
-		groupSections:  make(map[sectionKey]*fyne.Container),
-		scriptSections: make(map[kanacore.Script]*fyne.Container),
+		pathLines:  map[kanacore.Script]*fyne.Container{},
+		pathSegs:   map[kanacore.Script][]*canvas.Rectangle{},
+		pathCount:  map[kanacore.Script]*canvas.Text{},
+		pathNext:   map[kanacore.Script]*canvas.Text{},
+		cells:      map[string]*kanaCell{},
+		rowCells:   map[string][]*kanaCell{},
+		rowLabels:  map[string]*canvas.Text{},
+		rowFillers: map[string][]fyne.CanvasObject{},
+		groupGrids: map[kanacore.Group]*fyne.Container{},
 	}
 
-	// Build one 6-column progress grid per group of each script, so a
-	// group's label never widens another group's columns (Fyne sizes every
-	// grid cell to the widest cell in that same grid).
-	sections := container.NewVBox()
+	// Session line: correct · missed · accuracy.
+	tile := func(caption string) (*canvas.Text, fyne.CanvasObject) {
+		num := smallText("0", 15)
+		num.TextStyle = fyne.TextStyle{Bold: true}
+		num.Alignment = fyne.TextAlignCenter
+		sub := smallText(caption, 11)
+		sub.Color = panelSubColor
+		sub.Alignment = fyne.TextAlignCenter
+		bg := canvas.NewRectangle(tileFaceColor)
+		bg.CornerRadius = 4
+		return num, container.NewStack(bg, container.NewVBox(num, sub))
+	}
+	var c1, c2, c3 fyne.CanvasObject
+	p.correctText, c1 = tile("correct")
+	p.missedText, c2 = tile("missed")
+	p.accuracyText, c3 = tile("accuracy")
+	session := container.NewGridWithColumns(3, c1, c2, c3)
 
-	for _, script := range kanacore.Scripts() {
-		s := script.Script
-		scriptBox := container.NewVBox(
-			widget.NewLabelWithStyle(strings.ToUpper(script.Label), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-		)
-
-		for _, info := range kanacore.Groups() {
-			g := info.Group
-			gridItems := make([]fyne.CanvasObject, 0)
-
-			if g == kanacore.GroupBasic {
-				// Header row: blank + vowel headers.
-				headerCells := []*widget.Label{
-					widget.NewLabel(""),
-					widget.NewLabel("a"),
-					widget.NewLabel("i"),
-					widget.NewLabel("u"),
-					widget.NewLabel("e"),
-					widget.NewLabel("o"),
-				}
-				for _, lbl := range headerCells {
-					gridItems = append(gridItems, lbl)
-				}
-			}
-
-			for _, row := range kanacore.RowsInGroup(s, g) {
-				// Create the row-label cell.
-				rowLbl := widget.NewLabel(rowShortLabel(row.ID))
-
-				// Create 5 placeholder cells (one per vowel column), initially "".
-				// cells[0..4] correspond to columns a/i/u/e/o; only cells that
-				// get a real kana below are replaced with a label starting "-".
-				cells := [5]*widget.Label{}
-				for i := range cells {
-					cells[i] = widget.NewLabel("")
-				}
-
-				// Place each character into the correct column slot.
-				for _, e := range row.Entries {
-					char := e.Char
-					col := vowelColIndex(e.Romaji)
-					if col < 0 || col > 4 {
-						continue
-					}
-					lbl := widget.NewLabel("-")
-					p.charLabels[char] = lbl
-					cells[col] = lbl
-				}
-
-				// Store all 6 cells for this row so Update can show/hide them.
-				var row6 [6]*widget.Label
-				row6[0] = rowLbl
-				for i, c := range cells {
-					row6[i+1] = c
-				}
-				p.rowCells[row.ID] = row6
-
-				// Add to grid.
-				gridItems = append(gridItems, rowLbl)
-				for _, c := range cells {
-					gridItems = append(gridItems, c)
-				}
-
-				// Initially hide all row cells; Update() will show active ones.
-				for _, lbl := range row6 {
-					lbl.Hide()
-				}
-			}
-
-			grid := container.NewGridWithColumns(6, gridItems...)
-
-			if g == kanacore.GroupBasic {
-				p.basicGrids[s] = grid
-				scriptBox.Add(grid)
-				continue
-			}
-
-			label := widget.NewLabelWithStyle(groupLabel(g), fyne.TextAlignLeading, fyne.TextStyle{Italic: true})
-			section := container.NewVBox(label, grid)
-			section.Hide()
-			p.groupSections[sectionKey{s, g}] = section
-			scriptBox.Add(section)
+	// One path line per script: name, 15 segments, count; "Next" below.
+	top := container.NewVBox(session)
+	for _, info := range kanacore.Scripts() {
+		widths := []float32{62}
+		objs := []fyne.CanvasObject{smallText(info.Label, 12)}
+		for i := 0; i < 15; i++ {
+			seg := canvas.NewRectangle(segOpenColor)
+			seg.CornerRadius = 2
+			p.pathSegs[info.Script] = append(p.pathSegs[info.Script], seg)
+			widths = append(widths, 10)
+			objs = append(objs, seg)
 		}
-
-		p.scriptSections[s] = scriptBox
-		scriptBox.Hide()
-		sections.Add(scriptBox)
+		count := smallText("0/15", 11)
+		count.Color = panelSubColor
+		p.pathCount[info.Script] = count
+		widths = append(widths, 30)
+		objs = append(objs, count)
+		line := container.New(&fixedColumns{widths: widths, rowHeight: 14, gap: 2}, objs...)
+		next := smallText("", 11)
+		next.Color = panelSubColor
+		p.pathNext[info.Script] = next
+		box := container.NewVBox(line, next)
+		box.Hide()
+		p.pathLines[info.Script] = box
+		top.Add(box)
 	}
 
-	// Pre-create row labels (one per known row), hidden by default.
-	p.rowBox = container.NewVBox()
-	for _, row := range kanacore.AllKanaRows {
-		lbl := widget.NewLabel("")
-		lbl.Hide()
-		p.rowLabels[row.ID] = lbl
-		p.rowBox.Add(lbl)
+	// Grid header and one fixed-column grid per group.
+	head := func(s string) *canvas.Text {
+		t := smallText(s, 11)
+		t.Alignment = fyne.TextAlignCenter
+		t.Color = panelSubColor
+		return t
 	}
-
-	// Pre-create missed-kana labels (one per character), hidden by default.
-	p.missBox = container.NewVBox()
-	for _, row := range kanacore.AllKanaRows {
-		for _, char := range row.Characters() {
-			lbl := widget.NewLabel("")
-			lbl.Hide()
-			p.missLabels[char] = lbl
-			p.missBox.Add(lbl)
+	half := 5*cellW + 4*gridGap
+	header := container.New(&fixedColumns{widths: []float32{rowLabelW, half, halfGapW, half}, rowHeight: 14, gap: gridGap},
+		smallText("", 11), head("ひらがな"), smallText("", 11), head("カタカナ"))
+	grids := container.NewVBox(header)
+	for _, g := range kanacore.Groups() {
+		var objs []fyne.CanvasObject
+		for _, row := range kanacore.RowsInGroup(kanacore.ScriptHiragana, g.Group) {
+			lbl := smallText(rowShortLabel(row.ID), 11)
+			lbl.Alignment = fyne.TextAlignTrailing
+			lbl.Color = panelSubColor
+			p.rowLabels[row.ID] = lbl
+			objs = append(objs, lbl)
+			objs = append(objs, p.half(row)...)
+			spacer := canvas.NewRectangle(color.Transparent)
+			p.rowFillers[row.ID] = append(p.rowFillers[row.ID], spacer)
+			objs = append(objs, spacer)
+			kata, _ := kanacore.RowByID("kata:" + row.ID)
+			objs = append(objs, p.half(kata)...)
 		}
+		grid := container.New(gridColumns(), objs...)
+		p.groupGrids[g.Group] = grid
+		grids.Add(grid)
 	}
-	p.missEmpty = widget.NewLabel("None yet!")
-	p.missBox.Add(p.missEmpty)
 
-	p.container = container.NewVScroll(container.NewVBox(
-		widget.NewLabel("PROGRESS"),
-		sections,
-		widget.NewSeparator(),
-		widget.NewLabel("ACTIVE ROWS"),
-		p.rowBox,
-		widget.NewSeparator(),
-		widget.NewLabel("MISSED"),
-		p.missBox,
-	))
+	legend := container.NewHBox()
+	for _, item := range []struct {
+		label string
+		st    cellState
+		miss  bool
+	}{{"new", cellNew, false}, {"learning", cellLearning, false}, {"mastered", cellMastered, false}, {"missed", cellNew, true}} {
+		sw := newKanaCell("")
+		sw.set(item.st, item.miss)
+		t := smallText(item.label, 11)
+		t.Color = panelSubColor
+		legend.Add(container.NewGridWrap(fyne.NewSize(12, 12), sw))
+		legend.Add(t)
+	}
 
+	p.content = container.NewBorder(top, legend, nil, nil, container.NewVScroll(grids))
 	p.ExtendBaseWidget(p)
 	return p
 }
 
-func (p *StatsPanel) CreateRenderer() fyne.WidgetRenderer {
-	return widget.NewSimpleRenderer(p.container)
+// half builds the five cell slots of one row in vowel-column order; slots
+// without a kana (yōon i/e) are transparent fillers.
+func (p *StatsPanel) half(row kanacore.KanaRow) []fyne.CanvasObject {
+	slots := make([]fyne.CanvasObject, 5)
+	for _, e := range row.Entries {
+		if col := vowelColIndex(e.Romaji); col >= 0 && col < 5 {
+			cell := newKanaCell(e.Char)
+			p.cells[e.Char] = cell
+			p.rowCells[row.ID] = append(p.rowCells[row.ID], cell)
+			slots[col] = cell
+		}
+	}
+	base := kanacore.BaseRowID(row.ID)
+	for i, s := range slots {
+		if s == nil {
+			filler := canvas.NewRectangle(color.Transparent)
+			p.rowFillers[base] = append(p.rowFillers[base], filler)
+			slots[i] = filler
+		}
+	}
+	return slots
 }
 
-// Update refreshes all labels from the snapshot.
+func (p *StatsPanel) CreateRenderer() fyne.WidgetRenderer {
+	return widget.NewSimpleRenderer(p.content)
+}
+
+// MinSize fixes the panel at 300px wide; buildWindow wraps it in
+// container.NewPadded, so subtracting the theme padding on both sides keeps
+// the overall right column at exactly 300px.
+func (p *StatsPanel) MinSize() fyne.Size {
+	return fyne.NewSize(300-2*theme.Padding(), p.content.MinSize().Height)
+}
+
+// Update maps a snapshot onto the panel.
 func (p *StatsPanel) Update(snap StatsSnapshot) {
-	for s, box := range p.scriptSections {
-		if snap.ActiveScripts[s] {
-			box.Show()
-		} else {
-			box.Hide()
-		}
+	correct := 0
+	for _, st := range snap.SessionStats {
+		correct += st.CorrectCount
 	}
-
-	for char, lbl := range p.charLabels {
-		count := snap.SessionStats[char].CorrectCount
-		if count > 0 {
-			lbl.SetText(fmt.Sprintf("%d", count))
-		} else {
-			lbl.SetText("-")
-		}
-	}
-
-	for _, row := range kanacore.AllKanaRows {
-		row6, ok := p.rowCells[row.ID]
-		if !ok {
-			continue
-		}
-		if snap.SelectedRows[row.ID] {
-			for _, lbl := range row6 {
-				lbl.Show()
-			}
-		} else {
-			for _, lbl := range row6 {
-				lbl.Hide()
-			}
-		}
-	}
-
-	for _, row := range kanacore.AllKanaRows {
-		lbl, ok := p.rowLabels[row.ID]
-		if !ok {
-			continue
-		}
-		if snap.SelectedRows[row.ID] && snap.ActiveScripts[row.Script] {
-			lbl.SetText("• " + row.Label)
-			lbl.Show()
-		} else {
-			lbl.SetText("")
-			lbl.Hide()
-		}
-	}
-
-	for key, section := range p.groupSections {
-		visible := false
-		for _, row := range kanacore.RowsInGroup(key.Script, key.Group) {
-			if snap.SelectedRows[row.ID] {
-				visible = true
-				break
-			}
-		}
-		if visible {
-			section.Show()
-		} else {
-			section.Hide()
-		}
-	}
-
-	seen := make(map[string]bool)
-	for _, k := range snap.MissedKanas {
-		if seen[k.Char] {
-			continue
-		}
-		seen[k.Char] = true
-		if lbl, ok := p.missLabels[k.Char]; ok {
-			lbl.SetText(k.Char + " (" + k.Romaji + ")")
-			lbl.Show()
-		}
-	}
-	for char, lbl := range p.missLabels {
-		if !seen[char] {
-			lbl.Hide()
-		}
-	}
-	if len(seen) == 0 {
-		p.missEmpty.Show()
+	p.correctText.Text = fmt.Sprint(correct)
+	p.missedText.Text = fmt.Sprint(snap.Missed)
+	if answered := correct + snap.Missed; answered > 0 {
+		p.accuracyText.Text = fmt.Sprintf("%d %%", int(math.Round(100*float64(correct)/float64(answered))))
 	} else {
-		p.missEmpty.Hide()
+		p.accuracyText.Text = "–"
 	}
 
-	p.container.Refresh()
+	for _, info := range kanacore.Scripts() {
+		box := p.pathLines[info.Script]
+		ps, ok := snap.Paths[info.Script]
+		if !ok {
+			box.Hide()
+			continue
+		}
+		box.Show()
+		for i, seg := range p.pathSegs[info.Script] {
+			seg.FillColor = segOpenColor
+			if i < len(ps.Steps) {
+				switch ps.Steps[i] {
+				case StepMastered:
+					seg.FillColor = cellMasteredColor
+				case StepLearning:
+					seg.FillColor = cellLearningColor
+				}
+			}
+			seg.Refresh()
+		}
+		p.pathCount[info.Script].Text = fmt.Sprintf("%d/%d", ps.Unlocked, len(ps.Steps))
+		if len(ps.Next) == 0 {
+			p.pathNext[info.Script].Text = "All rows unlocked"
+		} else {
+			labels := make([]string, 0, len(ps.Next))
+			for _, id := range ps.Next {
+				if row, ok := kanacore.RowByID(id); ok {
+					labels = append(labels, row.Label)
+				}
+			}
+			p.pathNext[info.Script].Text = "Next: " + strings.Join(labels, " · ")
+		}
+	}
+
+	missed := map[string]bool{}
+	for _, k := range snap.MissedKanas {
+		missed[k.Char] = true
+	}
+	for char, cell := range p.cells {
+		cell.set(stateFor(snap.TotalCorrect[char]), missed[char])
+	}
+
+	for _, g := range kanacore.Groups() {
+		groupVisible := false
+		for _, row := range kanacore.RowsInGroup(kanacore.ScriptHiragana, g.Group) {
+			hOn := snap.ActiveScripts[kanacore.ScriptHiragana] && snap.SelectedRows[row.ID]
+			kOn := snap.ActiveScripts[kanacore.ScriptKatakana] && snap.SelectedRows["kata:"+row.ID]
+			show := hOn || kOn
+			groupVisible = groupVisible || show
+			setVisible(p.rowLabels[row.ID], show)
+			for _, f := range p.rowFillers[row.ID] {
+				setVisible(f, show)
+			}
+			for _, c := range p.rowCells[row.ID] {
+				setVisible(c, hOn)
+			}
+			for _, c := range p.rowCells["kata:"+row.ID] {
+				setVisible(c, kOn)
+			}
+		}
+		setVisible(p.groupGrids[g.Group], groupVisible)
+		p.groupGrids[g.Group].Refresh()
+	}
+
+	p.content.Refresh()
+}
+
+func setVisible(o fyne.CanvasObject, on bool) {
+	if on {
+		o.Show()
+	} else {
+		o.Hide()
+	}
 }

@@ -31,7 +31,7 @@ func TestShowPendingDialogsRefreshesStatsPanel(t *testing.T) {
 
 	showPendingDialogs(gs, statsPanel, ib, w)
 
-	if !statsPanel.scriptSections[kanacore.ScriptKatakana].Visible() {
+	if !statsPanel.pathLines[kanacore.ScriptKatakana].Visible() {
 		t.Error("expected katakana section visible after showPendingDialogs refreshed the stats panel")
 	}
 }
