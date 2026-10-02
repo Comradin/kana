@@ -163,7 +163,7 @@ func toKatakanaRows(rows []KanaRow) []KanaRow {
 	for i, row := range rows {
 		entries := make([]Entry, len(row.Entries))
 		for j, e := range row.Entries {
-			entries[j] = Entry{Char: toKatakana(e.Char), Romaji: e.Romaji, Alt: e.Alt}
+			entries[j] = Entry{Char: toKatakana(e.Char), Romaji: e.Romaji, Alt: append([]string(nil), e.Alt...)}
 		}
 		out[i] = KanaRow{
 			ID:      katakanaPrefix + row.ID,

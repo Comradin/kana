@@ -22,7 +22,7 @@ type StatsSnapshot struct {
 	ActiveScripts map[kanacore.Script]bool
 }
 
-// StatsPanel shows hiragana progress, active rows, and missed characters.
+// StatsPanel shows kana progress per active script, active rows, and missed characters.
 type StatsPanel struct {
 	widget.BaseWidget
 
