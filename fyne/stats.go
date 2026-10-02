@@ -125,7 +125,7 @@ func newStatsPanel() *StatsPanel {
 			}
 		}
 
-		for _, row := range kanacore.RowsInGroup(g) {
+		for _, row := range kanacore.RowsInGroup(kanacore.ScriptHiragana, g) {
 			// Create the row-label cell.
 			rowLbl := widget.NewLabel(rowShortLabel(row.ID))
 
@@ -268,7 +268,7 @@ func (p *StatsPanel) Update(snap StatsSnapshot) {
 
 	for group, section := range p.groupSections {
 		visible := false
-		for _, row := range kanacore.RowsInGroup(group) {
+		for _, row := range kanacore.RowsInGroup(kanacore.ScriptHiragana, group) {
 			if snap.SelectedRows[row.ID] {
 				visible = true
 				break
