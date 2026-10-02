@@ -59,9 +59,7 @@ func buildWindow(a fyne.App, st *store.Store) fyne.Window {
 	// SetOnStarted without clobbering this callback.
 	// First launch: introduce the first row once the window is up.
 	a.Lifecycle().SetOnStarted(func() {
-		if rows := gs.PendingIntro(); len(rows) > 0 {
-			showIntroDialog(gs, rows, inputBar, w)
-		}
+		showPendingDialogs(gs, inputBar, w)
 	})
 
 	w.SetOnClosed(func() {
@@ -91,24 +89,12 @@ func watchEvents(ch chan gameEvent, gs *GameState, statsPanel *StatsPanel, gameC
 		}
 
 		switch event.kind {
-		case rowsUnlockedEvent:
-			fyne.Do(func() {
-				// PendingIntro, not the event payload, is the source of
-				// truth: it reflects FinishIntro/Reset that may have run
-				// since the event was queued.
-				if over {
-					return
-				}
-				// Paused must always mean an intro is pending or showing:
-				// if nothing is pending, resume rather than leaving the
-				// game stuck paused.
-				rows := gs.PendingIntro()
-				if len(rows) == 0 {
-					gs.Resume()
-					return
-				}
-				showIntroDialog(gs, rows, inputBar, w)
-			})
+		case rowsUnlockedEvent, katakanaOfferEvent:
+			if over {
+				// Game over wins; an intro stays pending for Play Again.
+				continue
+			}
+			fyne.Do(func() { showPendingDialogs(gs, inputBar, w) })
 		case gameOverEvent:
 			gs.mu.Lock()
 			snap := gs.snapshot()
@@ -196,8 +182,6 @@ func showGameOverDialog(gs *GameState, snap StatsSnapshot, reason string, statsP
 		statsPanel.Update(snap)
 		inputBar.Update(snap)
 		gameCanvas.Refresh()
-		if rows := gs.PendingIntro(); len(rows) > 0 {
-			showIntroDialog(gs, rows, inputBar, w)
-		}
+		showPendingDialogs(gs, inputBar, w)
 	}, w)
 }

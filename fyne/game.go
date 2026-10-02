@@ -887,10 +887,10 @@ func (gs *GameState) PendingDialogs() (offer bool, intro []string) {
 	return gs.pendingOffer, append([]string(nil), gs.pendingIntro...)
 }
 
-// Resume continues a paused game.
+// Resume continues a paused game unless a dialog is still pending.
 func (gs *GameState) Resume() {
 	gs.mu.Lock()
-	gs.paused = false
+	gs.settle()
 	gs.mu.Unlock()
 }
 
@@ -900,13 +900,6 @@ func (gs *GameState) FinishIntro() {
 	gs.pendingIntro = nil
 	gs.settle()
 	gs.mu.Unlock()
-}
-
-// PendingIntro returns a copy of the row IDs waiting to be introduced.
-func (gs *GameState) PendingIntro() []string {
-	gs.mu.Lock()
-	defer gs.mu.Unlock()
-	return append([]string(nil), gs.pendingIntro...)
 }
 
 // buildSnapshot rebuilds the atomic snapshot of canvas objects.

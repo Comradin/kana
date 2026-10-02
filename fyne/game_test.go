@@ -310,6 +310,22 @@ func TestPausedGameDoesNotMoveSpawnOrScore(t *testing.T) {
 	}
 }
 
+func TestResumeRespectsPauseInvariant(t *testing.T) {
+	gs := newTestState()
+	gs.pendingOffer = true
+	gs.paused = true
+	gs.Resume()
+	if !gs.paused {
+		t.Fatal("Resume must leave the game paused while the offer is pending")
+	}
+
+	gs.pendingOffer = false
+	gs.Resume()
+	if gs.paused {
+		t.Fatal("Resume should unpause once nothing is pending")
+	}
+}
+
 func TestFinishIntroClearsPendingAndResumes(t *testing.T) {
 	gs := newUnlockReadyState()
 	gs.checkAnswer("a")
@@ -336,7 +352,7 @@ func TestUnlockAndScoreLimitKeepIntroForPlayAgain(t *testing.T) {
 	}
 
 	gs.Reset()
-	if !gs.paused || !equalIDs(gs.PendingIntro(), []string{"k", "s"}) {
+	if !gs.paused || !equalIDs(gs.pendingIntro, []string{"k", "s"}) {
 		t.Fatalf("after Reset paused=%v pending=%v, want paused with [k s]", gs.paused, gs.pendingIntro)
 	}
 }
@@ -464,6 +480,14 @@ func TestSettleResumesWhenNothingPending(t *testing.T) {
 	if !gs.paused {
 		t.Fatal("settle must keep the pause while an intro is pending")
 	}
+
+	gs.paused = true
+	gs.pendingIntro = nil
+	gs.pendingOffer = true
+	gs.settle()
+	if !gs.paused {
+		t.Fatal("settle must keep the pause while the offer is pending")
+	}
 }
 
 // newOfferReadyState returns a hiragana-only state where one correct あ
@@ -500,6 +524,9 @@ func TestOfferSkippedWhenAlreadyOffered(t *testing.T) {
 	if gs.pendingOffer || gs.paused {
 		t.Fatal("offer must not repeat")
 	}
+	if len(gs.eventCh) != 0 {
+		t.Fatalf("eventCh len = %d, want 0", len(gs.eventCh))
+	}
 }
 
 func TestOfferSkippedWhenKatakanaActive(t *testing.T) {
@@ -508,6 +535,12 @@ func TestOfferSkippedWhenKatakanaActive(t *testing.T) {
 	gs.checkAnswer("a")
 	if gs.pendingOffer {
 		t.Fatal("no offer while katakana is active")
+	}
+	if gs.paused {
+		t.Fatal("game must not be paused when no offer fires")
+	}
+	if len(gs.eventCh) != 0 {
+		t.Fatalf("eventCh len = %d, want 0", len(gs.eventCh))
 	}
 }
 

@@ -18,20 +18,39 @@ const (
 	introCardH     float32 = 120
 )
 
-// introShowing guards against two intro dialogs stacking (e.g. a stale
-// rowsUnlockedEvent racing Play Again's direct showIntroDialog call).
+// dialogShowing guards against stacking the offer and intro dialogs.
 // Fyne-thread-only: read and written exclusively from code that runs via
-// fyne.Do or a Fyne lifecycle callback, so it needs no lock.
-var introShowing bool
+// fyne.Do or a Fyne callback, so it needs no lock.
+var dialogShowing bool
 
-// showIntroDialog presents newly unlocked rows as large tiles with their
-// romaji. The game stays paused and input disabled until the dialog closes.
-// Must run on the Fyne thread.
-func showIntroDialog(gs *GameState, rowIDs []string, inputBar *InputBar, w fyne.Window) {
-	if introShowing {
+// showPendingDialogs shows whatever the game is waiting for: the katakana
+// offer first, then an intro. With nothing pending it resumes the game and
+// re-enables input, so "paused" never outlives its dialog. Must run on the
+// Fyne thread.
+func showPendingDialogs(gs *GameState, inputBar *InputBar, w fyne.Window) {
+	if dialogShowing {
 		return
 	}
+	offer, intro := gs.PendingDialogs()
+	switch {
+	case offer:
+		showKatakanaOffer(gs, inputBar, w)
+	case len(intro) > 0:
+		showIntroDialog(gs, intro, inputBar, w)
+	default:
+		gs.Resume()
+		inputBar.SetEnabled(true, w)
+	}
+}
 
+// continueAfterDialog chains to the next pending dialog, if any.
+func continueAfterDialog(gs *GameState, inputBar *InputBar, w fyne.Window) {
+	fyne.Do(func() { showPendingDialogs(gs, inputBar, w) })
+}
+
+// showIntroDialog presents newly unlocked rows as large tiles with their
+// romaji. Call it through showPendingDialogs. Must run on the Fyne thread.
+func showIntroDialog(gs *GameState, rowIDs []string, inputBar *InputBar, w fyne.Window) {
 	labels := make([]string, 0, len(rowIDs))
 	body := container.NewVBox()
 	for _, id := range rowIDs {
@@ -40,23 +59,56 @@ func showIntroDialog(gs *GameState, rowIDs []string, inputBar *InputBar, w fyne.
 			continue
 		}
 		labels = append(labels, row.Label)
-		cards := container.NewHBox()
-		for _, e := range row.Entries {
-			cards.Add(newIntroCard(e))
-		}
 		body.Add(widget.NewLabelWithStyle(row.Label, fyne.TextAlignLeading, fyne.TextStyle{Bold: true}))
-		body.Add(cards)
+		body.Add(introCards(row))
 	}
 
 	inputBar.SetEnabled(false, w)
 	d := dialog.NewCustom("New: "+strings.Join(labels, ", "), "Let's go", body, w)
 	d.SetOnClosed(func() {
-		introShowing = false
+		// A custom dialog has no response callback; SetOnClosed is the first
+		// callback that runs on close.
+		dialogShowing = false
 		gs.FinishIntro()
-		inputBar.SetEnabled(true, w)
+		continueAfterDialog(gs, inputBar, w)
 	})
-	introShowing = true
+	dialogShowing = true
 	d.Show()
+}
+
+// showKatakanaOffer asks once whether to add katakana. Call it through
+// showPendingDialogs. Must run on the Fyne thread.
+func showKatakanaOffer(gs *GameState, inputBar *InputBar, w fyne.Window) {
+	body := container.NewVBox(
+		widget.NewLabel("You know the basic hiragana. Katakana use the same sounds;\nstart with ア イ ウ エ オ?"),
+	)
+	if row, ok := kanacore.RowByID("kata:vowels"); ok {
+		body.Add(introCards(row))
+	}
+
+	inputBar.SetEnabled(false, w)
+	d := dialog.NewCustomConfirm("Add Katakana?", "Add Katakana", "Not now", body, func(add bool) {
+		// The response callback runs before SetOnClosed; clear the guard
+		// first so the chained intro is not swallowed.
+		dialogShowing = false
+		if add {
+			gs.EnableKatakana()
+		} else {
+			gs.DeclineKatakana()
+		}
+		continueAfterDialog(gs, inputBar, w)
+	}, w)
+	dialogShowing = true
+	d.Show()
+}
+
+// introCards lays out a row's kana as large cards.
+func introCards(row kanacore.KanaRow) fyne.CanvasObject {
+	cards := container.NewHBox()
+	for _, e := range row.Entries {
+		cards.Add(newIntroCard(e))
+	}
+	return cards
 }
 
 // newIntroCard renders one kana as a large paper tile with its romaji below.
