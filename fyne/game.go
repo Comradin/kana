@@ -16,6 +16,7 @@ type gameEventType int
 const (
 	gameOverEvent gameEventType = iota
 	rowsUnlockedEvent
+	katakanaOfferEvent
 )
 
 type gameEvent struct {
@@ -46,6 +47,9 @@ type GameState struct {
 
 	paused       bool     // tick, spawn and answers are suspended
 	pendingIntro []string // row IDs waiting to be introduced
+
+	pendingOffer    bool // the katakana offer dialog is waiting
+	katakanaOffered bool // the offer was already made once
 
 	store *store.Store
 
@@ -87,6 +91,9 @@ func NewGameState(st *store.Store) *GameState {
 	if st != nil {
 		if names, err := st.ActiveScripts(); err == nil && len(names) > 0 {
 			gs.activeScripts = scriptSet(parseScripts(names))
+		}
+		if offered, err := st.KatakanaOffered(); err == nil {
+			gs.katakanaOffered = offered
 		}
 		if stats, err := st.KanaStatistics(); err == nil {
 			for _, stat := range stats {
@@ -259,7 +266,9 @@ func (gs *GameState) Reset() {
 	gs.sessionStats = make(map[string]store.KanaStats)
 	gs.currentStreak = make(map[string]int)
 	gs.sessionDirty = false
-	// An intro dropped by game over is shown before the new game starts.
+	// An intro dropped by game over is shown before the new game starts; the
+	// offer cannot be pending at game over and is already marked as made.
+	gs.pendingOffer = false
 	gs.paused = len(gs.pendingIntro) > 0
 
 	// reload overall stats
@@ -417,9 +426,12 @@ func (gs *GameState) checkAnswer(input string) {
 		tile := gs.tiles[best]
 		gs.tiles = append(gs.tiles[:best], gs.tiles[best+1:]...)
 		gs.score += 10
-		gs.recordCorrect(tile.kana.Char)
+		announced := gs.recordCorrect(tile.kana.Char)
 		if gs.scoreLimit > 0 && gs.score >= gs.scoreLimit {
 			gs.endGame("score")
+		}
+		if !announced {
+			gs.maybeOfferKatakana()
 		}
 		gs.buildSnapshot()
 	}
@@ -457,7 +469,8 @@ func (gs *GameState) endGame(reason string) {
 }
 
 // recordCorrect updates session stats only. Must be called under lock.
-func (gs *GameState) recordCorrect(char string) {
+// Reports whether it announced newly unlocked rows.
+func (gs *GameState) recordCorrect(char string) bool {
 	streak := gs.currentStreak[char] + 1
 	gs.currentStreak[char] = streak
 
@@ -470,7 +483,9 @@ func (gs *GameState) recordCorrect(char string) {
 
 	if unlocked := gs.checkAutoProgression(); len(unlocked) > 0 {
 		gs.announceRows(unlocked)
+		return true
 	}
+	return false
 }
 
 // recordMiss updates session stats + resets streak. Must be called under lock.
@@ -731,9 +746,80 @@ func (gs *GameState) announceRows(ids []string) {
 // settle enforces the pause invariant: the game is paused only while a dialog
 // is pending. Must be called under lock.
 func (gs *GameState) settle() {
-	if gs.paused && len(gs.pendingIntro) == 0 {
+	if gs.paused && len(gs.pendingIntro) == 0 && !gs.pendingOffer {
 		gs.paused = false
 	}
+}
+
+// maybeOfferKatakana raises the one-time katakana offer once all hiragana
+// basic rows are mastered. It never fires after game over, while katakana is
+// active, or once already offered. Must be called under lock.
+func (gs *GameState) maybeOfferKatakana() {
+	if gs.over || gs.katakanaOffered || !gs.activeScripts[kanacore.ScriptHiragana] || gs.activeScripts[kanacore.ScriptKatakana] {
+		return
+	}
+	for _, row := range kanacore.BasicRows() {
+		if !gs.selectedRows[row.ID] || !gs.isRowMastered(row) {
+			return
+		}
+	}
+	select {
+	case gs.eventCh <- gameEvent{kind: katakanaOfferEvent}:
+		gs.paused = true
+		gs.pendingOffer = true
+		gs.katakanaOffered = true
+		if gs.store != nil {
+			_ = gs.store.SaveKatakanaOffered(true)
+		}
+	default:
+	}
+}
+
+// enableKatakanaLocked activates katakana and marks the offer as made. If no
+// katakana row is selected yet, it selects the first katakana step and queues
+// its intro. Must be called under lock.
+func (gs *GameState) enableKatakanaLocked() {
+	gs.activeScripts[kanacore.ScriptKatakana] = true
+	gs.saveActiveScripts()
+	gs.katakanaOffered = true
+	if gs.store != nil {
+		_ = gs.store.SaveKatakanaOffered(true)
+	}
+	if gs.hasSelectedRowOf(kanacore.ScriptKatakana) {
+		return
+	}
+	first := kanacore.ProgressionStepsFor(kanacore.ScriptKatakana)[0]
+	for _, id := range first {
+		gs.selectedRows[id] = true
+	}
+	gs.saveSelectedRows()
+	gs.pendingIntro = append(gs.pendingIntro, first...)
+	gs.paused = true
+}
+
+// EnableKatakana accepts the offer.
+func (gs *GameState) EnableKatakana() {
+	gs.mu.Lock()
+	defer gs.mu.Unlock()
+	gs.pendingOffer = false
+	gs.enableKatakanaLocked()
+	gs.settle()
+}
+
+// DeclineKatakana dismisses the offer.
+func (gs *GameState) DeclineKatakana() {
+	gs.mu.Lock()
+	defer gs.mu.Unlock()
+	gs.pendingOffer = false
+	gs.settle()
+}
+
+// PendingDialogs returns whether the offer is pending and a copy of the rows
+// waiting to be introduced.
+func (gs *GameState) PendingDialogs() (offer bool, intro []string) {
+	gs.mu.Lock()
+	defer gs.mu.Unlock()
+	return gs.pendingOffer, append([]string(nil), gs.pendingIntro...)
 }
 
 // Resume continues a paused game.

@@ -465,3 +465,115 @@ func TestSettleResumesWhenNothingPending(t *testing.T) {
 		t.Fatal("settle must keep the pause while an intro is pending")
 	}
 }
+
+// newOfferReadyState returns a hiragana-only state where one correct あ
+// fulfils the offer condition without unlocking anything.
+func newOfferReadyState() *GameState {
+	gs := newTestState()
+	basic := kanacore.DefaultRowIDs()
+	selectRows(gs, basic...)
+	masterRows(gs, basic...)
+	gs.tiles = []*KanaTile{tileAt("あ", "a", 0)}
+	return gs
+}
+
+func TestOfferFiresOnceBasicsAreMastered(t *testing.T) {
+	gs := newOfferReadyState()
+	gs.checkAnswer("a")
+	if !gs.pendingOffer || !gs.paused || !gs.katakanaOffered {
+		t.Fatalf("pendingOffer=%v paused=%v offered=%v", gs.pendingOffer, gs.paused, gs.katakanaOffered)
+	}
+	select {
+	case ev := <-gs.eventCh:
+		if ev.kind != katakanaOfferEvent {
+			t.Fatalf("event kind = %v", ev.kind)
+		}
+	default:
+		t.Fatal("expected katakanaOfferEvent")
+	}
+}
+
+func TestOfferSkippedWhenAlreadyOffered(t *testing.T) {
+	gs := newOfferReadyState()
+	gs.katakanaOffered = true
+	gs.checkAnswer("a")
+	if gs.pendingOffer || gs.paused {
+		t.Fatal("offer must not repeat")
+	}
+}
+
+func TestOfferSkippedWhenKatakanaActive(t *testing.T) {
+	gs := newOfferReadyState()
+	gs.activeScripts[kanacore.ScriptKatakana] = true
+	gs.checkAnswer("a")
+	if gs.pendingOffer {
+		t.Fatal("no offer while katakana is active")
+	}
+}
+
+func TestOfferSkippedOnGameEndingAnswer(t *testing.T) {
+	gs := newOfferReadyState()
+	gs.scoreLimit = 10
+	gs.checkAnswer("a")
+	if !gs.over || gs.pendingOffer || gs.katakanaOffered {
+		t.Fatalf("over=%v pendingOffer=%v offered=%v", gs.over, gs.pendingOffer, gs.katakanaOffered)
+	}
+}
+
+func TestOfferWaitsForAnswerWithoutUnlock(t *testing.T) {
+	gs := newOfferReadyState()
+	gs.autoProgress = true
+	gs.checkAnswer("a") // unlocks g+z and announces them
+	if gs.pendingOffer {
+		t.Fatal("offer must not compete with an intro")
+	}
+	<-gs.eventCh
+	gs.FinishIntro()
+	// Auto-progression stays on; g and z are selected but not mastered, so
+	// the next answer unlocks nothing and the offer can fire.
+	gs.tiles = []*KanaTile{tileAt("い", "i", 0)}
+	gs.checkAnswer("i")
+	if !gs.pendingOffer {
+		t.Fatal("offer should come with the next answer that announces nothing")
+	}
+}
+
+func TestEnableKatakanaStartsKatakanaWithIntro(t *testing.T) {
+	gs := newOfferReadyState()
+	gs.checkAnswer("a")
+	gs.EnableKatakana()
+	if gs.pendingOffer || !gs.activeScripts[kanacore.ScriptKatakana] || !gs.selectedRows["kata:vowels"] {
+		t.Fatalf("pendingOffer=%v scripts=%v", gs.pendingOffer, gs.activeScripts)
+	}
+	if !gs.paused || !equalIDs(gs.pendingIntro, []string{"kata:vowels"}) {
+		t.Fatalf("paused=%v pendingIntro=%v, want paused with [kata:vowels]", gs.paused, gs.pendingIntro)
+	}
+}
+
+func TestEnableKatakanaWithPreselectedRowsResumes(t *testing.T) {
+	gs := newOfferReadyState()
+	gs.selectedRows["kata:k"] = true
+	gs.checkAnswer("a")
+	gs.EnableKatakana()
+	if gs.paused || gs.pendingIntro != nil || gs.selectedRows["kata:vowels"] {
+		t.Fatalf("paused=%v pendingIntro=%v", gs.paused, gs.pendingIntro)
+	}
+}
+
+func TestDeclineKatakanaResumes(t *testing.T) {
+	gs := newOfferReadyState()
+	gs.checkAnswer("a")
+	gs.DeclineKatakana()
+	if gs.paused || gs.pendingOffer || gs.activeScripts[kanacore.ScriptKatakana] {
+		t.Fatalf("paused=%v pendingOffer=%v", gs.paused, gs.pendingOffer)
+	}
+}
+
+func TestResetClearsPendingOffer(t *testing.T) {
+	gs := newOfferReadyState()
+	gs.checkAnswer("a")
+	gs.Reset()
+	if gs.pendingOffer || gs.paused {
+		t.Fatalf("after Reset pendingOffer=%v paused=%v", gs.pendingOffer, gs.paused)
+	}
+}
