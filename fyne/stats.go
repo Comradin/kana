@@ -20,6 +20,8 @@ type StatsSnapshot struct {
 	ScoreLimit    int
 	Missed        int
 	ActiveScripts map[kanacore.Script]bool
+	TotalCorrect  map[string]int
+	Paths         map[kanacore.Script]PathStatus
 }
 
 // StatsPanel shows kana progress per active script, active rows, and missed characters.
