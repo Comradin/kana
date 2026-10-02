@@ -51,7 +51,8 @@ type GameState struct {
 	pendingOffer    bool // the katakana offer dialog is waiting
 	katakanaOffered bool // the offer was already made once
 
-	userPaused bool // the learner paused with the button or Esc
+	userPaused   bool // the learner paused with the button or Esc
+	settingsOpen bool // the settings dialog is open
 
 	store *store.Store
 
@@ -276,6 +277,7 @@ func (gs *GameState) Reset() {
 	// cannot express this one case where Reset must pause).
 	gs.pendingOffer = false
 	gs.userPaused = false
+	gs.settingsOpen = false
 	gs.paused = len(gs.pendingIntro) > 0
 
 	// reload overall stats
@@ -803,10 +805,10 @@ func (gs *GameState) announceRows(ids []string) {
 }
 
 // settle enforces the pause invariant: the game is paused only while a dialog
-// is pending or the learner has paused. It is the only place that unpauses.
-// Must be called under lock.
+// is pending, the learner has paused or the settings dialog is open. It is the
+// only place that unpauses. Must be called under lock.
 func (gs *GameState) settle() {
-	if gs.paused && len(gs.pendingIntro) == 0 && !gs.pendingOffer && !gs.userPaused {
+	if gs.paused && len(gs.pendingIntro) == 0 && !gs.pendingOffer && !gs.userPaused && !gs.settingsOpen {
 		gs.paused = false
 	}
 }
@@ -828,6 +830,20 @@ func (gs *GameState) TogglePause() bool {
 	}
 	gs.buildSnapshot()
 	return gs.userPaused
+}
+
+// SetSettingsOpen pauses while the settings dialog is open and releases that
+// pause when it closes; another reason may still hold the game paused.
+func (gs *GameState) SetSettingsOpen(open bool) {
+	gs.mu.Lock()
+	defer gs.mu.Unlock()
+	gs.settingsOpen = open
+	if open {
+		gs.paused = true
+	} else {
+		gs.settle()
+	}
+	gs.buildSnapshot()
 }
 
 // IsUserPaused reports whether the learner has paused the game.
@@ -931,11 +947,11 @@ func (gs *GameState) FinishIntro() {
 }
 
 // buildSnapshot rebuilds the atomic snapshot of canvas objects. While the
-// learner has paused, no tiles are published, so the pause cannot be used to
-// study them, and the canvas is told to show the hint.
-// Must be called under lock.
+// learner has paused or the settings dialog is open, no tiles are published,
+// so the pause cannot be used to study them; the canvas shows the hint for a
+// user pause only. Must be called under lock.
 func (gs *GameState) buildSnapshot() {
-	hide := gs.userPaused
+	hide := gs.userPaused || gs.settingsOpen
 	gs.showPauseHint.Store(gs.userPaused)
 	if hide {
 		gs.objectSnapshot.Store([]fyne.CanvasObject{})
