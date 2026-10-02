@@ -9,9 +9,7 @@ import (
 )
 
 // legacySuffixes are the database file and its SQLite WAL-mode siblings, in
-// the order they are moved: siblings first, the main file last. If a sibling
-// fails, the main file stays where it was and the move is retried on the next
-// start, so the database is never separated from its write-ahead log.
+// the order they are put in place: siblings first, the main file last.
 var legacySuffixes = []string{"-wal", "-shm", ""}
 
 // DefaultPath returns the per-user location for the database:
@@ -36,11 +34,11 @@ func DefaultPath() (string, error) {
 // as needed.
 //
 // If target already exists, legacy is left untouched and moved is false. If
-// legacy does not exist, it is a no-op. Otherwise it tries os.Rename for each
-// sibling and finally the main file; if renaming fails (for example across filesystems),
-// it falls back to copying the bytes and leaves the originals in place rather
-// than risk losing user data. It stops at the first file that can be neither
-// renamed nor copied.
+// legacy does not exist, it is a no-op. Otherwise every file is first copied
+// next to target under a temporary name, then renamed into place with the
+// main file last, and only then are the legacy files removed. On any error
+// before the main file is in place, legacy is left as it was and the caller
+// should keep using it; the move is retried on the next start.
 func MigrateLegacy(legacy, target string) (moved bool, err error) {
 	if _, err := os.Stat(target); err == nil {
 		return false, nil
@@ -59,20 +57,42 @@ func MigrateLegacy(legacy, target string) (moved bool, err error) {
 		return false, fmt.Errorf("store: ensure target directory: %w", err)
 	}
 
+	var present []string
 	for _, suffix := range legacySuffixes {
-		src, dst := legacy+suffix, target+suffix
-		if _, err := os.Stat(src); err != nil {
-			continue // siblings are optional
-		}
-		if err := os.Rename(src, dst); err == nil {
-			continue
-		}
-		if err := copyFile(src, dst); err != nil {
-			return false, fmt.Errorf("store: copy %s: %w", src, err)
+		if _, err := os.Stat(legacy + suffix); err == nil {
+			present = append(present, suffix)
 		}
 	}
 
+	// Copy everything first, so a failure leaves legacy complete.
+	for _, suffix := range present {
+		if err := copyFile(legacy+suffix, target+suffix+".tmp"); err != nil {
+			removeTemps(target, present)
+			return false, fmt.Errorf("store: copy %s: %w", legacy+suffix, err)
+		}
+	}
+
+	// Put the copies in place, main file last: a target without its main file
+	// is ignored and replaced on the next attempt.
+	for _, suffix := range present {
+		if err := os.Rename(target+suffix+".tmp", target+suffix); err != nil {
+			removeTemps(target, present)
+			return false, fmt.Errorf("store: place %s: %w", target+suffix, err)
+		}
+	}
+
+	// The data is safe at target; leftovers at legacy are harmless because
+	// target now exists.
+	for _, suffix := range present {
+		_ = os.Remove(legacy + suffix)
+	}
 	return true, nil
+}
+
+func removeTemps(target string, suffixes []string) {
+	for _, suffix := range suffixes {
+		_ = os.Remove(target + suffix + ".tmp")
+	}
 }
 
 // copyFile copies src to dst by content, fsyncing the destination so the

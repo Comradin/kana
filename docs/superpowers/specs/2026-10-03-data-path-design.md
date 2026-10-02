@@ -17,13 +17,13 @@ The database moves to a per-user data directory, the same on every OS.
 | Location | `$XDG_DATA_HOME/kana/kana.db`; if `XDG_DATA_HOME` is unset or not absolute, `<home>/.local/share/kana/kana.db`. Same rule on Linux, macOS and Windows. `os.UserConfigDir()` / `~/Library/Application Support` are not used. |
 | Config files | None today; settings live in the database. `~/.config/kana/` is not created. |
 | Legacy database | If the new file does not exist and `./kana.db` exists in the working directory, move it (plus `kana.db-wal` and `kana.db-shm` if present) to the new location on start, and print one line to stderr. If the new file exists, never touch the legacy one. |
-| Move failure | Move `-wal` and `-shm` first and the main file last, so the database is never separated from its write-ahead log. Per file, try `os.Rename`; if that fails (e.g. across filesystems), copy and leave the original in place. If a file can be neither renamed nor copied, stop: the main file stays at the old place and the move is retried on the next start, while this start opens the new location and prints the error. Never delete user data. |
+| Move procedure | Copy every present file (`kana.db`, `-wal`, `-shm`) next to the target under a `.tmp` name; then rename the copies into place, siblings first and the main file last; only then remove the legacy files. On any error before the main file is in place, remove the temporary copies, leave the legacy files untouched and **use `./kana.db` for this start**, so the move is retried on the next start. Never delete user data before the copy is complete. |
 
 ## Code
 
 - `store.DefaultPath() (string, error)`: resolves the path above. Uses `os.Getenv("XDG_DATA_HOME")` and `os.UserHomeDir()`; returns an error only if no home directory can be found.
 - `store.MigrateLegacy(legacy, target string) (moved bool, err error)`: does the move or copy described above for the main file and its `-wal`/`-shm` siblings. It creates the target directory as needed.
-- `fyne/main.go`: `path, err := store.DefaultPath()`; on error, print it and exit. Then `MigrateLegacy("kana.db", path)`, print a line if moved or on error, then `store.Open(path)` (which already creates the directory).
+- `fyne/main.go`: `path, err := store.DefaultPath()`; on error, print it and exit. Then `MigrateLegacy("kana.db", path)`; print a line if moved; on error print it and open `./kana.db` instead for this start; then `store.Open(path)` (which already creates the directory).
 
 ## Testing (`store/path_test.go`)
 
@@ -32,7 +32,7 @@ The database moves to a per-user data directory, the same on every OS.
   - legacy present, target missing → target has the contents, legacy and its `-wal`/`-shm` are gone, `moved == true`;
   - target present → nothing changes, `moved == false`;
   - legacy missing → no-op, `moved == false`, no error;
-  - a sibling that can be neither renamed nor copied → error, `moved == false`, the legacy main file is still in place and no target main file exists;
+  - a file that cannot be put in place → error, `moved == false`, all legacy files still in place, no target main file and no `.tmp` leftovers;
   - target directory is created when missing.
 
 ## Docs
