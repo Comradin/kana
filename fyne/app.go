@@ -37,6 +37,9 @@ func buildWindow(a fyne.App, st *store.Store) fyne.Window {
 	)
 
 	w.SetContent(layout)
+	// Keyboard focus starts in the romaji entry, so the learner can type
+	// right away without reaching for the mouse.
+	w.Canvas().Focus(inputBar.entry)
 
 	// Esc pauses when nothing has focus; the focused entry handles it itself.
 	// Behind a dialog, Esc is left alone so the dialog keeps the keyboard.
@@ -67,6 +70,10 @@ func buildWindow(a fyne.App, st *store.Store) fyne.Window {
 	// SetOnStarted without clobbering this callback.
 	// First launch: introduce the first row once the window is up.
 	a.Lifecycle().SetOnStarted(func() {
+		// Raise and activate the window: launched without an app bundle
+		// (e.g. `go run` on macOS) it would otherwise leave the keyboard
+		// with the terminal.
+		w.RequestFocus()
 		showPendingDialogs(gs, statsPanel, inputBar, w)
 	})
 
