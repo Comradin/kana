@@ -307,8 +307,24 @@ func (gs *GameState) Stop() {
 	}
 }
 
+const (
+	ticksPerSecond         = 10
+	minFallSeconds float32 = 16
+	maxFallSeconds float32 = 24
+)
+
+// fallStep is how far a tile moves per tick so that it crosses a canvas of
+// height h in fallSeconds, whatever the window size. A missing fall time
+// falls back to the minimum.
+func fallStep(h, fallSeconds float32) float32 {
+	if fallSeconds <= 0 {
+		fallSeconds = minFallSeconds
+	}
+	return h / (fallSeconds * ticksPerSecond)
+}
+
 func (gs *GameState) tickLoop() {
-	ticker := time.NewTicker(100 * time.Millisecond)
+	ticker := time.NewTicker(time.Second / ticksPerSecond)
 	defer ticker.Stop()
 
 	gs.mu.Lock()
@@ -352,7 +368,7 @@ func (gs *GameState) tick() {
 
 	for i := len(gs.tiles) - 1; i >= 0; i-- {
 		tile := gs.tiles[i]
-		tile.Move(fyne.NewPos(tile.pos.X, tile.pos.Y+tile.kana.Speed))
+		tile.Move(fyne.NewPos(tile.pos.X, tile.pos.Y+fallStep(gs.canvasH, tile.fallSeconds)))
 
 		if tile.pos.Y > gs.canvasH {
 			gs.recordMiss(tile.kana.Char)
@@ -387,13 +403,12 @@ func (gs *GameState) spawnKana() {
 	char := chars[rand.Intn(len(chars))]
 	romaji, _ := gs.charSet.GetRomaji(char)
 
-	speed := 3.75 + rand.Float32()*2.5
 	kana := kanacore.Kana{
 		Char:   char,
 		Romaji: romaji,
-		Speed:  speed,
 	}
 	tile := newKanaTile(kana)
+	tile.fallSeconds = minFallSeconds + rand.Float32()*(maxFallSeconds-minFallSeconds)
 
 	maxX := gs.canvasW - tile.Width()
 	if maxX < 0 {

@@ -6,7 +6,6 @@ import "strings"
 type Kana struct {
 	Char   string
 	Romaji string
-	Speed  float32
 }
 
 // CharacterSet represents a collection of kana characters with their romaji.

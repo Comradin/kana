@@ -131,7 +131,8 @@ func TestMissLimitEndsGame(t *testing.T) {
 }
 
 func tileAt(char, romaji string, y float32) *KanaTile {
-	tile := newKanaTile(kanacore.Kana{Char: char, Romaji: romaji, Speed: 5})
+	tile := newKanaTile(kanacore.Kana{Char: char, Romaji: romaji})
+	tile.fallSeconds = 20
 	tile.Move(fyne.NewPos(10, y))
 	return tile
 }
@@ -669,5 +670,46 @@ func TestApplySettingsRefillsEmptyActiveScript(t *testing.T) {
 	gs.applySettings(nil, bothScripts, false, 0)
 	if !gs.selectedRows["vowels"] || !gs.selectedRows["kata:vowels"] {
 		t.Fatalf("selected = %v, want vowels and kata:vowels", gs.selectedRows)
+	}
+}
+
+func TestFallStep(t *testing.T) {
+	cases := []struct{ h, secs, want float32 }{
+		{600, 20, 3},
+		{300, 20, 1.5},
+		{600, 0, 600 / (minFallSeconds * ticksPerSecond)},
+	}
+	for _, c := range cases {
+		if got := fallStep(c.h, c.secs); got != c.want {
+			t.Errorf("fallStep(%v, %v) = %v, want %v", c.h, c.secs, got, c.want)
+		}
+	}
+}
+
+func TestTickMovesByFallTime(t *testing.T) {
+	gs := newTestState()
+	gs.canvasH = 600
+	gs.tiles = []*KanaTile{tileAt("あ", "a", 0)}
+	gs.tick()
+	if y := gs.tiles[0].pos.Y; y != 3 {
+		t.Fatalf("y after one tick = %v, want 3", y)
+	}
+	gs.canvasH = 300
+	gs.tick()
+	if y := gs.tiles[0].pos.Y; y != 4.5 {
+		t.Fatalf("y after a tick at half height = %v, want 4.5", y)
+	}
+}
+
+func TestSpawnSetsFallTimeInRange(t *testing.T) {
+	gs := newTestState()
+	selectRows(gs, "vowels")
+	for i := 0; i < 50; i++ {
+		gs.spawnKana()
+	}
+	for _, tile := range gs.tiles {
+		if tile.fallSeconds < minFallSeconds || tile.fallSeconds > maxFallSeconds {
+			t.Fatalf("fallSeconds = %v, want [%v, %v]", tile.fallSeconds, minFallSeconds, maxFallSeconds)
+		}
 	}
 }
