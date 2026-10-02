@@ -146,7 +146,10 @@ func TestMigrateLegacy(t *testing.T) {
 			t.Fatalf("MigrateLegacy = %v, %v; want an error and moved=false", moved, err)
 		}
 		requireExists(t, legacy)
+		requireExists(t, legacy+"-shm")
 		requireGone(t, target)
+		requireGone(t, target+".tmp")
+		requireGone(t, target+"-shm.tmp")
 	})
 
 	t.Run("target present: nothing changes", func(t *testing.T) {
