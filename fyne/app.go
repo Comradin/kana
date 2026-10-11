@@ -54,6 +54,7 @@ func buildWindow(a fyne.App, st *store.Store) fyne.Window {
 	snap := gs.snapshot()
 	gs.mu.Unlock()
 	statsPanel.Update(snap)
+	inputBar.Update(snap)
 
 	gs.onStatsChanged = func() {
 		gs.mu.Lock()
@@ -149,7 +150,7 @@ func showGameOverDialog(gs *GameState, snap StatsSnapshot, reason string, statsP
 	case "score":
 		reasonText = "You reached your target score!"
 	case "misses":
-		reasonText = "10 kana slipped through."
+		reasonText = missReason(snap.Missed)
 	default:
 		reasonText = "Session ended."
 	}
@@ -180,7 +181,7 @@ func showGameOverDialog(gs *GameState, snap StatsSnapshot, reason string, statsP
 	content := container.NewVBox(
 		widget.NewLabelWithStyle(title, fyne.TextAlignCenter, fyne.TextStyle{Bold: true}),
 		widget.NewLabel(scoreText),
-		widget.NewLabel(fmt.Sprintf("Missed: %d/10", snap.Missed)),
+		widget.NewLabel(fmt.Sprintf("Missed: %d/%d", snap.Missed, snap.MissLimit)),
 		widget.NewLabel(reasonText),
 		widget.NewSeparator(),
 		widget.NewLabel("Characters missed:"),
