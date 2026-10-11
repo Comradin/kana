@@ -24,6 +24,8 @@ func showSettingsDialog(gs *GameState, statsPanel *StatsPanel, gameCanvas *GameC
 	}
 	currentAuto := gs.autoProgress
 	currentLimit := gs.scoreLimit
+	currentLevel := gs.level.Level
+	currentPoints := gs.pointsSetting
 	gs.mu.Unlock()
 
 	scriptChecks := make(map[kanacore.Script]*widget.Check)
@@ -105,7 +107,7 @@ func showSettingsDialog(gs *GameState, statsPanel *StatsPanel, gameCanvas *GameC
 			newLimit = n
 		}
 
-		gs.applySettings(newRows, checkedScripts(scriptChecks), newAuto, newLimit)
+		gs.applySettings(newRows, checkedScripts(scriptChecks), newAuto, newLimit, currentLevel, currentPoints)
 
 		gs.mu.Lock()
 		snap := gs.snapshot()

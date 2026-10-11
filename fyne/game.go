@@ -45,6 +45,11 @@ type GameState struct {
 	autoProgress  bool
 	activeScripts map[kanacore.Script]bool
 
+	level         LevelInfo // chosen difficulty
+	pointsSetting int       // pointsAuto or a fixed factor
+	answerStreak  int       // correct answers in a row this game
+	tempoStep     int       // session tempo, 0..maxTempoStep
+
 	paused       bool     // tick, spawn and answers are suspended
 	pendingIntro []string // row IDs waiting to be introduced
 
@@ -90,6 +95,7 @@ func NewGameState(st *store.Store) *GameState {
 		store:         st,
 		canvasW:       400,
 		canvasH:       600,
+		level:         LevelByName(""),
 	}
 
 	for _, id := range kanacore.DefaultRowIDs() {
@@ -112,6 +118,12 @@ func NewGameState(st *store.Store) *GameState {
 		}
 		if auto, err := st.AutoProgress(); err == nil {
 			gs.autoProgress = auto
+		}
+		if name, err := st.Difficulty(); err == nil {
+			gs.level = LevelByName(name)
+		}
+		if p, err := st.PointsFactor(); err == nil {
+			gs.pointsSetting = validPoints(p)
 		}
 		if limit, err := st.ScoreLimit(); err == nil {
 			if limit < 0 {
@@ -268,6 +280,8 @@ func (gs *GameState) Reset() {
 	gs.tiles = nil
 	gs.score = 0
 	gs.missed = 0
+	gs.answerStreak = 0
+	gs.tempoStep = 0
 	gs.over = false
 	gs.overReason = ""
 	gs.missedKanas = nil
@@ -311,18 +325,14 @@ func (gs *GameState) Stop() {
 	}
 }
 
-const (
-	ticksPerSecond         = 10
-	minFallSeconds float32 = 16
-	maxFallSeconds float32 = 24
-)
+const ticksPerSecond = 10
 
 // fallStep is how far a tile moves per tick so that it crosses a canvas of
 // height h in fallSeconds, whatever the window size. A missing fall time
-// falls back to the minimum.
-func fallStep(h, fallSeconds float32) float32 {
+// uses fallback.
+func fallStep(h, fallSeconds, fallback float32) float32 {
 	if fallSeconds <= 0 {
-		fallSeconds = minFallSeconds
+		fallSeconds = fallback
 	}
 	return h / (fallSeconds * ticksPerSecond)
 }
@@ -346,21 +356,31 @@ func (gs *GameState) tickLoop() {
 }
 
 func (gs *GameState) spawnLoop() {
-	ticker := time.NewTicker(4 * time.Second)
-	defer ticker.Stop()
-
 	gs.mu.Lock()
 	stop := gs.stopCh
+	interval := gs.spawnInterval()
 	gs.mu.Unlock()
 
+	timer := time.NewTimer(interval)
+	defer timer.Stop()
 	for {
 		select {
 		case <-stop:
 			return
-		case <-ticker.C:
+		case <-timer.C:
 			gs.spawnKana()
+			gs.mu.Lock()
+			interval = gs.spawnInterval()
+			gs.mu.Unlock()
+			timer.Reset(interval)
 		}
 	}
+}
+
+// spawnInterval is the level's spawn interval at the current tempo. Must be
+// called under lock.
+func (gs *GameState) spawnInterval() time.Duration {
+	return time.Duration(float64(gs.level.SpawnEvery) * float64(tempoFactor(gs.tempoStep)))
 }
 
 func (gs *GameState) tick() {
@@ -373,7 +393,7 @@ func (gs *GameState) tick() {
 	missedNow := false
 	for i := len(gs.tiles) - 1; i >= 0; i-- {
 		tile := gs.tiles[i]
-		tile.Move(fyne.NewPos(tile.pos.X, tile.pos.Y+fallStep(gs.canvasH, tile.fallSeconds)))
+		tile.Move(fyne.NewPos(tile.pos.X, tile.pos.Y+fallStep(gs.canvasH, tile.fallSeconds, gs.level.MinFall)))
 
 		if tile.pos.Y > gs.canvasH {
 			missedNow = true
@@ -418,7 +438,9 @@ func (gs *GameState) spawnKana() {
 		Romaji: romaji,
 	}
 	tile := newKanaTile(kana)
-	tile.fallSeconds = minFallSeconds + rand.Float32()*(maxFallSeconds-minFallSeconds)
+	correct := gs.overallStats[char].CorrectCount + gs.sessionStats[char].CorrectCount
+	base := gs.level.MinFall + rand.Float32()*(gs.level.MaxFall-gs.level.MinFall)
+	tile.fallSeconds = base * charFallFactor(correct) * tempoFactor(gs.tempoStep)
 
 	maxX := gs.canvasW - tile.Width()
 	if maxX < 0 {
@@ -459,7 +481,7 @@ func (gs *GameState) checkAnswer(input string) {
 	if matched {
 		tile := gs.tiles[best]
 		gs.tiles = append(gs.tiles[:best], gs.tiles[best+1:]...)
-		gs.score += 10
+		gs.score += 10 * gs.pointsFactor()
 		announced := gs.recordCorrect(tile.kana.Char)
 		if gs.scoreLimit > 0 && gs.score >= gs.scoreLimit {
 			gs.endGame("score")
@@ -477,10 +499,18 @@ func (gs *GameState) checkAnswer(input string) {
 	}
 }
 
+// pointsFactor is the points multiplier in effect. Must be called under lock.
+func (gs *GameState) pointsFactor() int {
+	if gs.pointsSetting == pointsAuto {
+		return gs.level.PointsFactor
+	}
+	return gs.pointsSetting
+}
+
 // checkMissedLimit ends the game if misses have reached the threshold.
 // Must be called with lock held.
 func (gs *GameState) checkMissedLimit() {
-	if gs.missed >= 10 && !gs.over {
+	if gs.missed >= gs.level.MissLimit && !gs.over {
 		gs.endGame("misses")
 	}
 }
@@ -515,6 +545,11 @@ func (gs *GameState) recordCorrect(char string) bool {
 	gs.sessionStats[char] = stat
 	gs.sessionDirty = true
 
+	gs.answerStreak++
+	if gs.answerStreak%streakPerStep == 0 && gs.tempoStep < maxTempoStep {
+		gs.tempoStep++
+	}
+
 	if unlocked := gs.checkAutoProgression(); len(unlocked) > 0 {
 		gs.announceRows(unlocked)
 		return true
@@ -532,6 +567,12 @@ func (gs *GameState) recordMiss(char string) {
 	stat.Streak = 0
 	gs.sessionStats[char] = stat
 	gs.sessionDirty = true
+
+	gs.answerStreak = 0
+	gs.tempoStep -= missTempoSteps
+	if gs.tempoStep < 0 {
+		gs.tempoStep = 0
+	}
 }
 
 // mergeSessionStats writes (baseline + session) to store. Must be called under lock.
@@ -630,7 +671,7 @@ func (gs *GameState) SetSelectedRows(rows []string) {
 // applySettings applies a saved settings dialog as one locked operation:
 // rows first, then scripts, so the katakana intro is decided against the new
 // selection. Every active script ends up with at least its first step.
-func (gs *GameState) applySettings(rows []string, scripts []kanacore.Script, auto bool, limit int) {
+func (gs *GameState) applySettings(rows []string, scripts []kanacore.Script, auto bool, limit int, level Level, points int) {
 	gs.mu.Lock()
 	defer gs.mu.Unlock()
 
@@ -655,9 +696,13 @@ func (gs *GameState) applySettings(rows []string, scripts []kanacore.Script, aut
 	}
 	gs.autoProgress = auto
 	gs.scoreLimit = limit
+	gs.level = LevelByName(string(level))
+	gs.pointsSetting = validPoints(points)
 	if gs.store != nil {
 		_ = gs.store.SaveAutoProgress(auto)
 		_ = gs.store.SaveScoreLimit(limit)
+		_ = gs.store.SaveDifficulty(string(gs.level.Level))
+		_ = gs.store.SavePointsFactor(gs.pointsSetting)
 	}
 
 	gs.dropInactiveTiles()
@@ -1019,5 +1064,8 @@ func (gs *GameState) snapshot() StatsSnapshot {
 		ActiveScripts: scriptsCopy,
 		TotalCorrect:  gs.totalCorrect(),
 		Paths:         paths,
+		LevelLabel:    gs.level.Label,
+		Tempo:         1 / tempoFactor(gs.tempoStep),
+		MissLimit:     gs.level.MissLimit,
 	}
 }
