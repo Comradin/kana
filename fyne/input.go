@@ -71,8 +71,7 @@ func newInputBar(gs *GameState, statsPanel *StatsPanel, gameCanvas *GameCanvas, 
 		gs.mu.Unlock()
 
 		ib.entry.SetText("")
-		ib.scoreLabel.SetText(ib.formatScore(snap.Score, snap.ScoreLimit))
-		ib.missedLabel.SetText(fmt.Sprintf("Missed: %d/10", snap.Missed))
+		ib.Update(snap)
 		statsPanel.Update(snap)
 	}
 
@@ -87,17 +86,10 @@ func newInputBar(gs *GameState, statsPanel *StatsPanel, gameCanvas *GameCanvas, 
 	return ib
 }
 
-func (ib *InputBar) formatScore(score, limit int) string {
-	if limit > 0 {
-		return fmt.Sprintf("Score: %d/%d", score, limit)
-	}
-	return fmt.Sprintf("Score: %d", score)
-}
-
 // Update refreshes score and missed labels (used after Reset/PlayAgain).
 func (ib *InputBar) Update(snap StatsSnapshot) {
-	ib.scoreLabel.SetText(ib.formatScore(snap.Score, snap.ScoreLimit))
-	ib.missedLabel.SetText(fmt.Sprintf("Missed: %d/10", snap.Missed))
+	ib.scoreLabel.SetText(formatStatus(snap.Score, snap.ScoreLimit, snap.LevelLabel, snap.Tempo))
+	ib.missedLabel.SetText(fmt.Sprintf("Missed: %d/%d", snap.Missed, snap.MissLimit))
 }
 
 // TogglePause pauses or resumes the game, as the pause button and Esc do.

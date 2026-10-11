@@ -53,7 +53,7 @@ func showSettingsDialog(gs *GameState, statsPanel *StatsPanel, gameCanvas *GameC
 			sections.Add(grid)
 		}
 		scroll := container.NewVScroll(sections)
-		scroll.SetMinSize(fyne.NewSize(460, 280))
+		scroll.SetMinSize(fyne.NewSize(460, 220))
 		tabs.Append(container.NewTabItem(info.Label, scroll))
 	}
 
@@ -71,9 +71,29 @@ func showSettingsDialog(gs *GameState, statsPanel *StatsPanel, gameCanvas *GameC
 		return nil
 	}
 
+	levelLabels := make([]string, 0, len(Levels()))
+	for _, l := range Levels() {
+		levelLabels = append(levelLabels, l.Label)
+	}
+	levelRadio := widget.NewRadioGroup(levelLabels, nil)
+	levelRadio.Horizontal = true
+	levelRadio.Required = true
+	levelRadio.SetSelected(LevelByName(string(currentLevel)).Label)
+
+	pointsLabels := make([]string, 0, len(pointsChoices))
+	for _, p := range pointsChoices {
+		pointsLabels = append(pointsLabels, pointsLabel(p))
+	}
+	pointsSelect := widget.NewSelect(pointsLabels, nil)
+	pointsSelect.SetSelected(pointsLabel(currentPoints))
+
 	form := container.NewVBox(
 		scriptRow,
 		tabs,
+		widget.NewSeparator(),
+		widget.NewLabelWithStyle("Difficulty", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		levelRadio,
+		container.NewHBox(widget.NewLabel("Points per hit"), pointsSelect),
 		widget.NewSeparator(),
 		autoCheck,
 		widget.NewSeparator(),
@@ -107,12 +127,13 @@ func showSettingsDialog(gs *GameState, statsPanel *StatsPanel, gameCanvas *GameC
 			newLimit = n
 		}
 
-		gs.applySettings(newRows, checkedScripts(scriptChecks), newAuto, newLimit, currentLevel, currentPoints)
+		gs.applySettings(newRows, checkedScripts(scriptChecks), newAuto, newLimit, levelFromLabel(levelRadio.Selected), pointsFromLabel(pointsSelect.Selected))
 
 		gs.mu.Lock()
 		snap := gs.snapshot()
 		gs.mu.Unlock()
 		statsPanel.Update(snap)
+		inputBar.Update(snap)
 		gameCanvas.Refresh()
 		showPendingDialogs(gs, statsPanel, inputBar, win)
 	}, win)
@@ -194,4 +215,24 @@ func allChecked(checks []*widget.Check) bool {
 		}
 	}
 	return len(checks) > 0
+}
+
+// levelFromLabel maps a difficulty label back to its level; unknown → Normal.
+func levelFromLabel(label string) Level {
+	for _, l := range Levels() {
+		if l.Label == label {
+			return l.Level
+		}
+	}
+	return LevelNormal
+}
+
+// pointsFromLabel maps a "Points per hit" label back to its setting.
+func pointsFromLabel(label string) int {
+	for _, p := range pointsChoices {
+		if pointsLabel(p) == label {
+			return p
+		}
+	}
+	return pointsAuto
 }
