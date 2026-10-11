@@ -21,6 +21,8 @@ const (
 	scoreLimitKey      = "score_limit"
 	activeScriptsKey   = "active_scripts"
 	katakanaOfferedKey = "katakana_offered"
+	difficultyKey      = "difficulty"
+	pointsFactorKey    = "points_factor"
 	databaseFilePerm   = 0o644
 	databaseDirPerm    = 0o755
 	defaultOpenTimout  = 5 * time.Second
@@ -149,6 +151,42 @@ func (s *Store) SaveKatakanaOffered(offered bool) error {
 		value = "1"
 	}
 	return s.setSetting(katakanaOfferedKey, value)
+}
+
+// Difficulty returns the stored level name, or "" when unset.
+func (s *Store) Difficulty() (string, error) {
+	value, err := s.getSetting(difficultyKey)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	return value, err
+}
+
+// SaveDifficulty persists the level name.
+func (s *Store) SaveDifficulty(name string) error {
+	return s.setSetting(difficultyKey, name)
+}
+
+// PointsFactor returns the stored points setting, or 0 (Auto) when unset or
+// unreadable.
+func (s *Store) PointsFactor() (int, error) {
+	value, err := s.getSetting(pointsFactorKey)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+	n, convErr := strconv.Atoi(value)
+	if convErr != nil {
+		return 0, nil
+	}
+	return n, nil
+}
+
+// SavePointsFactor persists the points setting.
+func (s *Store) SavePointsFactor(p int) error {
+	return s.setSetting(pointsFactorKey, strconv.Itoa(p))
 }
 
 // AutoProgress returns the persisted auto progression flag.
