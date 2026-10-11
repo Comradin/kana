@@ -2,6 +2,7 @@ package main
 
 import (
 	"testing"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/test"
@@ -21,6 +22,7 @@ func newTestState() *GameState {
 		stopCh:        make(chan struct{}),
 		canvasW:       400,
 		canvasH:       600,
+		level:         LevelByName(""),
 	}
 	gs.charSet = kanacore.AllKana()
 	for _, id := range kanacore.DefaultRowIDs() {
@@ -627,7 +629,7 @@ var bothScripts = []kanacore.Script{kanacore.ScriptHiragana, kanacore.ScriptKata
 
 func TestApplySettingsTurningKatakanaOnIntroducesVowels(t *testing.T) {
 	gs := newTestState()
-	gs.applySettings([]string{"vowels", "k"}, bothScripts, true, 0)
+	gs.applySettings([]string{"vowels", "k"}, bothScripts, true, 0, LevelNormal, pointsAuto)
 	if !gs.selectedRows["kata:vowels"] || !equalIDs(gs.pendingIntro, []string{"kata:vowels"}) || !gs.paused {
 		t.Fatalf("selected=%v pendingIntro=%v paused=%v", gs.selectedRows, gs.pendingIntro, gs.paused)
 	}
@@ -638,7 +640,7 @@ func TestApplySettingsTurningKatakanaOnIntroducesVowels(t *testing.T) {
 
 func TestApplySettingsWithPreselectedKatakanaHasNoIntro(t *testing.T) {
 	gs := newTestState()
-	gs.applySettings([]string{"vowels", "kata:k"}, bothScripts, true, 0)
+	gs.applySettings([]string{"vowels", "kata:k"}, bothScripts, true, 0, LevelNormal, pointsAuto)
 	if gs.paused || gs.pendingIntro != nil || gs.selectedRows["kata:vowels"] {
 		t.Fatalf("paused=%v pendingIntro=%v", gs.paused, gs.pendingIntro)
 	}
@@ -646,7 +648,7 @@ func TestApplySettingsWithPreselectedKatakanaHasNoIntro(t *testing.T) {
 
 func TestApplySettingsEmptyScriptsKeepsHiragana(t *testing.T) {
 	gs := newTestState()
-	gs.applySettings([]string{"vowels"}, nil, false, 0)
+	gs.applySettings([]string{"vowels"}, nil, false, 0, LevelNormal, pointsAuto)
 	if len(gs.activeScripts) != 1 || !gs.activeScripts[kanacore.ScriptHiragana] {
 		t.Fatalf("activeScripts = %v", gs.activeScripts)
 	}
@@ -656,7 +658,7 @@ func TestApplySettingsKatakanaOffDropsTilesKeepsRows(t *testing.T) {
 	gs := newTestState()
 	gs.activeScripts[kanacore.ScriptKatakana] = true
 	gs.tiles = []*KanaTile{tileAt("カ", "ka", 0), tileAt("か", "ka", 0)}
-	gs.applySettings([]string{"k", "kata:k"}, []kanacore.Script{kanacore.ScriptHiragana}, false, 0)
+	gs.applySettings([]string{"k", "kata:k"}, []kanacore.Script{kanacore.ScriptHiragana}, false, 0, LevelNormal, pointsAuto)
 	if len(gs.tiles) != 1 || gs.tiles[0].kana.Char != "か" {
 		t.Fatalf("expected only か to remain, got %d tiles", len(gs.tiles))
 	}
@@ -667,7 +669,7 @@ func TestApplySettingsKatakanaOffDropsTilesKeepsRows(t *testing.T) {
 
 func TestApplySettingsRefillsEmptyActiveScript(t *testing.T) {
 	gs := newTestState()
-	gs.applySettings(nil, bothScripts, false, 0)
+	gs.applySettings(nil, bothScripts, false, 0, LevelNormal, pointsAuto)
 	if !gs.selectedRows["vowels"] || !gs.selectedRows["kata:vowels"] {
 		t.Fatalf("selected = %v, want vowels and kata:vowels", gs.selectedRows)
 	}
@@ -677,10 +679,10 @@ func TestFallStep(t *testing.T) {
 	cases := []struct{ h, secs, want float32 }{
 		{600, 20, 3},
 		{300, 20, 1.5},
-		{600, 0, 600 / (minFallSeconds * ticksPerSecond)},
+		{600, 0, 3.75},
 	}
 	for _, c := range cases {
-		if got := fallStep(c.h, c.secs); got != c.want {
+		if got := fallStep(c.h, c.secs, 16); got != c.want {
 			t.Errorf("fallStep(%v, %v) = %v, want %v", c.h, c.secs, got, c.want)
 		}
 	}
@@ -702,14 +704,29 @@ func TestTickMovesByFallTime(t *testing.T) {
 }
 
 func TestSpawnSetsFallTimeInRange(t *testing.T) {
-	gs := newTestState()
+	gs := newTestState() // Normal; vowels not answered yet → factor 1.2
 	selectRows(gs, "vowels")
 	for i := 0; i < 50; i++ {
 		gs.spawnKana()
 	}
 	for _, tile := range gs.tiles {
-		if tile.fallSeconds < minFallSeconds || tile.fallSeconds > maxFallSeconds {
-			t.Fatalf("fallSeconds = %v, want [%v, %v]", tile.fallSeconds, minFallSeconds, maxFallSeconds)
+		if tile.fallSeconds < 16*1.2-0.01 || tile.fallSeconds > 24*1.2+0.01 {
+			t.Fatalf("fallSeconds = %v, want [19.2, 28.8]", tile.fallSeconds)
+		}
+	}
+}
+
+func TestSpawnOnProForMasteredKana(t *testing.T) {
+	gs := newTestState()
+	gs.level = LevelByName("pro")
+	selectRows(gs, "vowels")
+	masterRows(gs, "vowels")
+	for i := 0; i < 50; i++ {
+		gs.spawnKana()
+	}
+	for _, tile := range gs.tiles {
+		if tile.fallSeconds < 4.2-0.01 || tile.fallSeconds > 6.3+0.01 {
+			t.Fatalf("fallSeconds = %v, want [4.2, 6.3]", tile.fallSeconds)
 		}
 	}
 }
@@ -728,5 +745,114 @@ func TestMissCallsStatsHookOnce(t *testing.T) {
 	gs.tick() // nothing falls out
 	if calls != 1 {
 		t.Fatalf("hook calls after a tick without a miss = %d, want 1", calls)
+	}
+}
+
+func answerOne(gs *GameState) {
+	gs.tiles = []*KanaTile{tileAt("あ", "a", 0)}
+	gs.checkAnswer("a")
+}
+
+func TestTempoRisesWithStreakAndDropsOnMiss(t *testing.T) {
+	gs := newTestState()
+	for i := 0; i < 4; i++ {
+		answerOne(gs)
+	}
+	if gs.tempoStep != 0 {
+		t.Fatalf("tempoStep after 4 = %d", gs.tempoStep)
+	}
+	answerOne(gs)
+	if gs.tempoStep != 1 {
+		t.Fatalf("tempoStep after 5 = %d", gs.tempoStep)
+	}
+	gs.recordMiss("あ")
+	if gs.tempoStep != 0 || gs.answerStreak != 0 {
+		t.Fatalf("after miss tempoStep=%d streak=%d", gs.tempoStep, gs.answerStreak)
+	}
+	for i := 0; i < 60; i++ {
+		answerOne(gs)
+	}
+	if gs.tempoStep != maxTempoStep {
+		t.Fatalf("tempoStep after 60 = %d, want %d", gs.tempoStep, maxTempoStep)
+	}
+	gs.recordMiss("あ")
+	if gs.tempoStep != 8 {
+		t.Fatalf("tempoStep after cap and miss = %d, want 8", gs.tempoStep)
+	}
+}
+
+func TestPointsPerHit(t *testing.T) {
+	cases := []struct {
+		level  string
+		points int
+		want   int
+	}{
+		{"normal", pointsAuto, 10},
+		{"pro", pointsAuto, 30},
+		{"pro", 1, 10},
+		{"relaxed", 5, 50},
+	}
+	for _, c := range cases {
+		gs := newTestState()
+		gs.level = LevelByName(c.level)
+		gs.pointsSetting = c.points
+		answerOne(gs)
+		if gs.score != c.want {
+			t.Errorf("%s/%d: score = %d, want %d", c.level, c.points, gs.score, c.want)
+		}
+	}
+}
+
+func TestMissLimitFollowsLevel(t *testing.T) {
+	gs := newTestState()
+	gs.level = LevelByName("pro")
+	for i := 0; i < 4; i++ {
+		gs.missed++
+		gs.checkMissedLimit()
+	}
+	if gs.over {
+		t.Fatal("4 misses must not end a Pro game")
+	}
+	gs.missed++
+	gs.checkMissedLimit()
+	if !gs.over {
+		t.Fatal("the 5th miss ends a Pro game")
+	}
+}
+
+func TestResetClearsTempo(t *testing.T) {
+	gs := newTestState()
+	gs.answerStreak, gs.tempoStep = 7, 3
+	gs.Reset()
+	if gs.answerStreak != 0 || gs.tempoStep != 0 {
+		t.Fatalf("after Reset streak=%d step=%d", gs.answerStreak, gs.tempoStep)
+	}
+}
+
+func TestSpawnIntervalUsesTempo(t *testing.T) {
+	gs := newTestState()
+	gs.level = LevelByName("fast")
+	gs.tempoStep = 1
+	f := float32(0.95) // a variable: a constant expression would not convert to Duration
+	if got, want := gs.spawnInterval(), time.Duration(float64(2500*time.Millisecond)*float64(f)); got != want {
+		t.Fatalf("spawnInterval = %v, want %v", got, want)
+	}
+}
+
+func TestSnapshotCarriesLevelTempoAndLimit(t *testing.T) {
+	gs := newTestState()
+	gs.level = LevelByName("fast")
+	gs.tempoStep = 1
+	snap := gs.snapshot()
+	if snap.LevelLabel != "Fast" || snap.MissLimit != 7 || snap.Tempo != 1/float32(0.95) {
+		t.Fatalf("snapshot level=%q limit=%d tempo=%v", snap.LevelLabel, snap.MissLimit, snap.Tempo)
+	}
+}
+
+func TestApplySettingsStoresLevelAndPoints(t *testing.T) {
+	gs := newTestState()
+	gs.applySettings([]string{"vowels"}, nil, false, 0, LevelPro, 4)
+	if gs.level.Level != LevelPro || gs.pointsSetting != pointsAuto {
+		t.Fatalf("level=%v points=%d (4 is invalid → Auto)", gs.level.Level, gs.pointsSetting)
 	}
 }

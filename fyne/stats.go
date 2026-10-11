@@ -27,6 +27,10 @@ type StatsSnapshot struct {
 	ActiveScripts map[kanacore.Script]bool
 	TotalCorrect  map[string]int
 	Paths         map[kanacore.Script]PathStatus
+
+	LevelLabel string
+	Tempo      float32 // shown speed-up, 1 / tempoFactor
+	MissLimit  int
 }
 
 // vowelColIndex returns the column index (0–4) for a kana based on its romaji vowel ending.

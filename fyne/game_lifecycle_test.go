@@ -339,3 +339,19 @@ func TestOfferIsPersisted(t *testing.T) {
 		t.Fatal("katakana_offered should be stored when the offer is raised")
 	}
 }
+
+func TestStoredDifficultyIsLoaded(t *testing.T) {
+	test.NewApp()
+	st := openTestStore(t)
+	_ = st.SaveSelectedRows([]string{"vowels"})
+	_ = st.SaveDifficulty("fast")
+	_ = st.SavePointsFactor(5)
+	gs := NewGameState(st)
+	if gs.level.Level != LevelFast || gs.pointsSetting != 5 {
+		t.Fatalf("level=%v points=%d", gs.level.Level, gs.pointsSetting)
+	}
+	_ = st.SaveDifficulty("nonsense")
+	if NewGameState(st).level.Level != LevelNormal {
+		t.Fatal("unknown stored level must load as Normal")
+	}
+}
