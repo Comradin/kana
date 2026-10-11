@@ -14,12 +14,37 @@ Kana is a Fyne v2 desktop app (`kana-desktop`).
 
 ### Core Gameplay
 - **104 Hiragana and 104 Katakana (basic, Dakuon, Handakuon, Yōon)**: Practice the full practical hiragana and katakana sets, from あ/ア (a) to the combined Yōon with (han)dakuten
-- **Falling Character Mechanic**: Characters spawn at the top and fall for a fixed time (16–24 s, randomized per tile), independent of window height
+- **Falling Character Mechanic**: Characters spawn at the top and fall for a time that depends
+  on the chosen difficulty level, a per-character factor and the session tempo (see
+  Difficulty below), independent of window height
 - **Romaji Input**: Type the romanized equivalent and press Enter to score
 - **Learning path**: start with あいうえお, unlock two rows at a time; each automatically unlocked row is introduced before it is asked, and the game pauses while new rows are introduced
 - **Two scripts**: hiragana and katakana progress independently; switch scripts in the settings. After the basic hiragana you are offered katakana once.
 - **Score Limit Mode**: Set a target score or 0 for endless practice
-- **Miss Limit**: Game ends after 10 missed characters
+- **Miss Limit**: Game ends when the chosen level's miss limit is reached (5–10, see Difficulty below)
+
+### Difficulty
+
+- **Levels**: choose Relaxed, Normal, Fast or Pro in the settings. A level sets the fall-time
+  range, how often a new tile spawns, and the miss limit. Unset or unknown stored levels fall
+  back to Normal, which matches the original game exactly.
+
+  | Level | Fall time | New tile every | Misses allowed | Auto points factor |
+  |---|---|---|---|---|
+  | Relaxed | 18–26 s | 4.5 s | 10 | ×1 |
+  | Normal | 16–24 s | 4.0 s | 10 | ×1 |
+  | Fast | 10–15 s | 2.5 s | 7 | ×2 |
+  | Pro | 6–9 s | 1.6 s | 5 | ×3 |
+
+- **Per-character factor**: a newly spawned tile's fall time is also scaled by how well you
+  know that character — new characters get more time (×1.2), learning characters are
+  unchanged (×1.0), and mastered characters fall faster (×0.7).
+- **Session tempo**: five correct answers in a row speed the game up one tempo step (fall
+  time and spawn interval both shrink); a miss resets the streak and costs two tempo steps,
+  down to a floor at step 0. The input bar shows the resulting speed-up, e.g. `Tempo ×1.15`.
+- **Points per hit**: the settings' "Points per hit" field sets how many points a correct
+  answer is worth — Auto (by level, ×1/×2/×3 for Relaxed–Normal/Fast/Pro), or a fixed ×1, ×2,
+  ×3 or ×5. A correct answer scores `10 × factor`.
 
 ### Progress Tracking
 - **Persistent Statistics**: Progress is saved to a local SQLite database (`kana.db`)
@@ -69,20 +94,20 @@ go run ./fyne/
 ## How to Play
 
 1. Launch the app (`./kana-desktop`)
-2. Jump straight into the game; open the gear icon to adjust rows, auto-progression, and score limit
+2. Jump straight into the game; open the gear icon to adjust rows, difficulty level, points per hit, auto-progression, and score limit
 3. As characters fall, type their romaji equivalent and press Enter
-4. Each correct answer scores 10 points
-5. The game ends when you reach your score target, miss 10 characters, or quit
+4. Each correct answer scores 10 points, scaled by the points setting (Auto by level, or a fixed ×1/×2/×3/×5)
+5. The game ends when you reach your score target, miss as many characters as the level allows (5–10), or quit
 
 ### Controls
 
 - **Type + Enter**: Submit answer
-- **Gear icon**: Open settings during a game
+- **Gear icon**: Open settings during a game, including difficulty level and points per hit
 - **Game-over dialog**: Play Again or Quit
 
 ### Scoring
-- **+10 points** per correct answer
-- Session ends on: target score reached, 10 misses, or manual quit
+- **+10 points** per correct answer, times the points factor (Auto uses the level's factor: ×1 Relaxed/Normal, ×2 Fast, ×3 Pro)
+- Session ends on: target score reached, the level's miss limit reached, or manual quit
 
 ## Character Set
 
@@ -157,24 +182,30 @@ Built on [Fyne v2](https://fyne.io) with goroutine-based game loop:
 - `main.go`: Entry point, opens store, runs window
 - `app.go`: Window construction, event watcher goroutine
 - `game.go`: `GameState` — tick/spawn goroutines, answer checking, stats, auto-progression
+- `difficulty.go`: the level table (`Level`, `LevelInfo`, `Levels`, `LevelByName`), the points
+  setting (`pointsChoices`, `pointsLabel`, `validPoints`), and the pure helpers for the
+  per-character fall factor, the session tempo factor, the input bar's status line and the
+  game-over reason text
 - `canvas.go`: `GameCanvas` widget, atomic snapshot renderer (avoids mutex/render-thread deadlock)
 - `tile.go`: `KanaTile` — shadow + face + text canvas objects
 - `intro.go`: Pending dialogs (katakana offer and row intros) through one entry point, `showPendingDialogs`
 - `stats.go`: `StatsPanel` widget — a session line, one learning-path line per active script, and a side-by-side hiragana/katakana kana grid of each character's learning state
 - `progress.go`: computes each script's learning-path status (`PathStatus`) and total correct counts per character
 - `statswidgets.go`: the fixed-column grid layout and the kana cell widget used by the stats panel
-- `input.go`: `InputBar` — score, miss count, text entry
-- `settings.go`: In-game settings dialog with scripts and row selection (one tab per script, per-group "all" toggle)
+- `input.go`: `InputBar` — score, level, tempo, miss count, text entry
+- `settings.go`: In-game settings dialog with scripts and row selection (one tab per script, per-group "all" toggle), difficulty level and points per hit
 - `theme.go`: `KanaTheme` — warm paper colour palette
 
 ### Persistence (`store/`)
 
-- `store/store.go`: SQLite persistence, including active scripts and the katakana offer flag
+- `store/store.go`: SQLite persistence, including active scripts, the katakana offer flag, the chosen difficulty level and the points setting
 
 ### Game Timing
 - Tick loop: 100ms
-- Spawn interval: 4 seconds
-- Fall time: each tile takes 16–24 s (randomized) to cross the canvas, independent of window height
+- Spawn interval: depends on the chosen level (4.5 s Relaxed, 4.0 s Normal, 2.5 s Fast, 1.6 s
+  Pro), scaled by the session tempo
+- Fall time: each tile's base range also depends on the level (e.g. 16–24 s Normal, 6–9 s
+  Pro), scaled by the per-character factor and the session tempo; independent of window height
 
 ## Data Persistence
 

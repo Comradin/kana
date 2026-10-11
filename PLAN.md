@@ -92,10 +92,10 @@ This document outlines planned improvements and features for the Kana learning g
 ## Difficulty & Progression
 
 ### Priority: Medium
-- Difficulty presets (beginner/intermediate/advanced)
-- Dynamic difficulty adjustment based on performance
-- Spawn rate increases over time
-- Speed variation based on character mastery level
+- [x] Difficulty presets (Relaxed/Normal/Fast/Pro, chosen in the settings)
+- [x] Dynamic difficulty adjustment based on performance (session tempo: rises with streaks, drops on misses)
+- [x] Spawn rate increases over time (session tempo scales the spawn interval; also set per level)
+- [x] Speed variation based on character mastery level (per-character fall-time factor: new/learning/mastered)
 
 ## Statistics & Persistence
 
