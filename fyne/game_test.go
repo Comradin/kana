@@ -709,6 +709,9 @@ func TestSpawnSetsFallTimeInRange(t *testing.T) {
 	for i := 0; i < 50; i++ {
 		gs.spawnKana()
 	}
+	if len(gs.tiles) == 0 {
+		t.Fatal("nothing spawned")
+	}
 	for _, tile := range gs.tiles {
 		if tile.fallSeconds < 16*1.2-0.01 || tile.fallSeconds > 24*1.2+0.01 {
 			t.Fatalf("fallSeconds = %v, want [19.2, 28.8]", tile.fallSeconds)
@@ -723,6 +726,9 @@ func TestSpawnOnProForMasteredKana(t *testing.T) {
 	masterRows(gs, "vowels")
 	for i := 0; i < 50; i++ {
 		gs.spawnKana()
+	}
+	if len(gs.tiles) == 0 {
+		t.Fatal("nothing spawned")
 	}
 	for _, tile := range gs.tiles {
 		if tile.fallSeconds < 4.2-0.01 || tile.fallSeconds > 6.3+0.01 {
@@ -800,6 +806,23 @@ func TestPointsPerHit(t *testing.T) {
 		if gs.score != c.want {
 			t.Errorf("%s/%d: score = %d, want %d", c.level, c.points, gs.score, c.want)
 		}
+	}
+}
+
+func TestTickStopsCountingMissesAfterGameOver(t *testing.T) {
+	gs := newTestState()
+	gs.level = LevelByName("pro")
+	gs.missed = 4
+	gs.canvasH = 600
+	gs.tiles = []*KanaTile{tileAt("あ", "a", 599), tileAt("い", "i", 599)}
+
+	gs.tick()
+
+	if !gs.over {
+		t.Fatal("expected game over")
+	}
+	if gs.missed != 5 {
+		t.Fatalf("missed = %d, want 5", gs.missed)
 	}
 }
 
