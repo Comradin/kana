@@ -42,3 +42,25 @@ func TestKatakanaOfferedRoundTrip(t *testing.T) {
 		t.Fatalf("KatakanaOffered = %v, %v; want true", got, err)
 	}
 }
+
+func TestDifficultyAndPointsRoundTrip(t *testing.T) {
+	st := openTemp(t)
+	if d, err := st.Difficulty(); err != nil || d != "" {
+		t.Fatalf("unset Difficulty = %q, %v", d, err)
+	}
+	if p, err := st.PointsFactor(); err != nil || p != 0 {
+		t.Fatalf("unset PointsFactor = %d, %v", p, err)
+	}
+	if err := st.SaveDifficulty("pro"); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SavePointsFactor(3); err != nil {
+		t.Fatal(err)
+	}
+	if d, _ := st.Difficulty(); d != "pro" {
+		t.Fatalf("Difficulty = %q", d)
+	}
+	if p, _ := st.PointsFactor(); p != 3 {
+		t.Fatalf("PointsFactor = %d", p)
+	}
+}
