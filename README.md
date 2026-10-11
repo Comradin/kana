@@ -41,7 +41,8 @@ Kana is a Fyne v2 desktop app (`kana-desktop`).
   unchanged (×1.0), and mastered characters fall faster (×0.7).
 - **Session tempo**: five correct answers in a row speed the game up one tempo step (fall
   time and spawn interval both shrink); a miss resets the streak and costs two tempo steps,
-  down to a floor at step 0. The input bar shows the resulting speed-up, e.g. `Tempo ×1.15`.
+  down to a floor at step 0. The input bar shows the resulting speed-up, e.g. `Tempo ×1.17`,
+  capped at `×1.67`.
 - **Points per hit**: the settings' "Points per hit" field sets how many points a correct
   answer is worth — Auto (by level, ×1/×2/×3 for Relaxed–Normal/Fast/Pro), or a fixed ×1, ×2,
   ×3 or ×5. A correct answer scores `10 × factor`.

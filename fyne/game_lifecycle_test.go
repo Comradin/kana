@@ -355,3 +355,24 @@ func TestStoredDifficultyIsLoaded(t *testing.T) {
 		t.Fatal("unknown stored level must load as Normal")
 	}
 }
+
+func TestApplySettingsPersistsLevelAndPoints(t *testing.T) {
+	test.NewApp()
+	st := openTestStore(t)
+	_ = st.SaveSelectedRows([]string{"vowels"})
+
+	gs := NewGameState(st)
+	gs.applySettings([]string{"vowels"}, nil, false, 0, LevelPro, 5)
+
+	if diff, _ := st.Difficulty(); diff != "pro" {
+		t.Fatalf("stored difficulty = %q, want pro", diff)
+	}
+	if points, _ := st.PointsFactor(); points != 5 {
+		t.Fatalf("stored points factor = %d, want 5", points)
+	}
+
+	reloaded := NewGameState(st)
+	if reloaded.level.Level != LevelPro || reloaded.pointsSetting != 5 {
+		t.Fatalf("reloaded level=%v points=%d, want pro/5", reloaded.level.Level, reloaded.pointsSetting)
+	}
+}

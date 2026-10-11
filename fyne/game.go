@@ -402,6 +402,9 @@ func (gs *GameState) tick() {
 			gs.tiles = append(gs.tiles[:i], gs.tiles[i+1:]...)
 			gs.missed++
 			gs.checkMissedLimit()
+			if gs.over {
+				break
+			}
 		}
 	}
 

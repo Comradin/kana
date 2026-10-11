@@ -48,7 +48,7 @@ type InputBar struct {
 func newInputBar(gs *GameState, statsPanel *StatsPanel, gameCanvas *GameCanvas, win fyne.Window) *InputBar {
 	ib := &InputBar{
 		scoreLabel:  widget.NewLabel("Score: 0"),
-		missedLabel: widget.NewLabel("Missed: 0/10"),
+		missedLabel: widget.NewLabel(""),
 	}
 	// The button, Esc on the entry and Esc on the window all use this toggle.
 	ib.togglePause = func() {
