@@ -206,7 +206,7 @@ Bash, `set -euo pipefail`, `shellcheck`-clean. Usage:
     right-click → Open). Alternative: `xattr -dr com.apple.quarantine /Applications/Kana.app`.
   - Windows: unzip; at the SmartScreen warning "More info" → "Run anyway".
   - Linux (glibc 2.35+, e.g. Ubuntu 22.04 or newer): `tar xf kana-…-linux-x64.tar.xz`, then
-    `make user-install` in the extracted folder (or run `usr/local/bin/kana` directly).
+    `cd kana && make user-install` (or run `kana/usr/local/bin/kana` directly).
   - Verify a download: `sha256sum -c <file>.sha256` (macOS: `shasum -a 256 -c`).
 - **Releasing (maintainers):** the release-please flow, which commit types trigger a release,
   the two repository settings, and the macOS script with prerequisites (Go from `go.mod`,
@@ -221,7 +221,7 @@ Bash, `set -euo pipefail`, `shellcheck`-clean. Usage:
   otherwise the manual check.
 - `ci.yml` proves itself on this branch's PR.
 - `release.yml` dry run via the temporary branch trigger: both artifacts build, each
-  `.sha256` verifies, the Linux archive contains `usr/local/bin/kana` and a `.desktop` file
+  `.sha256` verifies, the Linux archive contains `kana/usr/local/bin/kana` and a `.desktop` file
   with `Exec=kana`, the Windows zip contains `Kana.exe`.
 - `scripts/release-macos.sh --no-upload` on the maintainer's Mac before the first release:
   the `.dmg` mounts, Kana starts and shows "Kana dev" (no tag means version 0.0.0), and the
