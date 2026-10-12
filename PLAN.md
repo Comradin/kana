@@ -39,7 +39,9 @@ This document outlines planned improvements and features for the Kana learning g
 
 **Spawn Distribution**
 - Replace simple RNG with a shuffled “bag” system so each enabled kana appears before repeats
-- Optional weighting layer to surface characters the learner has seen less often
+- [x] Optional weighting layer to surface characters the learner has seen less often —
+      done via spaced repetition: `memory.Pick` weights spawns by a forgetting-curve
+      estimate instead of a bag
 
 ## Training Modes
 

@@ -47,6 +47,17 @@ Kana is a Fyne v2 desktop app (`kana-desktop`).
   answer is worth — Auto (by level, ×1/×2/×3 for Relaxed–Normal/Fast/Pro), or a fixed ×1, ×2,
   ×3 or ×5. A correct answer scores `10 × factor`.
 
+### Spaced repetition
+
+- **Forgetting-curve model**: each character has a memory state (stability, last seen) that
+  estimates the chance you'd still recall it right now. A correct answer grows that stability;
+  a miss shrinks it and treats the character as half forgotten, so it comes back soon — a
+  just-missed kana is one of the most likely tiles to spawn next.
+- **Weighted spawning**: new tiles are chosen by that estimate. Likely-forgotten characters
+  spawn often, characters you know well spawn rarely but never stop appearing entirely (a 5%
+  floor), and brand-new characters make up at most 40% of spawns. A character already falling
+  on screen is not spawned again while it's still there.
+
 ### Progress Tracking
 - **Persistent Statistics**: Progress is saved to a local SQLite database (`kana.db`)
 - **Per-Character Stats**: Correct answers, misses, and current streak per hiragana and katakana character
@@ -176,13 +187,22 @@ Character data and row definitions live in `kanacore/`:
 - `kana.go`: `Kana` struct, `CharacterSet`, `NewCharacterSet`, `Matches` (canonical romaji plus accepted alternatives)
 - `kana_rows.go`: groups, rows with entries and alternative romaji, `ProgressionStepsFor`; scripts (`Script`, `Scripts`), katakana rows generated from the hiragana rows by a Unicode shift, `kata:`-prefixed row IDs
 
+### Spaced Repetition (`memory/`)
+
+A pure package modelling the forgetting curve, independent of the game and the store:
+
+- `memory.go`: `State` (stability, last seen), `Retrievability` (estimated recall chance),
+  `Correct` and `Miss` (state updates — a miss leaves `R = 0.5`), `Weight` (pick strength, with
+  a floor), `Seed` (starting state from a past correct count) and `Pick` (two-stage weighted
+  choice: at most `NewCap` share new, otherwise weighted by `Weight`)
+
 ### Desktop App (`fyne/`)
 
 Built on [Fyne v2](https://fyne.io) with goroutine-based game loop:
 
 - `main.go`: Entry point, opens store, runs window
 - `app.go`: Window construction, event watcher goroutine
-- `game.go`: `GameState` — tick/spawn goroutines, answer checking, stats, auto-progression
+- `game.go`: `GameState` — tick/spawn goroutines, answer checking, stats, auto-progression, spaced-repetition memory updates and weighted spawning
 - `difficulty.go`: the level table (`Level`, `LevelInfo`, `Levels`, `LevelByName`), the points
   setting (`pointsChoices`, `pointsLabel`, `validPoints`), and the pure helpers for the
   per-character fall factor, the session tempo factor, the input bar's status line and the
@@ -199,7 +219,7 @@ Built on [Fyne v2](https://fyne.io) with goroutine-based game loop:
 
 ### Persistence (`store/`)
 
-- `store/store.go`: SQLite persistence, including active scripts, the katakana offer flag, the chosen difficulty level and the points setting
+- `store/store.go`: SQLite persistence, including active scripts, the katakana offer flag, the chosen difficulty level, the points setting and per-character spaced-repetition memory states (seeded once from past correct counts)
 
 ### Game Timing
 - Tick loop: 100ms
@@ -221,6 +241,8 @@ It holds:
 - Auto-progression setting
 - Score limit preference
 - Per-character statistics (correct count, miss count, current streak)
+- Per-character spaced-repetition memory state (`memory` table), used to choose which kana
+  spawn next
 
 The database is created automatically on first run. If a `kana.db` from an older version is
 found in the working directory, it is moved to the new location once on startup.
