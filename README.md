@@ -13,7 +13,7 @@ Kana is a Fyne v2 desktop app (`kana-desktop`).
 ## Features
 
 ### Core Gameplay
-- **104 Hiragana and 104 Katakana (basic, Dakuon, Handakuon, Yōon)**: Practice the full practical hiragana and katakana sets, from あ/ア (a) to the combined Yōon with (han)dakuten
+- **104 Hiragana and 127 Katakana (basic, Dakuon, Handakuon, Yōon, plus 23 extended katakana)**: Practice the full practical hiragana and katakana sets, from あ/ア (a) to the combined Yōon with (han)dakuten, and the extended katakana used in loanwords (ティ, ファ, ヴ, …)
 - **Falling Character Mechanic**: Characters spawn at the top and fall for a time that depends
   on the chosen difficulty level, a per-character factor and the session tempo (see
   Difficulty below), independent of window height
@@ -65,7 +65,7 @@ Kana is a Fyne v2 desktop app (`kana-desktop`).
 - **Session vs Overall Stats**: The stats panel shows a session line (correct, missed, accuracy), a learning-path line per active script and a kana grid of each character's learning state; overall stats are persisted across sessions and drive progression
 
 ### Customization
-- **Row Selection**: Choose which hiragana and katakana rows to practice, grouped by Basic, Dakuon, Handakuon, Yōon and Yōon + Dakuten
+- **Row Selection**: Choose which hiragana and katakana rows to practice, grouped by Basic, Dakuon, Handakuon, Yōon, Yōon + Dakuten and (katakana only) Extended katakana
 - **Auto-Progression**: per script, unlocks the next learning-path step (one or two rows) once every active row of that script is mastered: at least 80% of its kana (rounded down, at least one) answered correctly three times
 - **Configurable Score Limit**: Set a target or play endlessly
 
@@ -179,6 +179,21 @@ matches the ぢ/づ tile unambiguously.
 Katakana mirror the hiragana tables with the same romaji and alternatives, e.g.
 カ = ka, シャ = sha.
 
+### Extended katakana (23, katakana only)
+
+| Row ID | Label | Characters |
+|---|---|---|
+| `kata:ext-t` | T/D (ティ) | ティ ti (thi), ディ di (dhi), トゥ tu (twu), ドゥ du (dwu) |
+| `kata:ext-f` | F (ファ) | ファ fa, フィ fi, フェ fe, フォ fo |
+| `kata:ext-w` | W (ウィ) | ウィ wi, ウェ we, ウォ wo |
+| `kata:ext-sh` | SH/J/CH (シェ) | シェ she (sye), ジェ je (zye, jye), チェ che (tye, cye) |
+| `kata:ext-v` | V (ヴ) | ヴァ va, ヴィ vi, ヴ vu, ヴェ ve, ヴォ vo |
+| `kata:ext-ts` | TS (ツァ) | ツァ tsa, ツィ tsi, ツェ tse, ツォ tso |
+
+They are the last three steps of the katakana learning path, after Yōon + Dakuten:
+ティ + ファ, ウィ + シェ, ヴ + ツァ. In the stats panel they form a katakana-only block in
+entry order.
+
 ## Architecture
 
 ### Character Data (`kanacore/`)
@@ -186,7 +201,8 @@ Katakana mirror the hiragana tables with the same romaji and alternatives, e.g.
 Character data and row definitions live in `kanacore/`:
 
 - `kana.go`: `Kana` struct, `CharacterSet`, `NewCharacterSet`, `Matches` (canonical romaji plus accepted alternatives)
-- `kana_rows.go`: groups, rows with entries and alternative romaji, `ProgressionStepsFor`; scripts (`Script`, `Scripts`), katakana rows generated from the hiragana rows by a Unicode shift, `kata:`-prefixed row IDs
+- `kana_rows.go`: groups (`Groups`, `GroupsFor`), rows with entries and alternative romaji, `ProgressionStepsFor`; scripts (`Script`, `Scripts`), katakana rows generated from the hiragana rows by a Unicode shift plus the katakana-only extended rows, `kata:`-prefixed row IDs
+- `words.go`: splits and matches kana words for the upcoming vocabulary trainer — `KanaUnits` (split a word into kana units), `ReadingMatches` (accept every allowed romaji spelling, including っ, ー and ん variants) and `Romaji` (the canonical spelling)
 
 ### Spaced Repetition (`memory/`)
 

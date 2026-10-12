@@ -10,8 +10,8 @@ This document outlines planned improvements and features for the Kana learning g
 - [x] Add Handakuten characters (ぱ、ぴ、ぷ、ぺ、ぽ)
 - [x] Add Yoon combinations (きゃ、きゅ、きょ, しゃ、しゅ、しょ, etc.)
 - [ ] Mode selector: Hiragana only, Katakana only, Mixed, Dakuten/Handakuten, Yoon
-- [ ] Extended katakana for loanwords (ティ ディ ファ フィ フェ フォ ウィ ウェ ウォ シェ チェ ジェ ヴ トゥ ドゥ ツァ …); note ティ "ti" collides with the ち alternative "ti"
-- [ ] Small っ/ッ (sokuon) and the long vowel mark ー (needed for words, see vocabulary trainer)
+- [x] Extended katakana for loanwords (ティ ディ ファ フィ フェ フォ ウィ ウェ ウォ シェ チェ ジェ ヴ トゥ ドゥ ツァ …); note ティ "ti" collides with the ち alternative "ti"
+- [x] Small っ/ッ (sokuon) and the long vowel mark ー in word readings (`kanacore.ReadingMatches`)
 
 ## Vocabulary Trainer
 
