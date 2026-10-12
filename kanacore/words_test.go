@@ -44,3 +44,60 @@ func TestKanaUnits(t *testing.T) {
 		}
 	}
 }
+
+func TestReadingMatches(t *testing.T) {
+	yes := map[string][]string{
+		"きって":    {"kitte", " KITTE "},
+		"まっちゃ":   {"matcha", "maccha", "mattya"},
+		"コーヒー":   {"koohii", "ko-hi-", "ko-hii"},
+		"でんしゃ":   {"densha", "densya", "dennsha", "den'sha"},
+		"きんえん":   {"kinen", "kin'en", "kinnen"},
+		"パーティー":  {"paatii", "paathii", "pa-ti-"},
+		"とうきょう":  {"toukyou"},
+		"ふじさん":   {"fujisan", "huzisan"},
+		"こーー":    {"kooo", "ko--", "koo-"},
+		"ヴァイオリン": {"vaiorin"},
+		"はい":     {"hai"},
+	}
+	for word, inputs := range yes {
+		for _, in := range inputs {
+			if !ReadingMatches(word, in) {
+				t.Errorf("ReadingMatches(%s, %q) = false, want true", word, in)
+			}
+		}
+	}
+	no := map[string][]string{
+		"とうきょう": {"tokyo", "toukyo"},
+		"きって":   {"kite", "kitt", "kittee", ""},
+		"はい":    {"ha", "haii", "hi"},
+		"コーヒー":  {"kohi", "kouhii"},
+		"先生":    {"sensei"},
+	}
+	for word, inputs := range no {
+		for _, in := range inputs {
+			if ReadingMatches(word, in) {
+				t.Errorf("ReadingMatches(%s, %q) = true, want false", word, in)
+			}
+		}
+	}
+}
+
+func TestRomaji(t *testing.T) {
+	cases := map[string]string{
+		"きって":    "kitte",
+		"まっちゃ":   "matcha",
+		"コーヒー":   "koohii",
+		"きんえん":   "kin'en",
+		"きんよう":   "kin'you",
+		"でんしゃ":   "densha",
+		"パーティー":  "paatii",
+		"とうきょう":  "toukyou",
+		"ヴァイオリン": "vaiorin",
+		"先生":     "",
+	}
+	for word, want := range cases {
+		if got := Romaji(word); got != want {
+			t.Errorf("Romaji(%s) = %q, want %q", word, got, want)
+		}
+	}
+}

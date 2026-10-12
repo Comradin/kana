@@ -72,3 +72,122 @@ func KanaUnits(word string) ([]string, bool) {
 	}
 	return units, true
 }
+
+// spellingsOf returns the accepted spellings of a normal unit; ん also
+// accepts n'.
+func spellingsOf(u string) []string {
+	sp := unitSpellings[u]
+	if isN(u) {
+		return append(append([]string(nil), sp...), "n'")
+	}
+	return sp
+}
+
+// lastVowel returns the final vowel of a spelling, or 0 if it ends in a
+// consonant or apostrophe.
+func lastVowel(s string) byte {
+	if s == "" || !isVowel(s[len(s)-1]) {
+		return 0
+	}
+	return s[len(s)-1]
+}
+
+// ReadingMatches reports whether input is a valid romaji reading of word:
+// each unit by one of its spellings, っ as a doubled first letter (or t
+// before ch), ー as the previous vowel or "-". Input is trimmed and
+// lower-cased first.
+func ReadingMatches(word, input string) bool {
+	units, ok := KanaUnits(word)
+	if !ok {
+		return false
+	}
+	in := strings.ToLower(strings.TrimSpace(input))
+	if in == "" {
+		return false
+	}
+	type state struct {
+		unit, pos int
+		vowel     byte
+	}
+	failed := make(map[state]bool)
+	var match func(i, pos int, vowel byte) bool
+	match = func(i, pos int, vowel byte) bool {
+		if i == len(units) {
+			return pos == len(in)
+		}
+		st := state{i, pos, vowel}
+		if failed[st] {
+			return false
+		}
+		rest := in[pos:]
+		u := units[i]
+		switch {
+		case u == longMark:
+			if strings.HasPrefix(rest, "-") && match(i+1, pos+1, vowel) {
+				return true
+			}
+			if vowel != 0 && rest != "" && rest[0] == vowel && match(i+1, pos+1, vowel) {
+				return true
+			}
+		case isSokuon(u):
+			for _, s := range spellingsOf(units[i+1]) {
+				prefixes := []string{s[:1]}
+				if strings.HasPrefix(s, "ch") {
+					prefixes = append(prefixes, "t")
+				}
+				for _, p := range prefixes {
+					if strings.HasPrefix(rest, p+s) && match(i+2, pos+len(p)+len(s), lastVowel(s)) {
+						return true
+					}
+				}
+			}
+		default:
+			for _, s := range spellingsOf(u) {
+				if strings.HasPrefix(rest, s) && match(i+1, pos+len(s), lastVowel(s)) {
+					return true
+				}
+			}
+		}
+		failed[st] = true
+		return false
+	}
+	return match(0, 0, 0)
+}
+
+// Romaji returns the canonical romaji of word, or "" if it cannot be split
+// into units: っ doubles the next consonant (t before ch), ー repeats the
+// previous vowel, ん is n' before a vowel or y.
+func Romaji(word string) string {
+	units, ok := KanaUnits(word)
+	if !ok {
+		return ""
+	}
+	var b strings.Builder
+	var vowel byte
+	for i, u := range units {
+		switch {
+		case u == longMark:
+			b.WriteByte(vowel)
+		case isSokuon(u):
+			next := unitSpellings[units[i+1]][0]
+			if strings.HasPrefix(next, "ch") {
+				b.WriteByte('t')
+			} else {
+				b.WriteByte(next[0])
+			}
+		case isN(u):
+			b.WriteString("n")
+			if i+1 < len(units) {
+				if sp := unitSpellings[units[i+1]]; sp != nil && (isVowel(sp[0][0]) || sp[0][0] == 'y') {
+					b.WriteString("'")
+				}
+			}
+			vowel = 0
+		default:
+			s := unitSpellings[u][0]
+			b.WriteString(s)
+			vowel = lastVowel(s)
+		}
+	}
+	return b.String()
+}
