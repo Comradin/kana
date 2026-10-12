@@ -67,6 +67,8 @@ func rowShortLabel(rowID string) string {
 		return "ん"
 	case "sy":
 		return "sh"
+	case "ext-t", "ext-f", "ext-w", "ext-sh", "ext-v", "ext-ts":
+		return strings.TrimPrefix(kanacore.BaseRowID(rowID), "ext-")
 	default:
 		return kanacore.BaseRowID(rowID)
 	}
@@ -86,8 +88,8 @@ type StatsPanel struct {
 
 	cells      map[string]*kanaCell           // by character
 	rowCells   map[string][]*kanaCell         // by row ID (hiragana or kata:), in column order
-	rowLabels  map[string]*canvas.Text        // by hiragana row ID
-	rowFillers map[string][]fyne.CanvasObject // spacer and empty slots of a base row
+	rowLabels  map[string]*canvas.Text        // by hiragana or extended katakana row ID
+	rowFillers map[string][]fyne.CanvasObject // spacer and empty slots of a base or extended row
 	groupGrids map[kanacore.Group]*fyne.Container
 
 	content *fyne.Container
@@ -135,17 +137,22 @@ func newStatsPanel() *StatsPanel {
 	p.accuracyText, c3 = tile("accuracy")
 	session := container.NewGridWithColumns(3, c1, c2, c3)
 
-	// One path line per script: name, 15 segments, count; "Next" below.
+	// One path line per script: name, one segment per step, count; "Next" below.
 	top := container.NewVBox(session)
 	for _, info := range kanacore.Scripts() {
 		steps := len(kanacore.ProgressionStepsFor(info.Script))
 		widths := []float32{62}
 		objs := []fyne.CanvasObject{smallText(info.Label, 12)}
+		// Fit label (62), count (30) and the gaps into the 288px grid width.
+		segW := float32(math.Floor(float64((288 - 62 - 30 - 2*float32(steps+1)) / float32(steps))))
+		if segW > 10 {
+			segW = 10
+		}
 		for i := 0; i < steps; i++ {
 			seg := canvas.NewRectangle(segOpenColor)
 			seg.CornerRadius = 2
 			p.pathSegs[info.Script] = append(p.pathSegs[info.Script], seg)
-			widths = append(widths, 10)
+			widths = append(widths, segW)
 			objs = append(objs, seg)
 		}
 		count := smallText(fmt.Sprintf("0/%d", steps), 11)
@@ -175,7 +182,7 @@ func newStatsPanel() *StatsPanel {
 		smallText("", 11), head("ひらがな"), smallText("", 11), head("カタカナ"))
 	// VBox spaces the header and each group grid by theme.Padding() (4px).
 	grids := container.NewVBox(header)
-	for _, g := range kanacore.Groups() {
+	for _, g := range kanacore.GroupsFor(kanacore.ScriptHiragana) {
 		var objs []fyne.CanvasObject
 		for _, row := range kanacore.RowsInGroup(kanacore.ScriptHiragana, g.Group) {
 			lbl := smallText(rowShortLabel(row.ID), 11)
@@ -194,6 +201,37 @@ func newStatsPanel() *StatsPanel {
 		p.groupGrids[g.Group] = grid
 		grids.Add(grid)
 	}
+
+	// Extended katakana: no hiragana half; entries in order, not by vowel.
+	var ext []fyne.CanvasObject
+	for _, row := range kanacore.RowsInGroup(kanacore.ScriptKatakana, kanacore.GroupExtended) {
+		lbl := smallText(rowShortLabel(row.ID), 11)
+		lbl.Alignment = fyne.TextAlignTrailing
+		lbl.Color = panelSubColor
+		p.rowLabels[row.ID] = lbl
+		ext = append(ext, lbl)
+		filler := func() fyne.CanvasObject {
+			f := canvas.NewRectangle(color.Transparent)
+			p.rowFillers[row.ID] = append(p.rowFillers[row.ID], f)
+			return f
+		}
+		for i := 0; i < 6; i++ { // empty hiragana half and spacer
+			ext = append(ext, filler())
+		}
+		for i := 0; i < 5; i++ {
+			if i < len(row.Entries) {
+				cell := newKanaCell(row.Entries[i].Char)
+				p.cells[row.Entries[i].Char] = cell
+				p.rowCells[row.ID] = append(p.rowCells[row.ID], cell)
+				ext = append(ext, cell)
+			} else {
+				ext = append(ext, filler())
+			}
+		}
+	}
+	extGrid := container.New(gridColumns(), ext...)
+	p.groupGrids[kanacore.GroupExtended] = extGrid
+	grids.Add(extGrid)
 
 	legend := container.NewHBox()
 	for _, item := range []struct {
@@ -308,7 +346,7 @@ func (p *StatsPanel) Update(snap StatsSnapshot) {
 		cell.set(stateFor(snap.TotalCorrect[char]), missed[char])
 	}
 
-	for _, g := range kanacore.Groups() {
+	for _, g := range kanacore.GroupsFor(kanacore.ScriptHiragana) {
 		groupVisible := false
 		for _, row := range kanacore.RowsInGroup(kanacore.ScriptHiragana, g.Group) {
 			hOn := snap.ActiveScripts[kanacore.ScriptHiragana] && snap.SelectedRows[row.ID]
@@ -328,6 +366,19 @@ func (p *StatsPanel) Update(snap StatsSnapshot) {
 		}
 		setVisible(p.groupGrids[g.Group], groupVisible)
 	}
+	extVisible := false
+	for _, row := range kanacore.RowsInGroup(kanacore.ScriptKatakana, kanacore.GroupExtended) {
+		on := snap.ActiveScripts[kanacore.ScriptKatakana] && snap.SelectedRows[row.ID]
+		extVisible = extVisible || on
+		setVisible(p.rowLabels[row.ID], on)
+		for _, f := range p.rowFillers[row.ID] {
+			setVisible(f, on)
+		}
+		for _, c := range p.rowCells[row.ID] {
+			setVisible(c, on)
+		}
+	}
+	setVisible(p.groupGrids[kanacore.GroupExtended], extVisible)
 
 	p.content.Refresh()
 }
