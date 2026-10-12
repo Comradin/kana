@@ -54,9 +54,10 @@ Kana is a Fyne v2 desktop app (`kana-desktop`).
   a miss shrinks it and treats the character as half forgotten, so it comes back soon — a
   just-missed kana is one of the most likely tiles to spawn next.
 - **Weighted spawning**: new tiles are chosen by that estimate. Likely-forgotten characters
-  spawn often, characters you know well spawn rarely but never stop appearing entirely (a 5%
-  floor), and brand-new characters make up at most 40% of spawns. A character already falling
-  on screen is not spawned again while it's still there.
+  spawn often, characters you know well spawn rarely but never stop appearing entirely (their
+  weight never drops below a tenth of a just-missed character's), and brand-new characters make
+  up at most 40% of spawns. A character already falling on screen is not spawned again while
+  it's still there, unless it is the only choice.
 
 ### Progress Tracking
 - **Persistent Statistics**: Progress is saved to a local SQLite database (`kana.db`)

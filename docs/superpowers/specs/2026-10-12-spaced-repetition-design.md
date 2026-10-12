@@ -139,7 +139,7 @@ CREATE TABLE IF NOT EXISTS memory (
     character with correct 3, with stability `memory.MinStability × 8`. Re-opening does not
     re-seed or overwrite a changed row. The tests check stability and row presence, not
     `last_seen`.
-  - `memory.Seed(10, now).Stability` ≈ 7.1 days; `Seed` is capped at `MaxStability`.
+  - `memory.Seed(10, now).Stability` ≈ 7.1 days; `Seed` stops growing after 10 correct answers.
 - **GameState:**
   - A correct answer creates a memory state for a new character.
   - A miss on a new character creates none; a miss on a known one lowers S.

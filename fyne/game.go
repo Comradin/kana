@@ -42,9 +42,11 @@ type GameState struct {
 	currentStreak map[string]int
 	sessionDirty  bool
 
-	memory      map[string]memory.State // spaced-repetition state per character
-	memoryDirty map[string]bool         // characters whose state is not saved yet
-	now         func() time.Time        // clock, replaceable in tests
+	memory           map[string]memory.State // spaced-repetition state per character
+	memoryDirty      map[string]bool         // characters whose state is not saved yet
+	memoryLoadFailed bool                    // stored states unreadable: never overwrite them
+	now              func() time.Time        // clock, replaceable in tests
+	rnd              func() float64          // spawn pick source, replaceable in tests
 
 	selectedRows  map[string]bool
 	autoProgress  bool
@@ -104,6 +106,7 @@ func NewGameState(st *store.Store) *GameState {
 		memory:        map[string]memory.State{},
 		memoryDirty:   map[string]bool{},
 		now:           time.Now,
+		rnd:           rand.Float64,
 	}
 
 	for _, id := range kanacore.DefaultRowIDs() {
@@ -126,6 +129,8 @@ func NewGameState(st *store.Store) *GameState {
 		}
 		if ms, err := st.MemoryStates("kana:"); err == nil {
 			gs.memory = ms
+		} else {
+			gs.memoryLoadFailed = true
 		}
 		if auto, err := st.AutoProgress(); err == nil {
 			gs.autoProgress = auto
@@ -444,7 +449,7 @@ func (gs *GameState) spawnKana() {
 		gs.mu.Unlock()
 		return
 	}
-	char := memory.Pick(gs.spawnCandidates(chars), gs.memory, gs.now(), rand.Float64)
+	char := memory.Pick(gs.spawnCandidates(chars), gs.memory, gs.now(), gs.rnd)
 	romaji, _ := gs.charSet.GetRomaji(char)
 
 	kana := kanacore.Kana{
@@ -640,9 +645,11 @@ func (gs *GameState) mergeSessionStats() {
 }
 
 // saveMemory writes changed memory states. It runs before the stats merge,
-// so a failing stats read cannot lose them. Must be called under lock.
+// so a failing stats read cannot lose them. If loading failed, nothing is
+// written, so the stored states are not replaced by fresh ones. Must be
+// called under lock.
 func (gs *GameState) saveMemory() {
-	if gs.store == nil {
+	if gs.store == nil || gs.memoryLoadFailed {
 		return
 	}
 	for char := range gs.memoryDirty {

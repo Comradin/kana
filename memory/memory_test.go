@@ -68,8 +68,8 @@ func TestWeightAndSeed(t *testing.T) {
 	if s := Seed(10, t0); !near(s.Stability, 7.11, 0.01) {
 		t.Fatalf("Seed(10) = %v days", s.Stability)
 	}
-	if s := Seed(50, t0); s.Stability > MaxStability {
-		t.Fatalf("Seed must cap at MaxStability")
+	if s50, s10 := Seed(50, t0), Seed(10, t0); s50.Stability != s10.Stability {
+		t.Fatalf("Seed(50) = %v, want Seed(10) = %v (count cap)", s50.Stability, s10.Stability)
 	}
 }
 
@@ -130,11 +130,31 @@ func TestPickEdges(t *testing.T) {
 		t.Fatal("empty candidates → empty string")
 	}
 	for i := 0; i < 100; i++ {
-		if Pick([]string{"n1", "n2"}, known, t0, rnd) == "" {
-			t.Fatal("only new candidates must still pick one")
+		if got := Pick([]string{"n1", "n2"}, known, t0, rnd); got != "n1" && got != "n2" {
+			t.Fatalf("only new candidates → one of them, got %q", got)
 		}
 		if Pick([]string{"k"}, known, t0, rnd) != "k" {
 			t.Fatal("only known candidates → known")
 		}
+	}
+}
+
+func TestNaNStability(t *testing.T) {
+	rnd := rand.New(rand.NewSource(4)).Float64
+	bad := State{Stability: math.NaN(), LastSeen: t0}
+	if w := Weight(bad, after(3)); math.IsNaN(w) || math.IsInf(w, 0) {
+		t.Fatalf("Weight with NaN stability = %v, want finite", w)
+	}
+	states := map[string]State{"bad": bad, "ok": {Stability: 2, LastSeen: t0}}
+	seen := map[string]bool{}
+	for i := 0; i < 200; i++ {
+		got := Pick([]string{"bad", "ok"}, states, after(3), rnd)
+		if got != "bad" && got != "ok" {
+			t.Fatalf("Pick = %q, want a candidate", got)
+		}
+		seen[got] = true
+	}
+	if !seen["bad"] || !seen["ok"] {
+		t.Fatalf("Pick must still distribute, saw %v", seen)
 	}
 }

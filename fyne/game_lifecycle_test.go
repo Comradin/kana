@@ -394,3 +394,18 @@ func TestMergePersistsMemory(t *testing.T) {
 		t.Fatal("memory must load on start")
 	}
 }
+
+func TestFailedMemoryLoadSkipsSave(t *testing.T) {
+	test.NewApp()
+	st := openTestStore(t)
+	_ = st.SaveSelectedRows([]string{"vowels"})
+	gs := NewGameState(st)
+	gs.mu.Lock()
+	gs.memoryLoadFailed = true
+	gs.recordCorrect("か")
+	gs.mergeSessionStats()
+	gs.mu.Unlock()
+	if got, _ := st.MemoryStates("kana:"); len(got) != 0 {
+		t.Fatalf("failed load must not write memory, got %v", got)
+	}
+}
