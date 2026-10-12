@@ -8,6 +8,7 @@ import (
 
 	"fyne.io/fyne/v2"
 	"kana/kanacore"
+	"kana/memory"
 	"kana/store"
 )
 
@@ -40,6 +41,10 @@ type GameState struct {
 	overallStats  map[string]store.KanaStats
 	currentStreak map[string]int
 	sessionDirty  bool
+
+	memory      map[string]memory.State // spaced-repetition state per character
+	memoryDirty map[string]bool         // characters whose state is not saved yet
+	now         func() time.Time        // clock, replaceable in tests
 
 	selectedRows  map[string]bool
 	autoProgress  bool
@@ -96,6 +101,9 @@ func NewGameState(st *store.Store) *GameState {
 		canvasW:       400,
 		canvasH:       600,
 		level:         LevelByName(""),
+		memory:        map[string]memory.State{},
+		memoryDirty:   map[string]bool{},
+		now:           time.Now,
 	}
 
 	for _, id := range kanacore.DefaultRowIDs() {
@@ -115,6 +123,9 @@ func NewGameState(st *store.Store) *GameState {
 				gs.overallStats[stat.Char] = copied
 				gs.currentStreak[stat.Char] = stat.Streak
 			}
+		}
+		if ms, err := st.MemoryStates("kana:"); err == nil {
+			gs.memory = ms
 		}
 		if auto, err := st.AutoProgress(); err == nil {
 			gs.autoProgress = auto
@@ -433,7 +444,7 @@ func (gs *GameState) spawnKana() {
 		gs.mu.Unlock()
 		return
 	}
-	char := chars[rand.Intn(len(chars))]
+	char := memory.Pick(gs.spawnCandidates(chars), gs.memory, gs.now(), rand.Float64)
 	romaji, _ := gs.charSet.GetRomaji(char)
 
 	kana := kanacore.Kana{
@@ -548,6 +559,10 @@ func (gs *GameState) recordCorrect(char string) bool {
 	gs.sessionStats[char] = stat
 	gs.sessionDirty = true
 
+	prev, known := gs.memory[char]
+	gs.memory[char] = memory.Correct(prev, known, gs.now())
+	gs.memoryDirty[char] = true
+
 	gs.answerStreak++
 	if gs.answerStreak%streakPerStep == 0 && gs.tempoStep < maxTempoStep {
 		gs.tempoStep++
@@ -571,6 +586,11 @@ func (gs *GameState) recordMiss(char string) {
 	gs.sessionStats[char] = stat
 	gs.sessionDirty = true
 
+	if prev, known := gs.memory[char]; known {
+		gs.memory[char] = memory.Miss(prev, gs.now())
+		gs.memoryDirty[char] = true
+	}
+
 	gs.answerStreak = 0
 	gs.tempoStep -= missTempoSteps
 	if gs.tempoStep < 0 {
@@ -580,6 +600,7 @@ func (gs *GameState) recordMiss(char string) {
 
 // mergeSessionStats writes (baseline + session) to store. Must be called under lock.
 func (gs *GameState) mergeSessionStats() {
+	gs.saveMemory()
 	if !gs.sessionDirty {
 		return
 	}
@@ -618,6 +639,19 @@ func (gs *GameState) mergeSessionStats() {
 	gs.sessionDirty = false
 }
 
+// saveMemory writes changed memory states. It runs before the stats merge,
+// so a failing stats read cannot lose them. Must be called under lock.
+func (gs *GameState) saveMemory() {
+	if gs.store == nil {
+		return
+	}
+	for char := range gs.memoryDirty {
+		if err := gs.store.SaveMemoryState("kana:"+char, gs.memory[char]); err == nil {
+			delete(gs.memoryDirty, char)
+		}
+	}
+}
+
 // availableCharacters returns the characters of selected rows whose script is
 // active, falling back to the basic rows of the first active script. Must be
 // called under lock.
@@ -641,6 +675,25 @@ func (gs *GameState) availableCharacters() []string {
 		return chars
 	}
 	return nil
+}
+
+// spawnCandidates drops characters that are already falling, unless that
+// would leave none. Must be called under lock.
+func (gs *GameState) spawnCandidates(chars []string) []string {
+	falling := make(map[string]bool, len(gs.tiles))
+	for _, t := range gs.tiles {
+		falling[t.kana.Char] = true
+	}
+	out := make([]string, 0, len(chars))
+	for _, c := range chars {
+		if !falling[c] {
+			out = append(out, c)
+		}
+	}
+	if len(out) == 0 {
+		return chars
+	}
+	return out
 }
 
 // applySelectedRows replaces the selection map.
