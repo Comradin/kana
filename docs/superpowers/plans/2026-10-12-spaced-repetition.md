@@ -612,10 +612,9 @@ func TestMergePersistsMemory(t *testing.T) {
 	memory      map[string]memory.State // spaced-repetition state per character
 	memoryDirty map[string]bool         // characters whose state is not saved yet
 	now         func() time.Time        // clock, replaceable in tests
-	// (put one field per line in the struct literals too, matching the rest)
 ```
 
-3. In `NewGameState`'s literal, add `memory: map[string]memory.State{}, memoryDirty: map[string]bool{}, now: time.Now,`. Inside `if st != nil {`, add:
+3. In `NewGameState`'s literal, add `memory: map[string]memory.State{},`, `memoryDirty: map[string]bool{},` and `now: time.Now,`, one field per line like the rest of the literal. Inside `if st != nil {`, add:
 
 ```go
 		if ms, err := st.MemoryStates("kana:"); err == nil {
