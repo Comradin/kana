@@ -54,7 +54,7 @@ now. The app shows its version.
         "include-component-in-tag": false
       }
     },
-    "bootstrap-sha": "da0eaba…"   // full SHA of main after PR #12
+    "bootstrap-sha": "da0eaba1deae2d0966722e19985cac5818da7f76"
   }
   ```
   `bootstrap-sha` is the full SHA of `main` after PR #12 (`da0eaba`). release-please then
