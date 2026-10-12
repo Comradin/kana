@@ -212,19 +212,22 @@ and update its doc comment: "katakana steps are the hiragana steps with the kata
 Run: `go test -count=1 ./kanacore/`
 Expected: PASS (`TestRowsAreOrderedByGroup` and `TestProgressionStepsCoverRowsInOrder` pass unchanged).
 
-Then `go test -count=1 ./...`. If a fyne test fails only because of the new step or row counts (e.g. a hard-coded number of katakana steps), update that expectation; anything else stop and report.
+Then fix the one fyne test that breaks: in `fyne/stats_test.go`, `TestPanelPathLineRendersSegmentsAndNext` expects `"2/15"` for katakana; change both `2/15` to `2/18` (the katakana path now has 18 steps).
+
+Also move the settings change here so the hiragana tab never shows an empty heading: in `fyne/settings.go`, replace `for _, g := range kanacore.Groups() {` in the per-script loop with `for _, g := range kanacore.GroupsFor(info.Script) {`.
+
+Run `go test -count=1 ./...`. Any other failure: stop and report.
 
 - [ ] **Step 5: Commit**
 
 ```bash
 gofmt -l .
-git add kanacore/kana_rows.go kanacore/kana_test.go
+git add kanacore/kana_rows.go kanacore/kana_test.go fyne/stats_test.go fyne/settings.go
 git commit -m "feat(kanacore): add extended katakana learning-path group
 
 Adds the ティ/ファ/ウィ/シェ/ヴ/ツァ rows as a katakana-only group with three extra steps after the generated katakana path, and GroupsFor to list only the groups a script has."
 ```
 
-(Include any fyne test files changed in Step 4 in `git add`.)
 
 ---
 
@@ -264,19 +267,18 @@ func TestKanaUnits(t *testing.T) {
 		}
 	}
 	bad := []string{
-		"",       // empty
-		"先生",     // kanji
-		"ゐ",      // unsupported kana
-		"ァ",      // lone small kana
-		"ーあ",     // leading long mark
-		"あっ",     // trailing sokuon
-		"あっあ",    // sokuon before a vowel
-		"あっん",    // sokuon before ん
-		"あっー",    // sokuon before ー
-		"っか",     // leading sokuon
-		"かんー",    // long mark after ん
-		"かっーた",   // long mark after っ
-		"kana",   // latin
+		"",     // empty
+		"先生",   // kanji
+		"ゐ",    // unsupported kana
+		"ァ",    // lone small kana
+		"ーあ",   // leading long mark
+		"あっ",   // trailing sokuon
+		"あっあ",  // sokuon before a vowel
+		"あっん",  // sokuon before ん
+		"あっー",  // sokuon before ー (also covers ー after っ)
+		"っか",   // leading sokuon
+		"かんー",  // long mark after ん
+		"kana", // latin
 	}
 	for _, w := range bad {
 		if _, valid := KanaUnits(w); valid {
@@ -285,6 +287,8 @@ func TestKanaUnits(t *testing.T) {
 	}
 }
 ```
+
+Run `gofmt -w kanacore/words_test.go` after writing the file (comment alignment).
 
 - [ ] **Step 2: Run test to verify it fails**
 
@@ -362,11 +366,8 @@ func KanaUnits(word string) ([]string, bool) {
 				return nil, false
 			}
 		case u == longMark:
-			if i == 0 {
-				return nil, false
-			}
-			prev := units[i-1]
-			if isN(prev) || isSokuon(prev) {
+			// ー after っ is already rejected by the っ rule above.
+			if i == 0 || isN(units[i-1]) {
 				return nil, false
 			}
 		}
@@ -637,6 +638,9 @@ func TestPanelExtendedBlock(t *testing.T) {
 	if w := p.groupGrids[kanacore.GroupExtended].MinSize().Width; w != 288 {
 		t.Fatalf("extended grid width = %v, want 288", w)
 	}
+	if h := p.groupGrids[kanacore.GroupExtended].MinSize().Height; h != cellH {
+		t.Fatalf("extended grid height = %v, want one row (%v)", h, cellH)
+	}
 	p.Update(panelSnap([]string{"kata:ext-t"}, []kanacore.Script{kanacore.ScriptHiragana}))
 	if p.groupGrids[kanacore.GroupExtended].Visible() {
 		t.Fatal("extended grid hidden while katakana is inactive")
@@ -683,8 +687,7 @@ Expected: FAIL (no extended grid / cells, path line too wide, label "ext-t").
 
 - [ ] **Step 3: Implement**
 
-`fyne/settings.go`, in the per-script loop: replace `for _, g := range kanacore.Groups() {` with
-`for _, g := range kanacore.GroupsFor(info.Script) {`.
+(The settings change was done in Task 1; `TestGroupsFor` covers that the hiragana tab gets no extended heading.)
 
 `fyne/stats.go`:
 
@@ -726,8 +729,13 @@ in order:
 		lbl.Color = panelSubColor
 		p.rowLabels[row.ID] = lbl
 		ext = append(ext, lbl)
+		filler := func() fyne.CanvasObject {
+			f := canvas.NewRectangle(color.Transparent)
+			p.rowFillers[row.ID] = append(p.rowFillers[row.ID], f)
+			return f
+		}
 		for i := 0; i < 6; i++ { // empty hiragana half and spacer
-			ext = append(ext, canvas.NewRectangle(color.Transparent))
+			ext = append(ext, filler())
 		}
 		for i := 0; i < 5; i++ {
 			if i < len(row.Entries) {
@@ -736,7 +744,7 @@ in order:
 				p.rowCells[row.ID] = append(p.rowCells[row.ID], cell)
 				ext = append(ext, cell)
 			} else {
-				ext = append(ext, canvas.NewRectangle(color.Transparent))
+				ext = append(ext, filler())
 			}
 		}
 	}
@@ -754,6 +762,9 @@ in order:
 		on := snap.ActiveScripts[kanacore.ScriptKatakana] && snap.SelectedRows[row.ID]
 		extVisible = extVisible || on
 		setVisible(p.rowLabels[row.ID], on)
+		for _, f := range p.rowFillers[row.ID] {
+			setVisible(f, on)
+		}
 		for _, c := range p.rowCells[row.ID] {
 			setVisible(c, on)
 		}
@@ -761,11 +772,7 @@ in order:
 	setVisible(p.groupGrids[kanacore.GroupExtended], extVisible)
 ```
 
-Note: hiding a row's label and cells while its transparent fillers stay visible leaves the
-row's height in the grid. If `fixedColumns` lays out hidden objects with zero height this is
-fine; otherwise hide the fillers too by recording them (e.g. `p.rowFillers[row.ID]`) and
-toggling them with the row, as the paired grid does. Check `fixedColumns` in
-`fyne/statswidgets.go` and follow the paired grid's pattern.
+`fixedColumns` skips a row only when all of its objects are hidden, so the fillers (keyed by the full `kata:ext-…` ID, which cannot collide with base IDs) are toggled with the row. Also update the stale comment above the path-line loop ("15 segments") to "one segment per step".
 
 - [ ] **Step 4: Run tests**
 
@@ -776,7 +783,7 @@ Expected: PASS, including the existing panel tests (`TestPanelHidesEmptyGroupsAn
 
 ```bash
 gofmt -l .
-git add fyne/settings.go fyne/stats.go fyne/stats_test.go
+git add fyne/stats.go fyne/stats_test.go
 git commit -m "feat(fyne): show extended katakana in settings and status panel
 
 The settings tabs list only the groups a script has, the status panel shows the extended rows as a katakana-only block in entry order, and the path line narrows its segments to fit the longer katakana path."
@@ -791,7 +798,7 @@ The settings tabs list only the groups a script has, the status panel shows the 
 
 - [ ] **Step 1: Update docs**
 
-- `README.md`: where the character sets / learning path are described, add the extended katakana group (ティ, ファ, ウィ, シェ, ヴ, ツァ rows, three extra katakana steps after Yōon + Dakuten). In the architecture list, note `kanacore` also splits and matches kana words (`KanaUnits`, `ReadingMatches`, `Romaji`) for the upcoming vocabulary trainer.
+- `README.md`: line ~16 "104 Hiragana and 104 Katakana" becomes 104 hiragana and 127 katakana (including 23 extended); the group list (~line 68) adds "Extended katakana". Where the character sets / learning path are described, add the extended katakana group (ティ, ファ, ウィ, シェ, ヴ, ツァ rows, three extra katakana steps after Yōon + Dakuten). In the architecture list, note `kanacore` also splits and matches kana words (`KanaUnits`, `ReadingMatches`, `Romaji`) for the upcoming vocabulary trainer.
 - `PLAN.md`: tick "Extended katakana for loanwords" (`[x]`) and change the small っ/ー item to "- [x] Small っ/ッ (sokuon) and the long vowel mark ー in word readings (`kanacore.ReadingMatches`)".
 
 - [ ] **Step 2: Commit**
