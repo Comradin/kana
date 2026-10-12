@@ -76,6 +76,37 @@ Kana is a Fyne v2 desktop app (`kana-desktop`).
 - In-game settings via gear icon (no pre-game setup form)
 - Game-over dialog with missed character review and Play Again
 
+## Download
+
+Ready-made builds are on the [latest release](https://github.com/Comradin/kana/releases/latest).
+Pick the file for your system:
+
+| System | File |
+|---|---|
+| macOS (Apple Silicon) | `kana-vX.Y.Z-macos-arm64.dmg` |
+| Windows (x64) | `kana-vX.Y.Z-windows-x64.zip` |
+| Linux (x64, glibc 2.35+, e.g. Ubuntu 22.04 or newer) | `kana-vX.Y.Z-linux-x64.tar.xz` |
+
+The builds are not signed, so your system warns about them on first start:
+
+- **macOS:** open the `.dmg` and drag Kana to Applications. On first start macOS blocks it;
+  open System Settings → Privacy & Security and click "Open Anyway" (on older macOS:
+  right-click the app → Open). Alternatively run
+  `xattr -dr com.apple.quarantine /Applications/Kana.app`.
+- **Windows:** unzip and start `Kana.exe`. At the SmartScreen warning click "More info" →
+  "Run anyway".
+- **Linux:** unpack and install for your user:
+
+  ```bash
+  tar xf kana-vX.Y.Z-linux-x64.tar.xz
+  cd kana && make user-install
+  ```
+
+  Or run `kana/usr/local/bin/kana` directly without installing.
+
+Each file has a `.sha256` checksum next to it. To verify a download, put both in the same
+folder and run `sha256sum -c <file>.sha256` (macOS: `shasum -a 256 -c <file>.sha256`).
+
 ## Installation
 
 ### Prerequisites
@@ -289,6 +320,39 @@ go build -o kana-desktop ./fyne/
 # Update dependencies
 go mod tidy
 ```
+
+## Releasing (maintainers)
+
+Releases are cut by [release-please](https://github.com/googleapis/release-please) from the
+conventional commit messages on `main`:
+
+1. Commits land on `main` through PRs (rebase merge, so each commit's type counts). `feat:`
+   commits bump the minor version, `fix:` commits the patch version; before 1.0 a breaking
+   change also bumps only the minor version. `docs:`, `chore:` and other types alone do not
+   start a release.
+2. On every push to `main` the `release` workflow opens or updates the release PR
+   "chore(main): release 0.x.y" with the `CHANGELOG.md` entry and the new version.
+3. Merging that PR creates the tag `v0.x.y` and the GitHub Release. In the same run the
+   Windows and Linux packages and their checksums are built and attached, and the release
+   notes get a line saying the macOS build follows.
+4. Build and upload the macOS package from an Apple Silicon Mac:
+
+   ```bash
+   git fetch --tags && git checkout v0.x.y
+   scripts/release-macos.sh v0.x.y
+   ```
+
+   Without a tag the script uses the newest release. `scripts/release-macos.sh --no-upload`
+   makes a local trial build in `dist/` without touching the release. Prerequisites: Go in the
+   version from `go.mod`, the Xcode command-line tools (`xcode-select --install`), and the
+   GitHub CLI `gh`, logged in (`gh auth login`).
+
+Repository settings this relies on (set once by hand):
+
+- Settings → Actions → General → "Allow GitHub Actions to create and approve pull requests"
+  must be enabled, so release-please can open its PR.
+- `main` must have no required status checks: release PRs opened with the default token do
+  not trigger CI, so a required check would block them forever.
 
 ## License
 
