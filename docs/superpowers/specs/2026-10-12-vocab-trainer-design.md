@@ -89,8 +89,8 @@ that each unit is matched by one of its spellings:
   not ambiguous.
 - っ/ッ: doubles the first letter of the next unit's chosen spelling (`kitte`); before a
   spelling starting with `ch`, `t` is also accepted (`matcha` and `maccha`).
-- ー: repeats the last vowel of the previous unit's chosen spelling (`koohii`), or `-`
-  (`ko-hi-`).
+- ー: repeats the last vowel of the chosen spelling of the nearest preceding unit that is not
+  ー (`koohii`), or `-` (`ko-hi-`). So ーー is `oo` or `--` after こ.
 - Long vowels written with う/お/い are typed kana by kana: とうきょう is `toukyou`;
   `tokyo` does not match. This is deliberate, so learners notice long vowels.
 
@@ -194,13 +194,18 @@ func Playable(entries []Entry, known func(unit string) bool, filter Filter) []En
 
 type Filter struct {
 	MaxLevel int    // bundled entries need JLPT >= MaxLevel numerically (5 = N5 only)
-	List     string // "" = bundled up to MaxLevel plus every private list; else only this list
-	Lesson   string // with List: only this lesson ("" = all)
+	List     string // "" = bundled up to MaxLevel plus every private list (mixed mode);
+	                // "jmdict" = bundled entries only, up to MaxLevel;
+	                // else only this private list, level ignored
+	Lesson   string // with a private List: only this lesson ("" = all)
 }
 ```
 
-An entry from a private list passes regardless of level. With `List` set, only entries from
-that list (and lesson) pass, and the level is ignored.
+An entry from a private list passes regardless of level. In words-only mode `word_source`
+maps directly onto `Filter.List`.
+
+`NewIndex` computes each entry's units once (`Entry.Units []string`); `Playable` and the level
+offer use them instead of calling `KanaUnits` again.
 
 ## Stage 3: Words in the game (mixed mode)
 
@@ -226,9 +231,11 @@ that list (and lesson) pass, and the level is ignored.
 - **Words:** loaded once in `NewGameState`: `vocab.Bundled()` plus `vocab.LoadDir(wordsDir)`,
   merged with `vocab.NewIndex`. A bundled load error disables bundled words; the status line
   then shows "Words unavailable: <error>". Kana play is unaffected.
-- **Stats:** `wordOverallStats` and `wordSessionStats` (correct, miss per reading), merged and
-  saved in `mergeSessionStats` and reloaded in `Reset`, exactly like the kana stats. A word is
-  secure when overall + session correct ≥ 3.
+- **Stats:** `wordOverallStats` and `wordSessionStats` (correct, miss per reading) with their
+  own `wordSessionDirty` flag. `mergeSessionStats` merges them independently of the kana
+  stats: its own baseline read (`WordStatistics()`), its own early return, so a skipped or
+  failed kana merge does not skip the words (and vice versa). Reloaded in `Reset` like the
+  kana stats. A word is secure when overall + session correct ≥ 3.
 - **Memory:** a separate `wordMemory map[string]memory.State` and `wordMemoryDirty`, loaded
   with `MemoryStates("word:")`, with their own `wordMemoryLoadFailed` flag. `saveMemory` also
   writes dirty word states as `"word:"+kana`, unless that flag is set.
@@ -285,16 +292,19 @@ that list (and lesson) pass, and the level is ignored.
 - Settings `word_level` (from stage 3) and `word_level_declined` (the level number that was
   offered and declined, 0 = none).
 - After a word hit, when not over, `word_level > 1`, `word_level_declined != word_level − 1`,
-  and at least 90 % of the bundled words of level `word_level` whose units use only active
-  scripts are secure, the offer "Add N<level−1> vocabulary?" is queued.
+  at least one bundled word of level `word_level` uses only active scripts, and at least 90 %
+  of those words are secure, the offer "Add N<level−1> vocabulary?" is queued.
 - Pause invariant, as for the katakana offer:
   - a `pendingLevelOffer` field, set only when the `levelOfferEvent` send succeeds;
   - `settle()` keeps the game paused while it is set;
   - `PendingDialogs` reports it, and `showPendingDialogs` shows it after the katakana offer
     and before intros;
-  - `Reset` clears it.
-- Accept lowers `word_level` by one; Decline stores `word_level − 1` in
-  `word_level_declined`. Changing the level by hand does not touch `word_level_declined`.
+  - `Reset` clears it;
+  - `watchEvents` (app.go) calls `showPendingDialogs` for `levelOfferEvent` as it does for
+    `rowsUnlockedEvent` and `katakanaOfferEvent`, dropping it when the game is over.
+- `AcceptLevelOffer()` lowers `word_level` by one; `DeclineLevelOffer()` stores
+  `word_level − 1` in `word_level_declined`. Each clears `pendingLevelOffer`, saves, and calls
+  `settle()`. Changing the level by hand does not touch `word_level_declined`.
 
 ### Settings dialog
 
@@ -319,7 +329,7 @@ The dialog gets four outer tabs; it must still fit the 1000 × 760 window:
   - `KanaUnits`: きゃく, パーティー, ヴァイオリン, きって succeed; 先生, ゐ, a leading ー,
     a trailing っ (あっ), っ before a vowel or ん, ー after ん or っ fail.
   - `ReadingMatches` table: きって `kitte`; まっちゃ `matcha`/`maccha`; コーヒー
-    `koohii`/`ko-hi-`; でんしゃ `densha`/`densya`/`dennsha`/`den'sha`; きんえん
+    `koohii`/`ko-hi-`/`ko-hii`; でんしゃ `densha`/`densya`/`dennsha`/`den'sha`; きんえん
     `kinen`/`kin'en`/`kinnen`; パーティー `paatii`/`paathii`; とうきょう `toukyou` yes,
     `tokyo` no; ふじさん `fujisan`/`huzisan`; wrong inputs, a prefix and an overlong input
     do not match.
@@ -334,7 +344,8 @@ The dialog gets four outer tabs; it must still fit the 1000 × 760 window:
   - JSON with meaning as string and as object; broken JSON.
   - Name collisions and the reserved `jmdict` name.
   - Homophones merged within a list and across sources in `NewIndex`.
-  - `Playable` with level, list and lesson filters; private words ignore the level.
+  - `Playable` with level, list and lesson filters; private words ignore the level;
+    `List: "jmdict"` returns only bundled entries up to the level; `Entry.Units` is set.
   - `Bundled()` loads, has more than 5,000 words, and every word passes `KanaUnits`.
   - `LoadDir` on a missing directory returns nothing and no error.
 - **store (stage 3/4):** `word_stats` and every new setting round-trip and default.
@@ -342,7 +353,8 @@ The dialog gets four outer tabs; it must still fit the 1000 × 760 window:
   - Word share with a seeded `rnd`: 0 with no playable word, about 0.3 with ≥ 30.
   - Known rule: a katakana word stops being playable when katakana is turned off.
   - Word tile fall time, points, hit and miss (session stats, memory, miss limit, tempo,
-    `missedWords`), merge persists word stats and word memory.
+    `missedWords`), merge persists word stats and word memory, also when only words changed
+    or the kana baseline read fails.
   - A kana tile and a word tile both matching: the lower one wins.
   - Feedback labels expire after 20 ticks, freeze while paused, are hidden with tiles and
     cleared by `Reset`.
@@ -350,9 +362,10 @@ The dialog gets four outer tabs; it must still fit the 1000 × 760 window:
 - **fyne (stage 4):**
   - Words-only: unlocked rule, list and lesson filter, kana fallback with the hint, missing
     source falls back to `jmdict`.
-  - Level offer at 90 % (counting only words of active scripts), not after a decline of that
-    level, not when over; with the offer pending and the settings dialog closed the game stays
-    paused; `Reset` clears it.
+  - Level offer at 90 % (counting only words of active scripts), not with zero qualifying
+    words, not after a decline of that level, not when over; the event leads to the dialog;
+    with the offer pending and the settings dialog closed the game stays paused; Accept and
+    Decline clear it and resume; `Reset` clears it.
 
 ## Stages
 
