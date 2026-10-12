@@ -108,8 +108,8 @@ func TestPanelPathLineRendersSegmentsAndNext(t *testing.T) {
 	if segs[2].FillColor != segOpenColor {
 		t.Fatalf("step 2 fill = %v, want open", segs[2].FillColor)
 	}
-	if got := p.pathCount[kanacore.ScriptKatakana].Text; got != "2/15" {
-		t.Fatalf("pathCount = %q, want 2/15", got)
+	if got := p.pathCount[kanacore.ScriptKatakana].Text; got != "2/18" {
+		t.Fatalf("pathCount = %q, want 2/18", got)
 	}
 	if got := p.pathNext[kanacore.ScriptKatakana].Text; got != "Next: D-row (ダ) · B-row (バ)" {
 		t.Fatalf("pathNext = %q", got)
