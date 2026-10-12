@@ -41,7 +41,7 @@ func showSettingsDialog(gs *GameState, statsPanel *StatsPanel, gameCanvas *GameC
 	tabs := container.NewAppTabs()
 	for _, info := range kanacore.Scripts() {
 		sections := container.NewVBox()
-		for _, g := range kanacore.Groups() {
+		for _, g := range kanacore.GroupsFor(info.Script) {
 			all, checks, grid := newGroupChecks(kanacore.RowsInGroup(info.Script, g.Group), selected)
 			for id, c := range checks {
 				rowChecks[id] = c

@@ -20,8 +20,8 @@ func TestHiraganaGetCharacters(t *testing.T) {
 }
 
 func TestAllKanaRowsCount(t *testing.T) {
-	if len(AllKanaRows) != 54 {
-		t.Fatalf("expected 54 rows, got %d", len(AllKanaRows))
+	if len(AllKanaRows) != 60 {
+		t.Fatalf("expected 60 rows, got %d", len(AllKanaRows))
 	}
 }
 
@@ -106,8 +106,8 @@ func TestAllKanaRowsHaveNoDuplicateCharacters(t *testing.T) {
 			total++
 		}
 	}
-	if total != 208 {
-		t.Fatalf("expected 208 characters, got %d", total)
+	if total != 231 {
+		t.Fatalf("expected 231 characters, got %d", total)
 	}
 }
 
@@ -244,6 +244,10 @@ func TestKatakanaTable(t *testing.T) {
 		{"シャ", "sha", []string{"sya"}},
 		{"ジャ", "ja", []string{"zya", "jya"}},
 		{"ピョ", "pyo", nil},
+		{"ティ", "ti", []string{"thi"}},
+		{"ヴ", "vu", nil},
+		{"ジェ", "je", []string{"zye", "jye"}},
+		{"ツォ", "tso", nil},
 	}
 	for _, c := range cases {
 		got, ok := cs.GetRomaji(c.char)
@@ -256,16 +260,14 @@ func TestKatakanaTable(t *testing.T) {
 			}
 		}
 	}
-	if len(cs.GetCharacters()) != 104 {
-		t.Fatalf("Katakana() has %d characters, want 104", len(cs.GetCharacters()))
+	if len(cs.GetCharacters()) != 127 {
+		t.Fatalf("Katakana() has %d characters, want 127", len(cs.GetCharacters()))
 	}
 }
 
 func TestKatakanaRowsMirrorHiragana(t *testing.T) {
-	if len(KatakanaRows) != len(HiraganaRows) {
-		t.Fatalf("%d katakana rows, want %d", len(KatakanaRows), len(HiraganaRows))
-	}
-	for i, k := range KatakanaRows {
+	generated := KatakanaRows[:len(HiraganaRows)]
+	for i, k := range generated {
 		h := HiraganaRows[i]
 		if k.ID != "kata:"+h.ID || k.Group != h.Group || k.Script != ScriptKatakana || h.Script != ScriptHiragana {
 			t.Fatalf("row %d: katakana %+v does not mirror hiragana %+v", i, k, h)
@@ -287,6 +289,11 @@ func TestKatakanaRowsMirrorHiragana(t *testing.T) {
 			}
 		}
 	}
+	for _, row := range KatakanaRows[len(HiraganaRows):] {
+		if row.Group != GroupExtended || row.Script != ScriptKatakana {
+			t.Fatalf("row %s after the generated rows must be extended katakana", row.ID)
+		}
+	}
 	if row, _ := RowByID("kata:k"); row.Label != "K-row (カ)" {
 		t.Fatalf("kata:k label = %q", row.Label)
 	}
@@ -303,8 +310,8 @@ func TestScriptOfAndBaseRowID(t *testing.T) {
 
 func TestAllKanaHasBothScripts(t *testing.T) {
 	cs := AllKana()
-	if len(cs.GetCharacters()) != 208 {
-		t.Fatalf("AllKana() has %d characters, want 208", len(cs.GetCharacters()))
+	if len(cs.GetCharacters()) != 231 {
+		t.Fatalf("AllKana() has %d characters, want 231", len(cs.GetCharacters()))
 	}
 	if !cs.Matches("か", "ka") || !cs.Matches("カ", "ka") {
 		t.Fatal("AllKana should match both か and カ")
@@ -314,5 +321,74 @@ func TestAllKanaHasBothScripts(t *testing.T) {
 	}
 	if got := len(RowsInGroup(ScriptKatakana, GroupBasic)); got != 11 {
 		t.Fatalf("katakana basic rows = %d, want 11", got)
+	}
+}
+
+func TestExtendedKatakanaRows(t *testing.T) {
+	rows := RowsInGroup(ScriptKatakana, GroupExtended)
+	wantIDs := []string{"kata:ext-t", "kata:ext-f", "kata:ext-w", "kata:ext-sh", "kata:ext-v", "kata:ext-ts"}
+	if len(rows) != len(wantIDs) {
+		t.Fatalf("extended rows = %d, want %d", len(rows), len(wantIDs))
+	}
+	total := 0
+	for i, row := range rows {
+		if row.ID != wantIDs[i] {
+			t.Fatalf("extended row %d = %s, want %s", i, row.ID, wantIDs[i])
+		}
+		if ScriptOf(row.ID) != ScriptKatakana {
+			t.Fatalf("%s must be a katakana row", row.ID)
+		}
+		total += len(row.Entries)
+	}
+	if total != 23 {
+		t.Fatalf("extended entries = %d, want 23", total)
+	}
+	if len(RowsInGroup(ScriptHiragana, GroupExtended)) != 0 {
+		t.Fatal("hiragana has no extended rows")
+	}
+	if CharToRow["ファ"] != "kata:ext-f" {
+		t.Fatalf("CharToRow[ファ] = %q", CharToRow["ファ"])
+	}
+}
+
+func TestExtendedSteps(t *testing.T) {
+	kata := ProgressionStepsFor(ScriptKatakana)
+	hira := ProgressionStepsFor(ScriptHiragana)
+	if len(kata) != len(hira)+3 {
+		t.Fatalf("katakana steps = %d, want %d", len(kata), len(hira)+3)
+	}
+	want := [][]string{{"kata:ext-t", "kata:ext-f"}, {"kata:ext-w", "kata:ext-sh"}, {"kata:ext-v", "kata:ext-ts"}}
+	for i, step := range kata[len(hira):] {
+		if len(step) != 2 || step[0] != want[i][0] || step[1] != want[i][1] {
+			t.Fatalf("extended step %d = %v, want %v", i, step, want[i])
+		}
+	}
+	for _, step := range hira {
+		for _, id := range step {
+			if row, _ := RowByID(id); row.Group == GroupExtended {
+				t.Fatal("hiragana steps must not contain extended rows")
+			}
+		}
+	}
+}
+
+func TestGroupsFor(t *testing.T) {
+	has := func(gs []GroupInfo, g Group) bool {
+		for _, info := range gs {
+			if info.Group == g {
+				return true
+			}
+		}
+		return false
+	}
+	if has(GroupsFor(ScriptHiragana), GroupExtended) {
+		t.Fatal("hiragana groups must not list Extended")
+	}
+	k := GroupsFor(ScriptKatakana)
+	if !has(k, GroupExtended) || k[len(k)-1].Group != GroupExtended {
+		t.Fatal("katakana groups end with Extended")
+	}
+	if len(GroupsFor(ScriptHiragana)) != 5 {
+		t.Fatalf("hiragana groups = %d, want 5", len(GroupsFor(ScriptHiragana)))
 	}
 }

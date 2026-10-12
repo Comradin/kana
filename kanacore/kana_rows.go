@@ -12,6 +12,7 @@ const (
 	GroupHandakuon  Group = "handakuon"
 	GroupYoon       Group = "yoon"
 	GroupYoonDakuon Group = "yoon-dakuon"
+	GroupExtended   Group = "extended"
 )
 
 // GroupInfo pairs a group with its display label.
@@ -28,7 +29,20 @@ func Groups() []GroupInfo {
 		{GroupHandakuon, "Handakuon"},
 		{GroupYoon, "Yōon"},
 		{GroupYoonDakuon, "Yōon + Dakuten"},
+		{GroupExtended, "Extended katakana"},
 	}
+}
+
+// GroupsFor returns the groups that have rows in the given script, in
+// progression order.
+func GroupsFor(s Script) []GroupInfo {
+	out := make([]GroupInfo, 0, len(Groups()))
+	for _, g := range Groups() {
+		if len(RowsInGroup(s, g.Group)) > 0 {
+			out = append(out, g)
+		}
+	}
+	return out
 }
 
 // Script identifies a kana writing system.
@@ -134,8 +148,20 @@ var HiraganaRows = withScript(ScriptHiragana, []KanaRow{
 	{ID: "py", Label: "PY (ぴゃ)", Group: GroupYoonDakuon, Entries: []Entry{entry("ぴゃ", "pya"), entry("ぴゅ", "pyu"), entry("ぴょ", "pyo")}},
 })
 
-// KatakanaRows mirrors HiraganaRows in katakana.
-var KatakanaRows = toKatakanaRows(HiraganaRows)
+// extendedKatakanaRows are katakana-only combinations used mainly in
+// loanwords. They have no hiragana counterpart.
+var extendedKatakanaRows = withScript(ScriptKatakana, []KanaRow{
+	{ID: katakanaPrefix + "ext-t", Label: "T/D (ティ)", Group: GroupExtended, Entries: []Entry{entry("ティ", "ti", "thi"), entry("ディ", "di", "dhi"), entry("トゥ", "tu", "twu"), entry("ドゥ", "du", "dwu")}},
+	{ID: katakanaPrefix + "ext-f", Label: "F (ファ)", Group: GroupExtended, Entries: []Entry{entry("ファ", "fa"), entry("フィ", "fi"), entry("フェ", "fe"), entry("フォ", "fo")}},
+	{ID: katakanaPrefix + "ext-w", Label: "W (ウィ)", Group: GroupExtended, Entries: []Entry{entry("ウィ", "wi"), entry("ウェ", "we"), entry("ウォ", "wo")}},
+	{ID: katakanaPrefix + "ext-sh", Label: "SH/J/CH (シェ)", Group: GroupExtended, Entries: []Entry{entry("シェ", "she", "sye"), entry("ジェ", "je", "zye", "jye"), entry("チェ", "che", "tye", "cye")}},
+	{ID: katakanaPrefix + "ext-v", Label: "V (ヴ)", Group: GroupExtended, Entries: []Entry{entry("ヴァ", "va"), entry("ヴィ", "vi"), entry("ヴ", "vu"), entry("ヴェ", "ve"), entry("ヴォ", "vo")}},
+	{ID: katakanaPrefix + "ext-ts", Label: "TS (ツァ)", Group: GroupExtended, Entries: []Entry{entry("ツァ", "tsa"), entry("ツィ", "tsi"), entry("ツェ", "tse"), entry("ツォ", "tso")}},
+})
+
+// KatakanaRows mirrors HiraganaRows in katakana, followed by the extended
+// katakana rows.
+var KatakanaRows = append(toKatakanaRows(HiraganaRows), extendedKatakanaRows...)
 
 // AllKanaRows lists the hiragana rows followed by the katakana rows.
 var AllKanaRows = append(append([]KanaRow(nil), HiraganaRows...), KatakanaRows...)
@@ -245,8 +271,14 @@ var hiraganaSteps = [][]string{
 	{"gy", "j"}, {"by", "py"},
 }
 
+// extendedSteps follow the generated katakana steps.
+var extendedSteps = [][]string{
+	{"kata:ext-t", "kata:ext-f"}, {"kata:ext-w", "kata:ext-sh"}, {"kata:ext-v", "kata:ext-ts"},
+}
+
 // ProgressionStepsFor returns a fresh copy of the learning-path steps for a
-// script; katakana steps are the hiragana steps with the katakana prefix.
+// script; katakana steps are the hiragana steps with the katakana prefix,
+// followed by the extended katakana steps.
 func ProgressionStepsFor(s Script) [][]string {
 	steps := make([][]string, len(hiraganaSteps))
 	for i, step := range hiraganaSteps {
@@ -258,6 +290,11 @@ func ProgressionStepsFor(s Script) [][]string {
 			ids[j] = id
 		}
 		steps[i] = ids
+	}
+	if s == ScriptKatakana {
+		for _, step := range extendedSteps {
+			steps = append(steps, append([]string(nil), step...))
+		}
 	}
 	return steps
 }
