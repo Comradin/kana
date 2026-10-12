@@ -1,6 +1,7 @@
 package main
 
 import (
+	"math/rand"
 	"testing"
 	"time"
 
@@ -27,6 +28,7 @@ func newTestState() *GameState {
 		memory:        map[string]memory.State{},
 		memoryDirty:   map[string]bool{},
 		now:           time.Now,
+		rnd:           rand.Float64,
 	}
 	gs.charSet = kanacore.AllKana()
 	for _, id := range kanacore.DefaultRowIDs() {
@@ -934,6 +936,7 @@ func TestSpawnPrefersWeakCharacter(t *testing.T) {
 	selectRows(gs, "vowels")
 	now := time.Date(2026, 10, 12, 12, 0, 0, 0, time.UTC)
 	gs.now = func() time.Time { return now }
+	gs.rnd = rand.New(rand.NewSource(1)).Float64
 	for _, c := range []string{"い", "う", "え", "お"} {
 		gs.memory[c] = memory.State{Stability: 5, LastSeen: now} // R = 1 → weight 0.05
 	}

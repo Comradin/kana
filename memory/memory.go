@@ -25,6 +25,9 @@ func elapsedDays(s State, now time.Time) float64 {
 }
 
 func clamp(v float64) float64 {
+	if math.IsNaN(v) {
+		return MinStability
+	}
 	return math.Min(math.Max(v, MinStability), MaxStability)
 }
 
