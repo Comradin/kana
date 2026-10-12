@@ -179,3 +179,57 @@ func TestRowShortLabelStripsKatakanaPrefix(t *testing.T) {
 		t.Fatalf("rowShortLabel(kata:vowels) = %q, want –", got)
 	}
 }
+
+func TestPanelExtendedBlock(t *testing.T) {
+	test.NewApp()
+	p := newStatsPanel()
+	p.Update(panelSnap([]string{"kata:ext-t"}, both))
+	if !p.cells["ティ"].Visible() || p.cells["ファ"].Visible() {
+		t.Fatal("selected extended row visible, unselected one hidden")
+	}
+	if !p.groupGrids[kanacore.GroupExtended].Visible() {
+		t.Fatal("extended grid visible when an extended row is selected")
+	}
+	if w := p.groupGrids[kanacore.GroupExtended].MinSize().Width; w != 288 {
+		t.Fatalf("extended grid width = %v, want 288", w)
+	}
+	if h := p.groupGrids[kanacore.GroupExtended].MinSize().Height; h != cellH {
+		t.Fatalf("extended grid height = %v, want one row (%v)", h, cellH)
+	}
+	p.Update(panelSnap([]string{"kata:ext-t"}, []kanacore.Script{kanacore.ScriptHiragana}))
+	if p.groupGrids[kanacore.GroupExtended].Visible() {
+		t.Fatal("extended grid hidden while katakana is inactive")
+	}
+}
+
+func TestPanelExtendedCellsInEntryOrder(t *testing.T) {
+	test.NewApp()
+	p := newStatsPanel()
+	cells := p.rowCells["kata:ext-t"]
+	want := []string{"ティ", "ディ", "トゥ", "ドゥ"}
+	if len(cells) != len(want) {
+		t.Fatalf("ext-t cells = %d, want %d", len(cells), len(want))
+	}
+	for i, c := range cells {
+		if c != p.cells[want[i]] {
+			t.Fatalf("ext-t cell %d is not %s", i, want[i])
+		}
+	}
+}
+
+func TestPathLineFitsWithExtendedSteps(t *testing.T) {
+	test.NewApp()
+	p := newStatsPanel()
+	if w := p.pathLines[kanacore.ScriptKatakana].MinSize().Width; w > 288 {
+		t.Fatalf("katakana path line width = %v, must fit 288", w)
+	}
+}
+
+func TestRowShortLabelExtended(t *testing.T) {
+	cases := map[string]string{"kata:ext-t": "t", "kata:ext-sh": "sh", "kata:ext-ts": "ts", "kata:ext-v": "v"}
+	for id, want := range cases {
+		if got := rowShortLabel(id); got != want {
+			t.Errorf("rowShortLabel(%s) = %q, want %q", id, got, want)
+		}
+	}
+}
