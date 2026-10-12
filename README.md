@@ -174,7 +174,9 @@ go run ./fyne/
 Hepburn romaji is canonical and is what the UI shows. Common alternatives are also
 accepted: si, ti, tu, hu, zi, di, du, sya, cya, jya, nn (and the others shown in
 parentheses above). じ/ぢ (ji) and ず/づ (zu) share an answer; typing di or du
-matches the ぢ/づ tile unambiguously.
+selects the ぢ/づ tile rather than じ/ず. With extended katakana active, di, du, ti,
+tu and wo are shared with ディ, ドゥ, ティ, トゥ and ウォ, and the lowest matching tile
+wins; thi, dhi, twu, dwu and who always target the extended tile.
 
 Katakana mirror the hiragana tables with the same romaji and alternatives, e.g.
 カ = ka, シャ = sha.
@@ -185,7 +187,7 @@ Katakana mirror the hiragana tables with the same romaji and alternatives, e.g.
 |---|---|---|
 | `kata:ext-t` | T/D (ティ) | ティ ti (thi), ディ di (dhi), トゥ tu (twu), ドゥ du (dwu) |
 | `kata:ext-f` | F (ファ) | ファ fa, フィ fi, フェ fe, フォ fo |
-| `kata:ext-w` | W (ウィ) | ウィ wi, ウェ we, ウォ wo |
+| `kata:ext-w` | W (ウィ) | ウィ wi (whi), ウェ we (whe), ウォ wo (who) |
 | `kata:ext-sh` | SH/J/CH (シェ) | シェ she (sye), ジェ je (zye, jye), チェ che (tye, cye) |
 | `kata:ext-v` | V (ヴ) | ヴァ va, ヴィ vi, ヴ vu, ヴェ ve, ヴォ vo |
 | `kata:ext-ts` | TS (ツァ) | ツァ tsa, ツィ tsi, ツェ tse, ツォ tso |
@@ -193,6 +195,9 @@ Katakana mirror the hiragana tables with the same romaji and alternatives, e.g.
 They are the last three steps of the katakana learning path, after Yōon + Dakuten:
 ティ + ファ, ウィ + シェ, ヴ + ツァ. In the stats panel they form a katakana-only block in
 entry order.
+
+ti, tu, di, du and wo also answer チ, ツ, ヂ, ヅ and ヲ; when both are falling, the lowest
+matching tile is taken, so use thi, twu, dhi, dwu or who to aim at the extended tile.
 
 ## Architecture
 

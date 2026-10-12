@@ -58,6 +58,11 @@ func TestReadingMatches(t *testing.T) {
 		"こーー":    {"kooo", "ko--", "koo-"},
 		"ヴァイオリン": {"vaiorin"},
 		"はい":     {"hai"},
+		"バッティング": {"battingu", "batthingu"},
+		"きゃっきゃ":  {"kyakkya"},
+		"ほんや":    {"honya", "hon'ya", "honnya", "hon’ya"},
+		"こんにゃく":  {"konnyaku", "kon'nyaku"},
+		"ウォッカ":   {"wokka", "whokka"},
 	}
 	for word, inputs := range yes {
 		for _, in := range inputs {
@@ -93,6 +98,8 @@ func TestRomaji(t *testing.T) {
 		"パーティー":  "paatii",
 		"とうきょう":  "toukyou",
 		"ヴァイオリン": "vaiorin",
+		"バッティング": "battingu",
+		"ほんや":    "hon'ya",
 		"先生":     "",
 	}
 	for word, want := range cases {

@@ -61,3 +61,18 @@ func TestSnapshotTotalCorrectAddsStoredAndSession(t *testing.T) {
 		t.Fatalf("TotalCorrect[か] = %d, want 3", got)
 	}
 }
+
+func TestProgressionAfterGeneratedKatakanaUnlocksExtended(t *testing.T) {
+	gs := newTestState()
+	gs.autoProgress = true
+	gs.activeScripts = map[kanacore.Script]bool{kanacore.ScriptKatakana: true}
+	var ids []string
+	for _, step := range kanacore.ProgressionStepsFor(kanacore.ScriptKatakana)[:15] {
+		ids = append(ids, step...)
+	}
+	selectRows(gs, ids...)
+	masterRows(gs, ids...)
+	if got := gs.checkAutoProgression(); !equalIDs(got, []string{"kata:ext-t", "kata:ext-f"}) {
+		t.Fatalf("unlocked %v, want [kata:ext-t kata:ext-f]", got)
+	}
+}
