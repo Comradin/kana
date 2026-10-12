@@ -7,6 +7,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/test"
 	"kana/kanacore"
+	"kana/memory"
 	"kana/store"
 )
 
@@ -23,6 +24,9 @@ func newTestState() *GameState {
 		canvasW:       400,
 		canvasH:       600,
 		level:         LevelByName(""),
+		memory:        map[string]memory.State{},
+		memoryDirty:   map[string]bool{},
+		now:           time.Now,
 	}
 	gs.charSet = kanacore.AllKana()
 	for _, id := range kanacore.DefaultRowIDs() {
@@ -877,5 +881,72 @@ func TestApplySettingsStoresLevelAndPoints(t *testing.T) {
 	gs.applySettings([]string{"vowels"}, nil, false, 0, LevelPro, 4)
 	if gs.level.Level != LevelPro || gs.pointsSetting != pointsAuto {
 		t.Fatalf("level=%v points=%d (4 is invalid → Auto)", gs.level.Level, gs.pointsSetting)
+	}
+}
+
+func TestCorrectCreatesMemoryState(t *testing.T) {
+	gs := newTestState()
+	gs.recordCorrect("か")
+	if s, ok := gs.memory["か"]; !ok || s.Stability != memory.MinStability || !gs.memoryDirty["か"] {
+		t.Fatalf("memory[か] = %+v, %v", s, ok)
+	}
+}
+
+func TestMissOnlyChangesKnownMemory(t *testing.T) {
+	gs := newTestState()
+	gs.recordMiss("か")
+	if _, ok := gs.memory["か"]; ok {
+		t.Fatal("a miss on a new character must not create memory")
+	}
+	gs.memory["き"] = memory.State{Stability: 1, LastSeen: time.Now()}
+	gs.recordMiss("き")
+	if s := gs.memory["き"].Stability; s < 0.29 || s > 0.31 {
+		t.Fatalf("miss on known → %v, want 0.3", s)
+	}
+	if w := memory.Weight(gs.memory["き"], gs.now()); w < 0.45 {
+		t.Fatalf("a just-missed character must be weighted high, got %v", w)
+	}
+}
+
+func TestResetKeepsMemory(t *testing.T) {
+	gs := newTestState()
+	gs.recordCorrect("か")
+	gs.Reset()
+	if _, ok := gs.memory["か"]; !ok {
+		t.Fatal("Reset must keep memory states")
+	}
+}
+
+func TestSpawnAvoidsFallingDuplicates(t *testing.T) {
+	gs := newTestState()
+	selectRows(gs, "vowels")
+	for i := 0; i < 20; i++ {
+		gs.tiles = []*KanaTile{tileAt("あ", "a", 0), tileAt("い", "i", 0), tileAt("う", "u", 0), tileAt("え", "e", 0)}
+		gs.spawnKana()
+		if got := gs.tiles[len(gs.tiles)-1].kana.Char; got != "お" {
+			t.Fatalf("spawned %s while it was falling", got)
+		}
+	}
+}
+
+func TestSpawnPrefersWeakCharacter(t *testing.T) {
+	gs := newTestState()
+	selectRows(gs, "vowels")
+	now := time.Date(2026, 10, 12, 12, 0, 0, 0, time.UTC)
+	gs.now = func() time.Time { return now }
+	for _, c := range []string{"い", "う", "え", "お"} {
+		gs.memory[c] = memory.State{Stability: 5, LastSeen: now} // R = 1 → weight 0.05
+	}
+	gs.memory["あ"] = memory.State{Stability: 1, LastSeen: now.Add(-7 * 24 * time.Hour)} // R ≈ 0.48
+	weak := 0
+	for i := 0; i < 500; i++ {
+		gs.tiles = nil
+		gs.spawnKana()
+		if gs.tiles[0].kana.Char == "あ" {
+			weak++
+		}
+	}
+	if weak < 300 { // expected about 0.52/(0.52+0.2) ≈ 72 %
+		t.Fatalf("あ spawned %d/500 times, want > 300", weak)
 	}
 }

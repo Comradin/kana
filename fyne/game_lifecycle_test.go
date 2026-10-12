@@ -376,3 +376,21 @@ func TestApplySettingsPersistsLevelAndPoints(t *testing.T) {
 		t.Fatalf("reloaded level=%v points=%d, want pro/5", reloaded.level.Level, reloaded.pointsSetting)
 	}
 }
+
+func TestMergePersistsMemory(t *testing.T) {
+	test.NewApp()
+	st := openTestStore(t)
+	_ = st.SaveSelectedRows([]string{"vowels"})
+	gs := NewGameState(st)
+	gs.mu.Lock()
+	gs.recordCorrect("か")
+	gs.mergeSessionStats()
+	gs.mu.Unlock()
+	got, _ := st.MemoryStates("kana:")
+	if _, ok := got["か"]; !ok || len(gs.memoryDirty) != 0 {
+		t.Fatalf("persisted = %v, dirty = %v", got, gs.memoryDirty)
+	}
+	if _, ok := NewGameState(st).memory["か"]; !ok {
+		t.Fatal("memory must load on start")
+	}
+}
