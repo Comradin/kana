@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"kana/memory"
+
 	_ "modernc.org/sqlite"
 )
 
@@ -397,6 +399,98 @@ func migrate(ctx context.Context, db *sql.DB) error {
 		if _, err := db.ExecContext(ctx, stmt); err != nil {
 			return fmt.Errorf("store: migrate statement failed: %w", err)
 		}
+	}
+	return ensureMemory(ctx, db, time.Now())
+}
+
+// ensureMemory creates the memory table if it is missing and, in the same
+// transaction, seeds it from kana_stats so earlier progress counts as known.
+// If anything fails nothing is committed and the next open tries again.
+func ensureMemory(ctx context.Context, db *sql.DB, now time.Time) error {
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("store: begin memory migration: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var name string
+	err = tx.QueryRowContext(ctx, `SELECT name FROM sqlite_master WHERE type='table' AND name='memory'`).Scan(&name)
+	if err == nil {
+		return tx.Commit()
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return fmt.Errorf("store: check memory table: %w", err)
+	}
+
+	if _, err := tx.ExecContext(ctx, `CREATE TABLE memory (
+		item TEXT PRIMARY KEY,
+		stability REAL NOT NULL,
+		last_seen INTEGER NOT NULL
+	)`); err != nil {
+		return fmt.Errorf("store: create memory table: %w", err)
+	}
+
+	type seed struct {
+		char    string
+		correct int
+	}
+	rows, err := tx.QueryContext(ctx, `SELECT char, correct_count FROM kana_stats WHERE correct_count > 0`)
+	if err != nil {
+		return fmt.Errorf("store: read kana stats for seeding: %w", err)
+	}
+	var seeds []seed
+	for rows.Next() {
+		var s seed
+		if err := rows.Scan(&s.char, &s.correct); err != nil {
+			rows.Close()
+			return fmt.Errorf("store: scan kana stats for seeding: %w", err)
+		}
+		seeds = append(seeds, s)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("store: iterate kana stats for seeding: %w", err)
+	}
+
+	for _, s := range seeds {
+		st := memory.Seed(s.correct, now)
+		if _, err := tx.ExecContext(ctx, `INSERT INTO memory (item, stability, last_seen) VALUES (?, ?, ?)`,
+			"kana:"+s.char, st.Stability, st.LastSeen.Unix()); err != nil {
+			return fmt.Errorf("store: seed memory: %w", err)
+		}
+	}
+	return tx.Commit()
+}
+
+// MemoryStates returns the memory states of all items starting with prefix,
+// keyed by the rest of the item ID.
+func (s *Store) MemoryStates(prefix string) (map[string]memory.State, error) {
+	rows, err := s.db.Query(`SELECT item, stability, last_seen FROM memory WHERE substr(item, 1, length(?)) = ?`, prefix, prefix)
+	if err != nil {
+		return nil, fmt.Errorf("store: query memory: %w", err)
+	}
+	defer rows.Close()
+	states := make(map[string]memory.State)
+	for rows.Next() {
+		var item string
+		var stability float64
+		var lastSeen int64
+		if err := rows.Scan(&item, &stability, &lastSeen); err != nil {
+			return nil, fmt.Errorf("store: scan memory: %w", err)
+		}
+		states[strings.TrimPrefix(item, prefix)] = memory.State{Stability: stability, LastSeen: time.Unix(lastSeen, 0)}
+	}
+	return states, rows.Err()
+}
+
+// SaveMemoryState stores one item's memory state.
+func (s *Store) SaveMemoryState(item string, st memory.State) error {
+	_, err := s.db.Exec(`
+		INSERT INTO memory (item, stability, last_seen) VALUES (?, ?, ?)
+		ON CONFLICT(item) DO UPDATE SET stability = excluded.stability, last_seen = excluded.last_seen
+	`, item, st.Stability, st.LastSeen.Unix())
+	if err != nil {
+		return fmt.Errorf("store: save memory %s: %w", item, err)
 	}
 	return nil
 }
