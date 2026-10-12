@@ -1,0 +1,140 @@
+name: release
+
+on:
+  push:
+    branches:
+      - main
+      - feat/releases # TEMPORARY: dry run on the release branch, removed before merge
+  workflow_dispatch:
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.rp.outputs.release_created }}
+      tag_name: ${{ steps.rp.outputs.tag_name }}
+    steps:
+      - id: rp
+        uses: googleapis/release-please-action@v4
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  build:
+    needs: release-please
+    if: ${{ !cancelled() && (needs.release-please.outputs.release_created == 'true' || github.ref != 'refs/heads/main') }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: windows
+          - os: ubuntu-22.04
+            target: linux
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_CREATED: ${{ needs.release-please.outputs.release_created }}
+      RELEASE_TAG: ${{ needs.release-please.outputs.tag_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release-please.outputs.tag_name }}
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Install system dependencies
+        if: matrix.target == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc libgl1-mesa-dev xorg-dev
+
+      - name: Check the C compiler
+        if: matrix.target == 'windows'
+        run: gcc --version
+
+      - name: Install the Fyne CLI
+        run: go install "fyne.io/tools/cmd/fyne@$(cat scripts/fyne-cli-version)"
+
+      - name: Version and tag
+        id: version
+        run: |
+          if [[ "$RELEASE_CREATED" == "true" ]]; then
+            tag="$RELEASE_TAG"
+            version="${tag#v}"
+          else
+            tag="dev-$(git rev-parse --short HEAD)"
+            version="0.0.0"
+          fi
+          echo "tag=$tag" >>"$GITHUB_OUTPUT"
+          echo "version=$version" >>"$GITHUB_OUTPUT"
+
+      - name: Package
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          fyne package --os "$TARGET" --release --app-version "$VERSION" \
+            --src "$PWD/fyne" --executable kana
+
+      - name: Archive and checksum
+        id: asset
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          asset="kana-$TAG-$TARGET-x64"
+          if [[ "$TARGET" == "windows" ]]; then
+            asset="$asset.zip"
+            (cd fyne && 7z a -tzip "../$asset" Kana.exe)
+          else
+            asset="$asset.tar.xz"
+            mv Kana.tar.xz "$asset"
+          fi
+          sha256sum "$asset" >"$asset.sha256"
+          echo "name=$asset" >>"$GITHUB_OUTPUT"
+
+      - name: Upload to the release
+        if: needs.release-please.outputs.release_created == 'true'
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+          ASSET: ${{ steps.asset.outputs.name }}
+        run: gh release upload "$TAG" "$ASSET" "$ASSET.sha256"
+
+      - name: Upload as workflow artifact
+        if: needs.release-please.outputs.release_created != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.asset.outputs.name }}
+          path: |
+            ${{ steps.asset.outputs.name }}
+            ${{ steps.asset.outputs.name }}.sha256
+
+  notes:
+    needs: [release-please, build]
+    if: needs.release-please.outputs.release_created == 'true'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TAG: ${{ needs.release-please.outputs.tag_name }}
+    steps:
+      - name: Add the macOS note
+        run: |
+          gh release view "$TAG" --json body -q .body >notes.md
+          printf '\nThe macOS build is uploaded separately and may follow shortly.\n' >>notes.md
+          gh release edit "$TAG" --notes-file notes.md
