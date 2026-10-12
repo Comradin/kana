@@ -99,6 +99,8 @@ func showSettingsDialog(gs *GameState, statsPanel *StatsPanel, gameCanvas *GameC
 		widget.NewSeparator(),
 		widget.NewLabel("Score limit (0 = endless)"),
 		limitEntry,
+		widget.NewSeparator(),
+		versionRow(),
 	)
 
 	gs.SetSettingsOpen(true)
