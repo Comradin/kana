@@ -23,7 +23,7 @@ answers, as they do today.
 | Model | Forgetting curve: stability `S` (days) and last review time per item. Retrievability `R = 0.9^(Δt / S)`, so after `Δt = S` recall is 90 %. |
 | First correct answer | `S = 10 min` (`minStability`). |
 | Further correct answer | `S ← min(S × (1.5 + 2 × (1 − R)), 365 days)`, using `R` at the moment of the answer. A hard recall (low `R`) grows `S` more. |
-| Miss (tile fell through) | `S ← max(S × 0.3, minStability)`. A miss on an item never answered correctly creates no memory state, so the item stays "new". |
+| Miss (tile fell through) | `S ← max(S × 0.3, minStability)`, and the last review time is set back so that `R = 0.5` right after the miss (`LastSeen = now − S × ln 0.5 / ln 0.9` days). A just-missed item therefore gets weight 0.5, ten times a secure one, and comes back soon. A miss on an item never answered correctly creates no memory state, so the item stays "new". |
 | Selection | Two stages. With probability `min(0.4, newShare)` pick uniformly among **new** candidates; otherwise pick among **known** candidates weighted by `max(1 − R, 0.05)`. With no known candidates, always pick new; with no new ones, always known. |
 | `newShare` | The number of new candidates divided by all candidates. With only 1 new of 20 candidates, the new one is not forced to 40 %. |
 | Duplicates | Characters currently falling are excluded from the candidates while at least one other candidate remains. |
@@ -62,14 +62,14 @@ func Seed(correct int, now time.Time) State               // stability from a co
 func Pick(candidates []string, states map[string]State, now time.Time, rnd func() float64) string
 ```
 
-`Correct`, `Miss` and `Seed` set `LastSeen = now`. Δt in days is
+`Correct` and `Seed` set `LastSeen = now`; `Miss` sets it so that `R = 0.5` at `now`. Δt in days is
 `now.Sub(LastSeen).Hours() / 24`. `Seed` gives `min(MinStability × 2^min(correct, 10), MaxStability)`. `Pick` returns `""` only for an empty candidate list.
 It is deterministic for a given `rnd` sequence, which the tests rely on.
 
 ### Store (`store/store.go`)
 
-A new table, created by `migrate` (`CREATE TABLE IF NOT EXISTS`), keyed by item ID so words can
-share it later:
+A new table, created by `migrate` (inside the seeding transaction below), keyed by item ID so
+words can share it later:
 
 ```sql
 CREATE TABLE IF NOT EXISTS memory (
@@ -124,7 +124,7 @@ CREATE TABLE IF NOT EXISTS memory (
   - `Correct` on a new item gives `minStability`.
   - `Correct` at R = 0.9 grows S by 1.7×; at R ≈ 0.5 it grows S by about 2.5×.
   - `S` is capped at 365 days.
-  - `Miss` multiplies S by 0.3, with a floor at `minStability`.
+  - `Miss` multiplies S by 0.3, with a floor at `minStability`, and leaves `R = 0.5` (weight 0.5) at the time of the miss.
   - `Weight` is `1 − R` with a floor of 0.05.
   - `Pick`, driven by a seeded `math/rand` source:
     - with 10 new and 10 known (all at R ≈ 1), the new share over 10,000 draws is 0.40 ± 0.02;
