@@ -16,7 +16,7 @@ import (
 func buildWindow(a fyne.App, st *store.Store) fyne.Window {
 	a.Settings().SetTheme(WarmPaperTheme())
 
-	w := a.NewWindow("Kana")
+	w := a.NewWindow(windowTitle(a.Metadata()))
 	w.Resize(fyne.NewSize(1000, 760))
 
 	gs := NewGameState(st)
