@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Kana app icon: a falling tile with か, in the game's tile colours. -->
+  <rect x="96" y="120" width="832" height="832" rx="168" fill="#b8956a"/>
+  <rect x="96" y="80" width="832" height="832" rx="168" fill="#eedfc0"/>
+  <text x="512" y="520" text-anchor="middle" dominant-baseline="central"
+        font-family="Noto Sans CJK JP, Hiragino Sans, sans-serif" font-weight="700"
+        font-size="600" fill="#2c1a0e">か</text>
+</svg>
