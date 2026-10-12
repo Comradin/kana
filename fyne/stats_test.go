@@ -226,10 +226,30 @@ func TestPathLineFitsWithExtendedSteps(t *testing.T) {
 }
 
 func TestRowShortLabelExtended(t *testing.T) {
-	cases := map[string]string{"kata:ext-t": "t", "kata:ext-sh": "sh", "kata:ext-ts": "ts", "kata:ext-v": "v"}
+	cases := map[string]string{
+		"kata:ext-t": "ti", "kata:ext-f": "fa", "kata:ext-w": "wi",
+		"kata:ext-sh": "je", "kata:ext-v": "va", "kata:ext-ts": "ts",
+	}
+	basic := map[string]bool{}
+	for _, row := range kanacore.RowsFor(kanacore.ScriptKatakana) {
+		if row.Group != kanacore.GroupExtended {
+			basic[rowShortLabel(row.ID)] = true
+		}
+	}
 	for id, want := range cases {
 		if got := rowShortLabel(id); got != want {
 			t.Errorf("rowShortLabel(%s) = %q, want %q", id, got, want)
+		}
+		if basic[want] {
+			t.Errorf("rowShortLabel(%s) = %q duplicates a basic row label", id, want)
+		}
+	}
+}
+
+func TestPathSegW(t *testing.T) {
+	for steps, want := range map[int]float32{15: 10, 18: 8} {
+		if got := pathSegW(steps); got != want {
+			t.Errorf("pathSegW(%d) = %v, want %v", steps, got, want)
 		}
 	}
 }

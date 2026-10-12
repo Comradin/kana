@@ -153,7 +153,7 @@ var HiraganaRows = withScript(ScriptHiragana, []KanaRow{
 var extendedKatakanaRows = withScript(ScriptKatakana, []KanaRow{
 	{ID: katakanaPrefix + "ext-t", Label: "T/D (ティ)", Group: GroupExtended, Entries: []Entry{entry("ティ", "ti", "thi"), entry("ディ", "di", "dhi"), entry("トゥ", "tu", "twu"), entry("ドゥ", "du", "dwu")}},
 	{ID: katakanaPrefix + "ext-f", Label: "F (ファ)", Group: GroupExtended, Entries: []Entry{entry("ファ", "fa"), entry("フィ", "fi"), entry("フェ", "fe"), entry("フォ", "fo")}},
-	{ID: katakanaPrefix + "ext-w", Label: "W (ウィ)", Group: GroupExtended, Entries: []Entry{entry("ウィ", "wi"), entry("ウェ", "we"), entry("ウォ", "wo")}},
+	{ID: katakanaPrefix + "ext-w", Label: "W (ウィ)", Group: GroupExtended, Entries: []Entry{entry("ウィ", "wi", "whi"), entry("ウェ", "we", "whe"), entry("ウォ", "wo", "who")}},
 	{ID: katakanaPrefix + "ext-sh", Label: "SH/J/CH (シェ)", Group: GroupExtended, Entries: []Entry{entry("シェ", "she", "sye"), entry("ジェ", "je", "zye", "jye"), entry("チェ", "che", "tye", "cye")}},
 	{ID: katakanaPrefix + "ext-v", Label: "V (ヴ)", Group: GroupExtended, Entries: []Entry{entry("ヴァ", "va"), entry("ヴィ", "vi"), entry("ヴ", "vu"), entry("ヴェ", "ve"), entry("ヴォ", "vo")}},
 	{ID: katakanaPrefix + "ext-ts", Label: "TS (ツァ)", Group: GroupExtended, Entries: []Entry{entry("ツァ", "tsa"), entry("ツィ", "tsi"), entry("ツェ", "tse"), entry("ツォ", "tso")}},

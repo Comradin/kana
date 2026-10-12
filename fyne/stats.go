@@ -16,6 +16,21 @@ import (
 	"kana/store"
 )
 
+// Learning-path line: script label, one segment per step, then the count.
+const (
+	pathLabelW float32 = 62
+	pathCountW float32 = 30
+	pathGap    float32 = 2
+	pathSegMax float32 = 10
+)
+
+// pathSegW returns the segment width that fits the label, count, steps
+// segments and their gaps into the grid width, capped at pathSegMax.
+func pathSegW(steps int) float32 {
+	avail := gridColumns().width() - pathLabelW - pathCountW - pathGap*float32(steps+1)
+	return min(float32(math.Floor(float64(avail/float32(steps)))), pathSegMax)
+}
+
 // StatsSnapshot is a lock-free copy of the game state fields needed by the panel.
 type StatsSnapshot struct {
 	SessionStats  map[string]store.KanaStats
@@ -58,19 +73,31 @@ func vowelColIndex(romaji string) int {
 	return -1
 }
 
+// extShortLabels are the extended katakana row labels, chosen to differ from
+// the basic rows' labels and to fit rowLabelW (at most two characters).
+var extShortLabels = map[string]string{
+	"ext-t": "ti", "ext-f": "fa", "ext-w": "wi",
+	"ext-sh": "je", "ext-v": "va", "ext-ts": "ts",
+}
+
 // rowShortLabel returns the short consonant label shown at the left of each row.
 func rowShortLabel(rowID string) string {
-	switch kanacore.BaseRowID(rowID) {
+	base := kanacore.BaseRowID(rowID)
+	if strings.HasPrefix(base, "ext-") {
+		if lbl, ok := extShortLabels[base]; ok {
+			return lbl
+		}
+		return strings.TrimPrefix(base, "ext-")
+	}
+	switch base {
 	case "vowels":
 		return "–"
 	case "n-only":
 		return "ん"
 	case "sy":
 		return "sh"
-	case "ext-t", "ext-f", "ext-w", "ext-sh", "ext-v", "ext-ts":
-		return strings.TrimPrefix(kanacore.BaseRowID(rowID), "ext-")
 	default:
-		return kanacore.BaseRowID(rowID)
+		return base
 	}
 }
 
@@ -141,13 +168,9 @@ func newStatsPanel() *StatsPanel {
 	top := container.NewVBox(session)
 	for _, info := range kanacore.Scripts() {
 		steps := len(kanacore.ProgressionStepsFor(info.Script))
-		widths := []float32{62}
+		widths := []float32{pathLabelW}
 		objs := []fyne.CanvasObject{smallText(info.Label, 12)}
-		// Fit label (62), count (30) and the gaps into the 288px grid width.
-		segW := float32(math.Floor(float64((288 - 62 - 30 - 2*float32(steps+1)) / float32(steps))))
-		if segW > 10 {
-			segW = 10
-		}
+		segW := pathSegW(steps)
 		for i := 0; i < steps; i++ {
 			seg := canvas.NewRectangle(segOpenColor)
 			seg.CornerRadius = 2
@@ -158,9 +181,9 @@ func newStatsPanel() *StatsPanel {
 		count := smallText(fmt.Sprintf("0/%d", steps), 11)
 		count.Color = panelSubColor
 		p.pathCount[info.Script] = count
-		widths = append(widths, 30)
+		widths = append(widths, pathCountW)
 		objs = append(objs, count)
-		line := container.New(&fixedColumns{widths: widths, rowHeight: 14, gap: 2}, objs...)
+		line := container.New(&fixedColumns{widths: widths, rowHeight: 14, gap: pathGap}, objs...)
 		next := smallText("", 11)
 		next.Color = panelSubColor
 		p.pathNext[info.Script] = next

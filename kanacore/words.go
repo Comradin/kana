@@ -95,13 +95,13 @@ func lastVowel(s string) byte {
 // ReadingMatches reports whether input is a valid romaji reading of word:
 // each unit by one of its spellings, っ as a doubled first letter (or t
 // before ch), ー as the previous vowel or "-". Input is trimmed and
-// lower-cased first.
+// lower-cased first, and a typographic apostrophe (’) counts as '.
 func ReadingMatches(word, input string) bool {
 	units, ok := KanaUnits(word)
 	if !ok {
 		return false
 	}
-	in := strings.ToLower(strings.TrimSpace(input))
+	in := strings.ReplaceAll(strings.ToLower(strings.TrimSpace(input)), "’", "'")
 	if in == "" {
 		return false
 	}
