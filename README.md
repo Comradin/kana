@@ -18,6 +18,12 @@ Kana is a Fyne v2 desktop app (`kana-desktop`).
   on the chosen difficulty level, a per-character factor and the session tempo (see
   Difficulty below), independent of window height
 - **Romaji Input**: Type the romanized equivalent and press Enter to score
+- **Words**: once you can read them, Japanese words fall among the kana tiles (green border).
+  A word appears when every kana in it is secure (answered correctly three times) in an
+  active script: bundled JLPT words up to your level (N5 by default) and every word from your
+  own lists. Type the whole reading (`sensei`, `kitte`, `koohii`, `ko-hi-`); a hit shows the
+  meaning, a missed word shows its romaji and meaning. One spawn in a hundred is a word per
+  playable word, at most 30 %; longer words fall more slowly (up to twice the time).
 - **Learning path**: start with あいうえお, unlock two rows at a time; each automatically unlocked row is introduced before it is asked, and the game pauses while new rows are introduced
 - **Two scripts**: hiragana and katakana progress independently; switch scripts in the settings. After the basic hiragana you are offered katakana once.
 - **Score Limit Mode**: Set a target score or 0 for endless practice
@@ -72,9 +78,9 @@ Kana is a Fyne v2 desktop app (`kana-desktop`).
 ### Desktop App (Fyne)
 - Warm paper tile aesthetic — stamp-style kana tiles on a parchment background
 - Split layout: game canvas on the left, stats panel on the right; window starts at 1000 × 760
-- Stats panel: a session line, one learning-path line per active script, and a side-by-side hiragana/katakana kana grid (new/learning/mastered, with a red border on a character missed this session)
+- Stats panel: a session line, one learning-path line per active script, a side-by-side hiragana/katakana kana grid (new/learning/mastered, with a red border on a character missed this session), a words line (playable, secure, level) and the word data attribution
 - In-game settings via gear icon (no pre-game setup form)
-- Game-over dialog with missed character review and Play Again
+- Game-over dialog with missed character and word review and Play Again
 
 ## Download
 
@@ -140,7 +146,7 @@ go run ./fyne/
 1. Launch the app (`./kana-desktop`)
 2. Jump straight into the game; open the gear icon to adjust rows, difficulty level, points per hit, auto-progression, and score limit
 3. As characters fall, type their romaji equivalent and press Enter
-4. Each correct answer scores 10 points, scaled by the points setting (Auto by level, or a fixed ×1/×2/×3/×5)
+4. Each correct kana scores 10 points (a word 10 per kana unit), scaled by the points setting (Auto by level, or a fixed ×1/×2/×3/×5)
 5. The game ends when you reach your score target, miss as many characters as the level allows (5–10), or quit
 
 ### Controls
@@ -150,7 +156,7 @@ go run ./fyne/
 - **Game-over dialog**: Play Again or Quit
 
 ### Scoring
-- **+10 points** per correct answer, times the points factor (Auto uses the level's factor: ×1 Relaxed/Normal, ×2 Fast, ×3 Pro)
+- **+10 points** per correct kana and per kana unit of a correct word, times the points factor (Auto uses the level's factor: ×1 Relaxed/Normal, ×2 Fast, ×3 Pro)
 - Session ends on: target score reached, the level's miss limit reached, or manual quit
 
 ## Character Set
@@ -238,11 +244,11 @@ Character data and row definitions live in `kanacore/`:
 
 - `kana.go`: `Kana` struct, `CharacterSet`, `NewCharacterSet`, `Matches` (canonical romaji plus accepted alternatives)
 - `kana_rows.go`: groups (`Groups`, `GroupsFor`), rows with entries and alternative romaji, `ProgressionStepsFor`; scripts (`Script`, `Scripts`), katakana rows generated from the hiragana rows by a Unicode shift plus the katakana-only extended rows, `kata:`-prefixed row IDs
-- `words.go`: splits and matches kana words for the upcoming vocabulary trainer — `KanaUnits` (split a word into kana units), `ReadingMatches` (accept every allowed romaji spelling, including っ, ー and ん variants) and `Romaji` (the canonical spelling)
+- `words.go`: splits and matches kana words for the vocabulary trainer — `KanaUnits` (split a word into kana units), `ReadingMatches` (accept every allowed romaji spelling, including っ, ー and ん variants) and `Romaji` (the canonical spelling)
 
 ### Word Lists (`vocab/`)
 
-Word data for the upcoming vocabulary trainer, independent of the game and the store:
+Word data for the vocabulary trainer, independent of the game and the store:
 
 - `vocab.go`: `Word`, `Meanings` (per language, with fallback for display), `List`
 - `csvlist.go`, `jsonlist.go`, `dir.go`: private word lists (CSV/TSV/JSON) and `LoadDir`
@@ -276,7 +282,10 @@ Built on [Fyne v2](https://fyne.io) with goroutine-based game loop:
   per-character fall factor, the session tempo factor, the input bar's status line and the
   game-over reason text
 - `canvas.go`: `GameCanvas` widget, atomic snapshot renderer (avoids mutex/render-thread deadlock)
-- `tile.go`: `KanaTile` — shadow + face + text canvas objects
+- `tile.go`: `KanaTile` — shadow + face + text canvas objects, for a kana or a word
+- `words.go`: word helpers — meaning language, missed-word and feedback texts, the words line
+- `wordgame.go`: word progress (stats, memory, merge), the playable-word rule and cache, word spawning
+- `feedback.go`: the labels shown after a word hit or miss
 - `intro.go`: Pending dialogs (katakana offer and row intros) through one entry point, `showPendingDialogs`
 - `stats.go`: `StatsPanel` widget — a session line, one learning-path line per active script, and a side-by-side hiragana/katakana kana grid of each character's learning state
 - `progress.go`: computes each script's learning-path status (`PathStatus`) and total correct counts per character
@@ -287,7 +296,7 @@ Built on [Fyne v2](https://fyne.io) with goroutine-based game loop:
 
 ### Persistence (`store/`)
 
-- `store/store.go`: SQLite persistence, including active scripts, the katakana offer flag, the chosen difficulty level, the points setting and per-character spaced-repetition memory states (seeded once from past correct counts)
+- `store/store.go`: SQLite persistence, including active scripts, the katakana offer flag, the chosen difficulty level, the points setting and per-character spaced-repetition memory states (seeded once from past correct counts), per-word statistics and the word settings (`word_level`, `meaning_lang`)
 
 ### Game Timing
 - Tick loop: 100ms
@@ -311,6 +320,10 @@ It holds:
 - Per-character statistics (correct count, miss count, current streak)
 - Per-character spaced-repetition memory state (`memory` table), used to choose which kana
   spawn next
+- Per-word statistics (`word_stats`: correct and miss count per reading) and per-word
+  spaced-repetition memory (`word:` items in the `memory` table)
+- The JLPT level words are played up to (`word_level`, default N5) and the meaning language
+  (`meaning_lang`; unset means the system language if the word list has it, else English)
 
 The database is created automatically on first run. If a `kana.db` from an older version is
 found in the working directory, it is moved to the new location once on startup.
@@ -330,12 +343,14 @@ The vocabulary trainer ships with a list of about 7,000 JLPT words
 The data file is licensed under CC BY-SA 4.0; the code stays MIT. Details, versions and how to
 regenerate it: [`vocab/data/ATTRIBUTION.md`](vocab/data/ATTRIBUTION.md).
 
+The game names these sources in the status panel.
+
 ### Private word lists
 
 Your own lists (for example from a textbook) go in the `words` folder next to `kana.db`:
 `$XDG_DATA_HOME/kana/words/`, or `~/.local/share/kana/words/`. They are read from there only
-and never belong in the repository. The game uses them from the next stage of the
-vocabulary trainer on.
+and never belong in the repository. Their words fall in the game like bundled words, at any
+JLPT level; the folder is read when the app starts.
 
 - **CSV/TSV** (`*.csv`, `*.tsv`): a header row; the separator (tab, semicolon or comma) is
   taken from it. Columns: `kana` (required), `meaning` (any language), `meaning_de`,
