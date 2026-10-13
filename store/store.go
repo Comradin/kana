@@ -25,12 +25,17 @@ const (
 	katakanaOfferedKey = "katakana_offered"
 	difficultyKey      = "difficulty"
 	pointsFactorKey    = "points_factor"
+	wordLevelKey       = "word_level"
+	meaningLangKey     = "meaning_lang"
 	databaseFilePerm   = 0o644
 	databaseDirPerm    = 0o755
 	defaultOpenTimout  = 5 * time.Second
 )
 
 const DefaultScoreLimit = 1000
+
+// DefaultWordLevel is the JLPT level words are played up to when unset (N5).
+const DefaultWordLevel = 5
 
 // Store provides persisted access to user settings and kana statistics.
 type Store struct {
@@ -43,6 +48,14 @@ type KanaStats struct {
 	CorrectCount int
 	MissCount    int
 	Streak       int
+}
+
+// WordStats is the aggregated statistics for one word reading. It is kept
+// apart from KanaStats: the word か (mosquito) is not the character か.
+type WordStats struct {
+	Kana         string
+	CorrectCount int
+	MissCount    int
 }
 
 // Open initialises the SQLite database located at path and applies migrations.
@@ -243,6 +256,46 @@ func (s *Store) SaveScoreLimit(limit int) error {
 	return s.setSetting(scoreLimitKey, strconv.Itoa(limit))
 }
 
+// WordLevel returns the JLPT level words are played up to (5 = N5 only).
+// Unset or invalid values give DefaultWordLevel.
+func (s *Store) WordLevel() (int, error) {
+	value, err := s.getSetting(wordLevelKey)
+	if errors.Is(err, sql.ErrNoRows) {
+		return DefaultWordLevel, nil
+	}
+	if err != nil {
+		return DefaultWordLevel, err
+	}
+	n, convErr := strconv.Atoi(strings.TrimSpace(value))
+	if convErr != nil || n < 1 || n > 5 {
+		return DefaultWordLevel, nil
+	}
+	return n, nil
+}
+
+// SaveWordLevel persists the JLPT level (1–5).
+func (s *Store) SaveWordLevel(level int) error {
+	if level < 1 || level > 5 {
+		return fmt.Errorf("store: word level %d out of range 1–5", level)
+	}
+	return s.setSetting(wordLevelKey, strconv.Itoa(level))
+}
+
+// MeaningLang returns the language meanings are shown in, or "" when unset:
+// the app then follows the system language.
+func (s *Store) MeaningLang() (string, error) {
+	value, err := s.getSetting(meaningLangKey)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	return value, err
+}
+
+// SaveMeaningLang persists the meaning language; "" means follow the system.
+func (s *Store) SaveMeaningLang(lang string) error {
+	return s.setSetting(meaningLangKey, lang)
+}
+
 // SaveKanaStats upserts the aggregated statistics for the provided kana.
 func (s *Store) SaveKanaStats(char string, correctCount, missCount, streak int) error {
 	if char == "" {
@@ -343,6 +396,53 @@ func (s *Store) KanaStatistics() (map[string]KanaStats, error) {
 	return stats, nil
 }
 
+// SaveWordStats upserts the aggregated statistics for one word reading
+// (absolute values, like SaveKanaStats).
+func (s *Store) SaveWordStats(kana string, correctCount, missCount int) error {
+	if kana == "" {
+		return errors.New("store: word reading is required")
+	}
+	if correctCount < 0 {
+		correctCount = 0
+	}
+	if missCount < 0 {
+		missCount = 0
+	}
+	_, err := s.db.Exec(`
+		INSERT INTO word_stats (kana, correct_count, miss_count)
+		VALUES (?, ?, ?)
+		ON CONFLICT(kana) DO UPDATE SET
+			correct_count = excluded.correct_count,
+			miss_count = excluded.miss_count
+	`, kana, correctCount, missCount)
+	if err != nil {
+		return fmt.Errorf("store: save word stats %s: %w", kana, err)
+	}
+	return nil
+}
+
+// WordStatistics returns the stats for all tracked word readings.
+func (s *Store) WordStatistics() (map[string]WordStats, error) {
+	rows, err := s.db.Query(`SELECT kana, correct_count, miss_count FROM word_stats`)
+	if err != nil {
+		return nil, fmt.Errorf("store: query word stats: %w", err)
+	}
+	defer rows.Close()
+
+	stats := make(map[string]WordStats)
+	for rows.Next() {
+		var ws WordStats
+		if err := rows.Scan(&ws.Kana, &ws.CorrectCount, &ws.MissCount); err != nil {
+			return nil, fmt.Errorf("store: scan word stats: %w", err)
+		}
+		stats[ws.Kana] = ws
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("store: iterate word stats: %w", err)
+	}
+	return stats, nil
+}
+
 func (s *Store) getSetting(key string) (string, error) {
 	var value string
 	err := s.db.QueryRow(`SELECT value FROM settings WHERE key = ?`, key).Scan(&value)
@@ -392,6 +492,11 @@ func migrate(ctx context.Context, db *sql.DB) error {
 			correct_count INTEGER NOT NULL DEFAULT 0,
 			miss_count INTEGER NOT NULL DEFAULT 0,
 			streak INTEGER NOT NULL DEFAULT 0
+		);`,
+		`CREATE TABLE IF NOT EXISTS word_stats (
+			kana TEXT PRIMARY KEY,
+			correct_count INTEGER NOT NULL DEFAULT 0,
+			miss_count INTEGER NOT NULL DEFAULT 0
 		);`,
 	}
 
