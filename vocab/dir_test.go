@@ -68,6 +68,11 @@ func TestLoadDir(t *testing.T) {
 	if len(m.Words) != 2 {
 		t.Fatalf("every row is kept within a list: %+v", m.Words)
 	}
+	ix := NewIndex(nil, lists)
+	e, ok := ix.Lookup("せんせい")
+	if !ok || !reflect.DeepEqual(e.Meanings[""], []string{"Lehrer", "Lehrerin"}) {
+		t.Fatalf("index merges repeated readings: %+v", e)
+	}
 	if byName["a (json)"].Words[0].Source != "a (json)" {
 		t.Fatal("Source is the list name")
 	}
