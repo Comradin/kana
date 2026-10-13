@@ -48,6 +48,16 @@ type GameState struct {
 	now              func() time.Time        // clock, replaceable in tests
 	rnd              func() float64          // spawn pick source, replaceable in tests
 
+	// Words (vocabulary trainer, mixed mode): progress per reading, kept
+	// apart from the kana stats and memory.
+	wordOverallStats     map[string]store.WordStats
+	wordSessionStats     map[string]store.WordStats
+	wordSessionDirty     bool
+	wordMemory           map[string]memory.State // spaced-repetition state per reading
+	wordMemoryDirty      map[string]bool         // readings whose state is not saved yet
+	wordMemoryLoadFailed bool                    // stored word states unreadable: never overwrite them
+	wordLevel            int                     // words are played up to this JLPT level, 5 = N5
+
 	selectedRows  map[string]bool
 	autoProgress  bool
 	activeScripts map[kanacore.Script]bool
@@ -90,23 +100,28 @@ type GameState struct {
 // NewGameState constructs a new GameState, loading persisted state if store is non-nil.
 func NewGameState(st *store.Store) *GameState {
 	gs := &GameState{
-		sessionStats:  make(map[string]store.KanaStats),
-		overallStats:  make(map[string]store.KanaStats),
-		currentStreak: make(map[string]int),
-		selectedRows:  make(map[string]bool),
-		activeScripts: map[kanacore.Script]bool{kanacore.ScriptHiragana: true},
-		eventCh:       make(chan gameEvent, 4),
-		stopCh:        make(chan struct{}),
-		scoreLimit:    store.DefaultScoreLimit,
-		charSet:       kanacore.AllKana(),
-		store:         st,
-		canvasW:       400,
-		canvasH:       600,
-		level:         LevelByName(""),
-		memory:        map[string]memory.State{},
-		memoryDirty:   map[string]bool{},
-		now:           time.Now,
-		rnd:           rand.Float64,
+		sessionStats:     make(map[string]store.KanaStats),
+		overallStats:     make(map[string]store.KanaStats),
+		currentStreak:    make(map[string]int),
+		selectedRows:     make(map[string]bool),
+		activeScripts:    map[kanacore.Script]bool{kanacore.ScriptHiragana: true},
+		eventCh:          make(chan gameEvent, 4),
+		stopCh:           make(chan struct{}),
+		scoreLimit:       store.DefaultScoreLimit,
+		charSet:          kanacore.AllKana(),
+		store:            st,
+		canvasW:          400,
+		canvasH:          600,
+		level:            LevelByName(""),
+		memory:           map[string]memory.State{},
+		memoryDirty:      map[string]bool{},
+		now:              time.Now,
+		rnd:              rand.Float64,
+		wordOverallStats: make(map[string]store.WordStats),
+		wordSessionStats: make(map[string]store.WordStats),
+		wordMemory:       map[string]memory.State{},
+		wordMemoryDirty:  map[string]bool{},
+		wordLevel:        store.DefaultWordLevel,
 	}
 
 	for _, id := range kanacore.DefaultRowIDs() {
@@ -131,6 +146,17 @@ func NewGameState(st *store.Store) *GameState {
 			gs.memory = ms
 		} else {
 			gs.memoryLoadFailed = true
+		}
+		if ws, err := st.WordStatistics(); err == nil {
+			gs.wordOverallStats = ws
+		}
+		if ms, err := st.MemoryStates("word:"); err == nil {
+			gs.wordMemory = ms
+		} else {
+			gs.wordMemoryLoadFailed = true
+		}
+		if level, err := st.WordLevel(); err == nil {
+			gs.wordLevel = level
 		}
 		if auto, err := st.AutoProgress(); err == nil {
 			gs.autoProgress = auto
@@ -304,6 +330,8 @@ func (gs *GameState) Reset() {
 	gs.sessionStats = make(map[string]store.KanaStats)
 	gs.currentStreak = make(map[string]int)
 	gs.sessionDirty = false
+	gs.wordSessionStats = make(map[string]store.WordStats)
+	gs.wordSessionDirty = false
 	// An intro dropped by game over is shown before the new game starts; the
 	// offer cannot be pending at game over and is already marked as made.
 	// The new game stays paused only while that intro is still pending,
@@ -323,6 +351,12 @@ func (gs *GameState) Reset() {
 				gs.overallStats[stat.Char] = copied
 				gs.currentStreak[stat.Char] = stat.Streak
 			}
+		}
+	}
+	gs.wordOverallStats = make(map[string]store.WordStats)
+	if gs.store != nil {
+		if ws, err := gs.store.WordStatistics(); err == nil {
+			gs.wordOverallStats = ws
 		}
 	}
 
@@ -568,10 +602,7 @@ func (gs *GameState) recordCorrect(char string) bool {
 	gs.memory[char] = memory.Correct(prev, known, gs.now())
 	gs.memoryDirty[char] = true
 
-	gs.answerStreak++
-	if gs.answerStreak%streakPerStep == 0 && gs.tempoStep < maxTempoStep {
-		gs.tempoStep++
-	}
+	gs.raiseTempo()
 
 	if unlocked := gs.checkAutoProgression(); len(unlocked) > 0 {
 		gs.announceRows(unlocked)
@@ -596,6 +627,21 @@ func (gs *GameState) recordMiss(char string) {
 		gs.memoryDirty[char] = true
 	}
 
+	gs.lowerTempo()
+}
+
+// raiseTempo counts a correct answer (kana or word) towards the session
+// tempo. Must be called under lock.
+func (gs *GameState) raiseTempo() {
+	gs.answerStreak++
+	if gs.answerStreak%streakPerStep == 0 && gs.tempoStep < maxTempoStep {
+		gs.tempoStep++
+	}
+}
+
+// lowerTempo resets the answer streak and takes tempo steps back after a
+// miss (kana or word). Must be called under lock.
+func (gs *GameState) lowerTempo() {
 	gs.answerStreak = 0
 	gs.tempoStep -= missTempoSteps
 	if gs.tempoStep < 0 {
@@ -603,9 +649,21 @@ func (gs *GameState) recordMiss(char string) {
 	}
 }
 
-// mergeSessionStats writes (baseline + session) to store. Must be called under lock.
+// mergeSessionStats writes (baseline + session) to store for kana and words.
+// Memory is saved first, so a failing stats read cannot lose it. The kana
+// and word merges are independent: each has its own baseline read and early
+// return, so a skipped or failed one never skips the other. Must be called
+// under lock.
 func (gs *GameState) mergeSessionStats() {
 	gs.saveMemory()
+	gs.mergeWordStats()
+	gs.mergeKanaStats()
+}
+
+// mergeKanaStats writes (baseline + session) kana stats. A failed baseline
+// read keeps sessionDirty so the next merge retries. Must be called under
+// lock.
+func (gs *GameState) mergeKanaStats() {
 	if !gs.sessionDirty {
 		return
 	}
@@ -644,17 +702,25 @@ func (gs *GameState) mergeSessionStats() {
 	gs.sessionDirty = false
 }
 
-// saveMemory writes changed memory states. It runs before the stats merge,
-// so a failing stats read cannot lose them. If loading failed, nothing is
-// written, so the stored states are not replaced by fresh ones. Must be
-// called under lock.
+// saveMemory writes changed kana and word memory states. If loading a kind
+// failed, nothing of that kind is written, so the stored states are not
+// replaced by fresh ones. Must be called under lock.
 func (gs *GameState) saveMemory() {
-	if gs.store == nil || gs.memoryLoadFailed {
+	if gs.store == nil {
 		return
 	}
-	for char := range gs.memoryDirty {
-		if err := gs.store.SaveMemoryState("kana:"+char, gs.memory[char]); err == nil {
-			delete(gs.memoryDirty, char)
+	if !gs.memoryLoadFailed {
+		for char := range gs.memoryDirty {
+			if err := gs.store.SaveMemoryState("kana:"+char, gs.memory[char]); err == nil {
+				delete(gs.memoryDirty, char)
+			}
+		}
+	}
+	if !gs.wordMemoryLoadFailed {
+		for kana := range gs.wordMemoryDirty {
+			if err := gs.store.SaveMemoryState("word:"+kana, gs.wordMemory[kana]); err == nil {
+				delete(gs.wordMemoryDirty, kana)
+			}
 		}
 	}
 }
