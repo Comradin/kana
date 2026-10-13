@@ -1160,7 +1160,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
+	"sort"
 	"strings"
 )
 
@@ -1172,16 +1172,26 @@ type jlptRow struct {
 	Waller string
 }
 
-// readJLPT reads n1.csv … n5.csv from dir. Every file must exist.
+// readJLPT reads every n1.csv … n5.csv in dir, easiest level (n5) first and
+// each file in its own order, so the easiest level's meanings come first
+// when words are merged. It fails if dir has no such file.
 func readJLPT(dir string) ([]jlptRow, error) {
+	if _, err := os.Stat(dir); err != nil {
+		return nil, err
+	}
+	paths, err := filepath.Glob(filepath.Join(dir, "n[1-5].csv"))
+	if err != nil {
+		return nil, err
+	}
+	if len(paths) == 0 {
+		return nil, fmt.Errorf("%s: no n1.csv … n5.csv", dir)
+	}
+	sort.Sort(sort.Reverse(sort.StringSlice(paths))) // n5 … n1
 	var rows []jlptRow
-	for level := 1; level <= 5; level++ {
-		path := filepath.Join(dir, "n"+strconv.Itoa(level)+".csv")
+	for _, path := range paths {
+		level := int(filepath.Base(path)[1] - '0')
 		f, err := os.Open(path)
 		if err != nil {
-			if level != 4 && level != 5 && os.IsNotExist(err) && isFixture(dir) {
-				continue
-			}
 			return nil, err
 		}
 		recs, err := csv.NewReader(f).ReadAll()
@@ -1191,7 +1201,7 @@ func readJLPT(dir string) ([]jlptRow, error) {
 		}
 		for i, r := range recs {
 			if i == 0 || len(r) < 4 {
-				continue
+				continue // header or short row
 			}
 			rows = append(rows, jlptRow{Seq: strings.TrimSpace(r[0]), Kana: strings.TrimSpace(r[1]), Level: level, Waller: r[3]})
 		}
@@ -1199,8 +1209,6 @@ func readJLPT(dir string) ([]jlptRow, error) {
 	return rows, nil
 }
 ```
-
-**Simplify instead:** do not special-case fixtures. Read every `n*.csv` that exists (`filepath.Glob(dir+"/n[1-5].csv")`), fail if the directory does not exist or no file matches, and take the level from the file name. Replace the loop above with that; the fixture then only needs `n4.csv` and `n5.csv`. (Delete `isFixture`.)
 
 `cmd/vocabgen/jmdict.go`:
 
@@ -1276,23 +1284,25 @@ func readJMdict(path string, wanted map[string]bool) (map[string]map[string][]st
 			continue
 		}
 		glosses := map[string][]string{}
-		for _, s := range e.Senses {
-			seen := map[string]bool{}
-			for _, g := range s.Glosses {
+		for _, sense := range e.Senses {
+			// A language is taken only from the first sense that has
+			// glosses in it.
+			fresh := map[string]bool{}
+			for _, g := range sense.Glosses {
 				lang := g.Lang
 				if lang == "" {
 					lang = "eng"
 				}
 				code, ok := langCodes[lang]
-				if !ok || seen[code] && false {
+				text := strings.TrimSpace(g.Text)
+				if !ok || text == "" {
 					continue
 				}
-				if _, done := glosses[code]; done && !seen[code] {
-					continue // an earlier sense already gave this language
+				if _, taken := glosses[code]; taken && !fresh[code] {
+					continue
 				}
-				seen[code] = true
-				text := strings.TrimSpace(g.Text)
-				if text != "" && len(glosses[code]) < maxGlossesPerLang {
+				fresh[code] = true
+				if len(glosses[code]) < maxGlossesPerLang {
 					glosses[code] = append(glosses[code], text)
 				}
 			}
@@ -1301,8 +1311,6 @@ func readJMdict(path string, wanted map[string]bool) (map[string]map[string][]st
 	}
 }
 ```
-
-Clean up the `seen` logic while implementing (the `&& false` is a placeholder to remove): per sense, a language is taken only if no earlier sense provided it; within the sense, append up to three glosses. Verify with the test (`せんせい` en = the first three of the first sense; `second sense` ignored).
 
 Check during implementation whether `encoding/xml` in non-strict mode handles the real file's `<!DOCTYPE … [ … ]>` and `&n;` entities: if unknown entities cause errors, set `dec.Entity` to a map built from the DTD (parse `<!ENTITY name "text">` from the `Directive` token) — the fixture includes one entity so the test covers it.
 
@@ -1431,7 +1439,7 @@ func (s Stats) String() string {
 }
 ```
 
-Merge order matters for reproducibility and for "bridge" before "chopsticks": rows are processed in file order n1…n5 — so `はし` from n4 (chopsticks) would come before n5 (bridge). The test expects `["bridge", "chopsticks"]`. Process rows **from n5 down to n1** (easiest first) so the easiest level's meanings come first; within a file keep file order. Implement by reading files in that order in `readJLPT` (glob, sort by level descending). Note `outWord` is declared in both the test and `build.go`; rename the test's type to `testWord`.
+Merge order matters for reproducibility and for "bridge" before "chopsticks": rows are processed in file order n1…n5 — so `はし` from n4 (chopsticks) would come before n5 (bridge). The test expects `["bridge", "chopsticks"]`. `readJLPT` returns rows from n5 down to n1, so the easiest level's meanings come first. Note `outWord` is declared in both the test and `build.go`; rename the test's type to `testWord`.
 
 `json.Encoder` sorts map keys, so `m` is deterministic.
 
