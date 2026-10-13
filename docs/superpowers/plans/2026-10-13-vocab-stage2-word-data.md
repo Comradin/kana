@@ -1648,3 +1648,42 @@ git commit -m "feat(vocab): bundle the JLPT word list
 
 Embeds the generated list of JLPT words with JMdict meanings in nine languages, with attribution for JMdict, Jonathan Waller's levels and the sequence mapping, and documents word data and private lists in the README."
 ```
+
+---
+
+### Task 7: Monthly word data update (EDRDG licence requirement)
+
+The EDRDG licence requires "a procedure for regular updating of the data from the most recent versions available". A scheduled workflow regenerates the data and opens a PR when it changed.
+
+**Files:** Create `.github/workflows/update-words.yml`, `vocab/data/SOURCES`; modify `vocab/data/ATTRIBUTION.md`, `README.md` (maintainer section)
+
+- [ ] **Step 1:** `vocab/data/SOURCES` records the inputs of the committed data, two lines:
+
+```
+jmdict-last-modified: <Last-Modified header of JMdict.gz, e.g. Tue, 13 Oct 2026 03:30:22 GMT>
+jlpt-mapping-commit: <commit SHA of stephenmk/yomitan-jlpt-vocab>
+```
+
+Write it now for the data generated in Task 6. `ATTRIBUTION.md` refers to this file instead of naming the versions itself, and says the data is regenerated monthly by `.github/workflows/update-words.yml`.
+
+- [ ] **Step 2:** `.github/workflows/update-words.yml`:
+  - Triggers: `schedule: - cron: "17 4 3 * *"` (monthly, 3rd day 04:17 UTC) and `workflow_dispatch`.
+  - `permissions: contents: write, pull-requests: write`; `concurrency: update-words`.
+  - One job on `ubuntu-latest`: checkout; `actions/setup-go@v5` with `go-version-file: go.mod`; download `http://ftp.edrdg.org/pub/Nihongo/JMdict.gz` with `curl -fsSL -D headers.txt` and read `Last-Modified` from the headers; `git clone --depth 1 https://github.com/stephenmk/yomitan-jlpt-vocab` and read its HEAD SHA; `go run ./cmd/vocabgen -jmdict … -jlpt …/original_data -out vocab/data/words.json.gz`; rewrite `vocab/data/SOURCES`; `go test -count=1 ./vocab/` (only `vocab` — no Fyne dependencies needed).
+  - If `git diff --quiet -- vocab/data/words.json.gz` reports no change, stop (a changed `SOURCES` alone does not open a PR).
+  - Otherwise: branch `update-words`, commit both files with message `fix(vocab): update word data from JMdict` and the vocabgen stats line as body, `git push --force origin update-words`, and `gh pr create --base main --head update-words --title "fix(vocab): update word data from JMdict" --body "<stats line, Last-Modified, mapping commit>"` unless a PR for that branch is already open (`gh pr list --head update-words --json number -q length`), in which case the push updated it. Configure `git config user.name "github-actions[bot]"` and `user.email "41898282+github-actions[bot]@users.noreply.github.com"`. `GH_TOKEN: ${{ github.token }}`.
+  - `fix:` makes release-please cut a patch release, so updated data reaches users.
+  - Note in a comment: PRs opened with the default token do not trigger `ci.yml`; the job already ran the `vocab` tests.
+
+- [ ] **Step 3:** Validate with `go run github.com/rhysd/actionlint/cmd/actionlint@latest`; fix all findings.
+
+- [ ] **Step 4:** README maintainer section: one paragraph on the monthly word data update and why (EDRDG licence).
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add .github/workflows/update-words.yml vocab/data/SOURCES vocab/data/ATTRIBUTION.md README.md
+git commit -m "feat(vocab): update the word data monthly
+
+A scheduled workflow regenerates the word list from the latest JMdict and JLPT mapping and opens a PR when it changed, as the EDRDG licence asks for regular updates."
+```

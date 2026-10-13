@@ -153,6 +153,11 @@ type Word struct {
   CC BY-SA 4.0; the code stays MIT. The README gains a "Word data" section with the same
   attribution and links to the file. This stage merges before stage 3, so the attribution
   is in place before the app uses the data.
+- **Regular updates (EDRDG licence):** "there must be a procedure for regular updating of the
+  data from the most recent versions available". `.github/workflows/update-words.yml` runs
+  monthly (and on demand), regenerates `words.json.gz` from the latest JMdict and mapping,
+  records the inputs in `vocab/data/SOURCES`, and opens a PR `fix(vocab): update word data
+  from JMdict` when the data changed, so release-please cuts a patch release.
 
 ### Private lists
 
