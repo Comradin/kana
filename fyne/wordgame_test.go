@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"errors"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"testing"
@@ -528,5 +529,100 @@ func TestSnapshotCarriesMissedWordsAndResetClears(t *testing.T) {
 	gs.Reset()
 	if len(gs.missedWords) != 0 {
 		t.Fatal("Reset must clear missed words")
+	}
+}
+
+// vowelWords returns n distinct words written with vowels only (at most 150).
+func vowelWords(n int) []vocab.Word {
+	vowels := []string{"あ", "い", "う", "え", "お"}
+	var out []vocab.Word
+	for _, a := range vowels {
+		for _, b := range vowels {
+			for _, c := range append([]string{""}, vowels...) {
+				if len(out) == n {
+					return out
+				}
+				out = append(out, bw(a+b+c, 5, "word"))
+			}
+		}
+	}
+	return out
+}
+
+func countWordSpawns(gs *GameState, spawns int) int {
+	words := 0
+	for i := 0; i < spawns; i++ {
+		gs.tiles = nil
+		gs.spawnKana()
+		if gs.tiles[0].word != nil {
+			words++
+		}
+	}
+	return words
+}
+
+func TestWordShareOfSpawns(t *testing.T) {
+	gs := newTestState()
+	selectRows(gs, "vowels")
+	gs.rnd = rand.New(rand.NewSource(7)).Float64
+	withWords(gs, vowelWords(60)...)
+	if n := countWordSpawns(gs, 200); n != 0 {
+		t.Fatalf("%d words spawned while no vowel is secure", n)
+	}
+	secure(gs, "あ", "い", "う", "え", "お")
+	if n := countWordSpawns(gs, 1000); n < 250 || n > 350 {
+		t.Fatalf("%d/1000 word spawns with 60 playable, want about 300", n)
+	}
+}
+
+func TestFewPlayableWordsSpawnRarely(t *testing.T) {
+	gs := newTestState()
+	selectRows(gs, "vowels")
+	gs.rnd = rand.New(rand.NewSource(3)).Float64
+	withWords(gs, vowelWords(10)...)
+	secure(gs, "あ", "い", "う", "え", "お")
+	if n := countWordSpawns(gs, 1000); n < 60 || n > 140 {
+		t.Fatalf("%d/1000 word spawns with 10 playable, want about 100", n)
+	}
+}
+
+func TestWordSpawnFallTimeAndPlacement(t *testing.T) {
+	gs := newTestState() // Normal: 16–24 s
+	selectRows(gs, "vowels")
+	gs.rnd = func() float64 { return 0 } // always a word, always the first new candidate
+	gs.canvasW = 150
+	withWords(gs, bw("あおい", 5, "blue"))
+	secure(gs, "あ", "お", "い")
+	for i := 0; i < 30; i++ {
+		gs.tiles = nil
+		gs.spawnKana()
+		tile := gs.tiles[0]
+		if tile.word == nil || tile.word.Kana != "あおい" {
+			t.Fatalf("spawned %+v, want the word あおい", tile.kana)
+		}
+		if tile.fallSeconds < 16*1.4-0.01 || tile.fallSeconds > 24*1.4+0.01 {
+			t.Fatalf("fallSeconds = %v, want [22.4, 33.6]", tile.fallSeconds)
+		}
+		if tile.pos.X < 0 || tile.pos.X+tile.Width() > gs.canvasW+0.5 {
+			t.Fatalf("tile at x=%.1f width %.1f leaves the %v px field", tile.pos.X, tile.Width(), gs.canvasW)
+		}
+	}
+}
+
+func TestWordSpawnAvoidsFallingWords(t *testing.T) {
+	gs := newTestState()
+	selectRows(gs, "vowels")
+	gs.rnd = func() float64 { return 0 }
+	withWords(gs, bw("あい", 5, "love"), bw("あお", 5, "blue"))
+	secure(gs, "あ", "い", "お")
+	gs.tiles = []*KanaTile{wordTileAt(gs, "あい", 0)}
+	gs.spawnKana()
+	if got := gs.tiles[1].word; got == nil || got.Kana != "あお" {
+		t.Fatal("expected あお while あい is falling")
+	}
+	gs.tiles = []*KanaTile{wordTileAt(gs, "あい", 0), wordTileAt(gs, "あお", 0)}
+	gs.spawnKana()
+	if got := gs.tiles[2].word; got == nil || got.Kana != "あい" {
+		t.Fatal("with every word falling, the exclusion must be dropped")
 	}
 }

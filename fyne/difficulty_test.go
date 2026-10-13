@@ -1,6 +1,7 @@
 package main
 
 import (
+	"math"
 	"testing"
 	"time"
 )
@@ -60,5 +61,23 @@ func TestFormatStatusAndMissReason(t *testing.T) {
 	}
 	if got := missReason(5); got != "5 tiles slipped through." {
 		t.Errorf("missReason = %q", got)
+	}
+}
+
+func TestWordShare(t *testing.T) {
+	cases := map[int]float64{0: 0, 10: 0.1, 30: 0.3, 500: 0.3}
+	for n, want := range cases {
+		if got := wordShare(n); math.Abs(got-want) > 1e-9 {
+			t.Errorf("wordShare(%d) = %v, want %v", n, got, want)
+		}
+	}
+}
+
+func TestWordFallFactor(t *testing.T) {
+	cases := map[int]float32{1: 1, 2: 1.2, 3: 1.4, 6: 2, 9: 2}
+	for units, want := range cases {
+		if got := wordFallFactor(units); got-want > 1e-5 || want-got > 1e-5 {
+			t.Errorf("wordFallFactor(%d) = %v, want %v", units, got, want)
+		}
 	}
 }
