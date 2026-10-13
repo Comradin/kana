@@ -72,3 +72,16 @@ func TestFeedbackTexts(t *testing.T) {
 		t.Errorf("miss without meanings = %q", got)
 	}
 }
+
+func TestFormatWordsLine(t *testing.T) {
+	if got := formatWordsLine(WordsStatus{Playable: 42, Secure: 17, Level: 5}); got != "Words: 42 playable · 17 secure · up to N5" {
+		t.Errorf("line = %q", got)
+	}
+	if got := formatWordsLine(WordsStatus{Err: "broken data", Playable: 3, Level: 5}); got != "Words unavailable: broken data" {
+		t.Errorf("error line = %q", got)
+	}
+	long := formatWordsLine(WordsStatus{Err: strings.Repeat("x", 100)})
+	if r := []rune(long); len(r) != maxWordsLineRunes || !strings.HasSuffix(long, "…") {
+		t.Errorf("long error = %q (%d runes)", long, len(r))
+	}
+}

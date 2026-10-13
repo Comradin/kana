@@ -738,3 +738,32 @@ func TestResetClearsFeedback(t *testing.T) {
 		t.Fatal("Reset must clear feedback labels")
 	}
 }
+
+func TestSnapshotWordsStatus(t *testing.T) {
+	gs := newTestState()
+	withWords(gs, bw("あい", 5, "love"), bw("あお", 5, "blue"), bw("いえ", 5, "house"))
+	secure(gs, "あ", "い", "お")
+	gs.wordOverallStats["あい"] = store.WordStats{Kana: "あい", CorrectCount: 2}
+	gs.wordSessionStats["あい"] = store.WordStats{Kana: "あい", CorrectCount: 1}
+	snap := gs.snapshot()
+	if snap.Words != (WordsStatus{Playable: 2, Secure: 1, Level: 5}) {
+		t.Fatalf("Words = %+v, want 2 playable, 1 secure, N5", snap.Words)
+	}
+	if snap.WordCorrect != 1 {
+		t.Fatalf("WordCorrect = %d, want the session's 1", snap.WordCorrect)
+	}
+}
+
+func TestSnapshotShowsBundledError(t *testing.T) {
+	test.NewApp()
+	orig := bundledWords
+	bundledWords = func() ([]vocab.Word, error) { return nil, errors.New("broken data") }
+	t.Cleanup(func() { bundledWords = orig })
+	gs := NewGameState(nil)
+	gs.mu.Lock()
+	snap := gs.snapshot()
+	gs.mu.Unlock()
+	if got := formatWordsLine(snap.Words); got != "Words unavailable: broken data" {
+		t.Fatalf("line = %q", got)
+	}
+}

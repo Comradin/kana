@@ -189,3 +189,26 @@ func (gs *GameState) pickWord() (vocab.Entry, bool) {
 	kana := memory.Pick(gs.wordCandidates(playable), gs.wordMemory, gs.now(), gs.rnd)
 	return gs.words.Lookup(kana)
 }
+
+// wordsStatus summarises the words for the status panel. Must be called
+// under lock.
+func (gs *GameState) wordsStatus() WordsStatus {
+	ws := WordsStatus{Err: gs.wordsErr, Level: gs.wordLevel}
+	for _, e := range gs.playableWords() {
+		ws.Playable++
+		if gs.wordCorrect(e.Kana) >= secureCorrect {
+			ws.Secure++
+		}
+	}
+	return ws
+}
+
+// sessionWordCorrect is the number of word hits this session. Must be
+// called under lock.
+func (gs *GameState) sessionWordCorrect() int {
+	n := 0
+	for _, st := range gs.wordSessionStats {
+		n += st.CorrectCount
+	}
+	return n
+}
