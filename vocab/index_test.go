@@ -85,3 +85,78 @@ func TestPlayable(t *testing.T) {
 		}
 	}
 }
+
+func TestWithListsMatchesNewIndex(t *testing.T) {
+	bundled := []Word{
+		word("ねこ", 5, BundledSource, "", "en", "cat"),
+		word("はし", 5, BundledSource, "", "en", "bridge"),
+		word("はし", 4, BundledSource, "", "en", "chopsticks"),
+		word("きって", 4, BundledSource, "", "en", "stamp"),
+	}
+	lists := []List{
+		{Name: "minna", Words: []Word{
+			word("はし", 0, "minna", "3", "de", "Essstäbchen"),
+			word("はし", 0, "minna", "4", "en", "bridge"),
+			word("せんせい", 0, "minna", "1", "de", "Lehrer"),
+			word("abc", 0, "minna", "1", "de", "invalid reading"),
+		}},
+		{Name: "extra", Words: []Word{
+			word("ねこ", 0, "extra", "", "en", "kitty"),
+			word("あお", 0, "extra", "", "en", "blue"),
+		}},
+	}
+	base := NewIndex(bundled, nil)
+	before := NewIndex(bundled, nil)
+
+	merged := base.WithLists(lists)
+	want := NewIndex(bundled, lists)
+	if !reflect.DeepEqual(merged.Entries(), want.Entries()) {
+		t.Fatalf("WithLists entries = %+v\nwant %+v", merged.Entries(), want.Entries())
+	}
+	for _, e := range want.Entries() {
+		got, ok := merged.Lookup(e.Kana)
+		if !ok || !reflect.DeepEqual(got, e) {
+			t.Fatalf("Lookup(%s) = %+v, %v; want %+v", e.Kana, got, ok, e)
+		}
+	}
+	if !reflect.DeepEqual(base.Entries(), before.Entries()) {
+		t.Fatalf("WithLists changed the base index: %+v\nwant %+v", base.Entries(), before.Entries())
+	}
+	if _, ok := base.Lookup("せんせい"); ok {
+		t.Fatal("a private reading leaked into the base index")
+	}
+
+	if empty := base.WithLists(nil); !reflect.DeepEqual(empty.Entries(), base.Entries()) {
+		t.Fatal("WithLists(nil) must give the base entries")
+	}
+}
+
+// TestWithListsDoesNotShareMeanings merges two lists into one base whose
+// meanings slice has spare capacity: an append in place would let the
+// second merge overwrite the first one's meaning.
+func TestWithListsDoesNotShareMeanings(t *testing.T) {
+	base := NewIndex([]Word{
+		word("いぬ", 5, BundledSource, "", "en", "dog"),
+		word("いぬ", 5, BundledSource, "", "en", "hound"),
+		word("いぬ", 5, BundledSource, "", "en", "spy"),
+	}, nil)
+	if e, _ := base.Lookup("いぬ"); cap(e.Meanings["en"]) <= len(e.Meanings["en"]) {
+		t.Skip("no spare capacity to alias")
+	}
+	a := base.WithLists([]List{{Name: "a", Words: []Word{word("いぬ", 0, "a", "1", "en", "doggy")}}})
+	b := base.WithLists([]List{{Name: "b", Words: []Word{word("いぬ", 0, "b", "2", "en", "pup")}}})
+	ea, _ := a.Lookup("いぬ")
+	eb, _ := b.Lookup("いぬ")
+	if got := ea.Meanings["en"]; !reflect.DeepEqual(got, []string{"dog", "hound", "spy", "doggy"}) {
+		t.Fatalf("a = %v", got)
+	}
+	if got := eb.Meanings["en"]; !reflect.DeepEqual(got, []string{"dog", "hound", "spy", "pup"}) {
+		t.Fatalf("b = %v", got)
+	}
+	if e, _ := base.Lookup("いぬ"); len(e.Meanings["en"]) != 3 || len(e.Lists) != 0 {
+		t.Fatalf("base changed: %+v", e)
+	}
+	if _, ok := ea.Lists["b"]; ok {
+		t.Fatal("list b leaked into a's entry")
+	}
+}

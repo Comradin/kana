@@ -2,13 +2,17 @@ package main
 
 import (
 	"database/sql"
+	"errors"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
 	"fyne.io/fyne/v2/test"
+	"kana/kanacore"
 	"kana/memory"
 	"kana/store"
+	"kana/vocab"
 )
 
 func TestRecordWordCorrectTouchesOnlyWordProgress(t *testing.T) {
@@ -195,5 +199,185 @@ func TestStoredWordLevelIsLoaded(t *testing.T) {
 	_ = st.SaveWordLevel(3)
 	if l := NewGameState(st).wordLevel; l != 3 {
 		t.Fatalf("wordLevel = %d, want 3", l)
+	}
+}
+
+// bw is a bundled word with one English meaning.
+func bw(kana string, level int, en string) vocab.Word {
+	return vocab.Word{Kana: kana, JLPT: level, Source: vocab.BundledSource, Meanings: vocab.Meanings{"en": {en}}}
+}
+
+// withWords replaces the word index with the given bundled words.
+func withWords(gs *GameState, words ...vocab.Word) {
+	gs.words = vocab.NewIndex(words, nil)
+	gs.invalidatePlayable()
+}
+
+// secure gives each character three stored correct answers.
+func secure(gs *GameState, chars ...string) {
+	for _, c := range chars {
+		gs.overallStats[c] = store.KanaStats{Char: c, CorrectCount: 3}
+	}
+	gs.invalidatePlayable()
+}
+
+func playableKana(gs *GameState) []string {
+	var out []string
+	for _, e := range gs.playableWords() {
+		out = append(out, e.Kana)
+	}
+	return out
+}
+
+func TestUnitKnown(t *testing.T) {
+	gs := newTestState() // hiragana only
+	secure(gs, "か", "カ")
+	gs.overallStats["き"] = store.KanaStats{Char: "き", CorrectCount: 2}
+	gs.overallStats["く"] = store.KanaStats{Char: "く", CorrectCount: 2}
+	gs.sessionStats["く"] = store.KanaStats{Char: "く", CorrectCount: 1}
+	cases := map[string]bool{"か": true, "き": false, "く": true, "カ": false, "っ": true, "ッ": false, "ー": true, "け": false}
+	for unit, want := range cases {
+		if got := gs.unitKnown(unit); got != want {
+			t.Errorf("hiragana only: unitKnown(%s) = %v, want %v", unit, got, want)
+		}
+	}
+	gs.activeScripts = map[kanacore.Script]bool{kanacore.ScriptKatakana: true}
+	cases = map[string]bool{"か": false, "カ": true, "っ": false, "ッ": true, "ー": true}
+	for unit, want := range cases {
+		if got := gs.unitKnown(unit); got != want {
+			t.Errorf("katakana only: unitKnown(%s) = %v, want %v", unit, got, want)
+		}
+	}
+}
+
+func TestPlayableWordsFollowLevelAndKnownKana(t *testing.T) {
+	gs := newTestState()
+	withWords(gs, bw("あい", 5, "love"), bw("あお", 4, "blue"), bw("いえ", 5, "house"))
+	secure(gs, "あ", "い", "お")
+	if got := playableKana(gs); !equalIDs(got, []string{"あい"}) {
+		t.Fatalf("playable at N5 = %v, want [あい] (あお is N4, いえ needs え)", got)
+	}
+	gs.wordLevel = 4
+	gs.invalidatePlayable()
+	if got := playableKana(gs); !equalIDs(got, []string{"あい", "あお"}) {
+		t.Fatalf("playable at N4 = %v", got)
+	}
+}
+
+func TestPrivateListWordsIgnoreLevel(t *testing.T) {
+	gs := newTestState()
+	gs.words = vocab.NewIndex(nil, []vocab.List{{Name: "mine", Words: []vocab.Word{{Kana: "あお", Source: "mine", Meanings: vocab.Meanings{}}}}})
+	secure(gs, "あ", "お")
+	if got := playableKana(gs); !equalIDs(got, []string{"あお"}) {
+		t.Fatalf("playable = %v, want [あお]", got)
+	}
+}
+
+func TestNoWordIndexMeansNoWords(t *testing.T) {
+	gs := newTestState()
+	if got := gs.playableWords(); got != nil {
+		t.Fatalf("playable without an index = %v", got)
+	}
+}
+
+func TestPlayableRefreshesWhenKanaBecomesSecure(t *testing.T) {
+	gs := newTestState()
+	withWords(gs, bw("あい", 5, "love"))
+	secure(gs, "あ")
+	gs.overallStats["い"] = store.KanaStats{Char: "い", CorrectCount: 2}
+	if got := playableKana(gs); len(got) != 0 {
+		t.Fatalf("playable before い is secure = %v", got)
+	}
+	gs.recordCorrect("い")
+	if got := playableKana(gs); !equalIDs(got, []string{"あい"}) {
+		t.Fatalf("playable after い is secure = %v", got)
+	}
+}
+
+func TestKatakanaWordStopsWhenKatakanaTurnsOff(t *testing.T) {
+	gs := newTestState()
+	gs.activeScripts[kanacore.ScriptKatakana] = true
+	withWords(gs, bw("アイ", 5, "eye"))
+	secure(gs, "ア", "イ")
+	if got := playableKana(gs); !equalIDs(got, []string{"アイ"}) {
+		t.Fatalf("playable with katakana = %v", got)
+	}
+	gs.applySettings([]string{"vowels", "kata:vowels"}, []kanacore.Script{kanacore.ScriptHiragana}, false, 0, LevelNormal, pointsAuto)
+	if got := playableKana(gs); len(got) != 0 {
+		t.Fatalf("playable after katakana off = %v", got)
+	}
+}
+
+func TestNewGameStateLoadsBundledWords(t *testing.T) {
+	test.NewApp()
+	gs := NewGameState(openTestStore(t))
+	if gs.words == nil || gs.wordsErr != "" || len(gs.words.Entries()) < 5000 {
+		t.Fatalf("words = %v entries, err %q", gs.words != nil, gs.wordsErr)
+	}
+}
+
+func TestPrivateListsLoadWhenBundledFails(t *testing.T) {
+	test.NewApp()
+	data := t.TempDir()
+	t.Setenv("XDG_DATA_HOME", data)
+	dir := filepath.Join(data, "kana", "words")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "mine.csv"), []byte("kana,meaning\nあお,blue\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	orig := bundledWords
+	bundledWords = func() ([]vocab.Word, error) { return nil, errors.New("broken data") }
+	t.Cleanup(func() { bundledWords = orig })
+
+	gs := NewGameState(nil)
+	if gs.wordsErr != "broken data" {
+		t.Fatalf("wordsErr = %q", gs.wordsErr)
+	}
+	if entries := gs.words.Entries(); len(entries) != 1 || entries[0].Kana != "あお" {
+		t.Fatalf("entries = %v, want the private あお only", entries)
+	}
+}
+
+func TestMeaningLangFollowsSystemUnlessStored(t *testing.T) {
+	test.NewApp()
+	orig := systemLanguage
+	systemLanguage = func() string { return "de-AT" }
+	t.Cleanup(func() { systemLanguage = orig })
+	st := openTestStore(t)
+	_ = st.SaveSelectedRows([]string{"vowels"})
+	if l := NewGameState(st).meaningLang; l != "de" {
+		t.Fatalf("meaningLang = %q, want de from the system", l)
+	}
+	_ = st.SaveMeaningLang("sv")
+	if l := NewGameState(st).meaningLang; l != "sv" {
+		t.Fatalf("meaningLang = %q, want the stored sv", l)
+	}
+}
+
+func TestPlayableRefreshesWhenKatakanaOfferIsAccepted(t *testing.T) {
+	gs := newTestState() // hiragana only
+	withWords(gs, bw("アイ", 5, "eye"))
+	secure(gs, "ア", "イ")
+	if got := playableKana(gs); len(got) != 0 {
+		t.Fatalf("playable before katakana = %v", got)
+	}
+	gs.EnableKatakana()
+	if got := playableKana(gs); !equalIDs(got, []string{"アイ"}) {
+		t.Fatalf("playable after accepting the offer = %v, want [アイ]", got)
+	}
+}
+
+func TestResetRebuildsPlayable(t *testing.T) {
+	gs := newTestState()
+	withWords(gs, bw("あい", 5, "love"))
+	secure(gs, "あ", "い")
+	if got := playableKana(gs); !equalIDs(got, []string{"あい"}) {
+		t.Fatalf("playable before Reset = %v", got)
+	}
+	gs.Reset() // no store: the stored stats reload as empty
+	if got := playableKana(gs); len(got) != 0 {
+		t.Fatalf("playable after Reset = %v, want none (cache not rebuilt?)", got)
 	}
 }

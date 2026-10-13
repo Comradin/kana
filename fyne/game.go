@@ -10,6 +10,7 @@ import (
 	"kana/kanacore"
 	"kana/memory"
 	"kana/store"
+	"kana/vocab"
 )
 
 type gameEventType int
@@ -57,6 +58,11 @@ type GameState struct {
 	wordMemoryDirty      map[string]bool         // readings whose state is not saved yet
 	wordMemoryLoadFailed bool                    // stored word states unreadable: never overwrite them
 	wordLevel            int                     // words are played up to this JLPT level, 5 = N5
+	meaningLang          string                  // language meanings are shown in
+	words                *vocab.Index            // every word reading; nil = no words
+	wordsErr             string                  // bundled list failed to load
+	playable             []vocab.Entry           // cached playableWords result
+	playableOK           bool                    // playable is up to date
 
 	selectedRows  map[string]bool
 	autoProgress  bool
@@ -128,6 +134,7 @@ func NewGameState(st *store.Store) *GameState {
 		gs.selectedRows[id] = true
 	}
 
+	storedLang := ""
 	if st != nil {
 		if names, err := st.ActiveScripts(); err == nil && len(names) > 0 {
 			gs.activeScripts = scriptSet(parseScripts(names))
@@ -158,6 +165,9 @@ func NewGameState(st *store.Store) *GameState {
 		if level, err := st.WordLevel(); err == nil {
 			gs.wordLevel = level
 		}
+		if l, err := st.MeaningLang(); err == nil {
+			storedLang = l
+		}
 		if auto, err := st.AutoProgress(); err == nil {
 			gs.autoProgress = auto
 		}
@@ -184,6 +194,8 @@ func NewGameState(st *store.Store) *GameState {
 		}
 	}
 
+	gs.meaningLang = resolveMeaningLang(storedLang, systemLanguage())
+	gs.loadWords()
 	return gs
 }
 
@@ -359,6 +371,7 @@ func (gs *GameState) Reset() {
 			gs.wordOverallStats = ws
 		}
 	}
+	gs.invalidatePlayable()
 
 	gs.buildSnapshot()
 	gs.mu.Unlock()
@@ -597,6 +610,9 @@ func (gs *GameState) recordCorrect(char string) bool {
 	stat.Streak = streak
 	gs.sessionStats[char] = stat
 	gs.sessionDirty = true
+	if gs.overallStats[char].CorrectCount+stat.CorrectCount == secureCorrect {
+		gs.invalidatePlayable() // the kana just became secure
+	}
 
 	prev, known := gs.memory[char]
 	gs.memory[char] = memory.Correct(prev, known, gs.now())
@@ -699,6 +715,7 @@ func (gs *GameState) mergeKanaStats() {
 		delete(gs.sessionStats, char)
 	}
 
+	gs.invalidatePlayable() // the stored baseline may differ
 	gs.sessionDirty = false
 }
 
@@ -834,6 +851,7 @@ func (gs *GameState) applySettings(rows []string, scripts []kanacore.Script, aut
 		_ = gs.store.SavePointsFactor(gs.pointsSetting)
 	}
 
+	gs.invalidatePlayable()
 	gs.dropInactiveTiles()
 	gs.buildSnapshot()
 	gs.settle()
@@ -1081,6 +1099,7 @@ func (gs *GameState) maybeOfferKatakana() {
 // its intro. Must be called under lock.
 func (gs *GameState) enableKatakanaLocked() {
 	gs.activeScripts[kanacore.ScriptKatakana] = true
+	gs.invalidatePlayable()
 	gs.saveActiveScripts()
 	gs.katakanaOffered = true
 	if gs.store != nil {
