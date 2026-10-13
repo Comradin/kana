@@ -767,12 +767,14 @@ func (gs *GameState) availableCharacters() []string {
 	return nil
 }
 
-// spawnCandidates drops characters that are already falling, unless that
-// would leave none. Must be called under lock.
+// spawnCandidates drops kana that are already falling as kana tiles, unless
+// that would leave none. Must be called under lock.
 func (gs *GameState) spawnCandidates(chars []string) []string {
 	falling := make(map[string]bool, len(gs.tiles))
 	for _, t := range gs.tiles {
-		falling[t.kana.Char] = true
+		if t.word == nil { // falling words do not block a kana
+			falling[t.kana.Char] = true
+		}
 	}
 	out := make([]string, 0, len(chars))
 	for _, c := range chars {
@@ -857,11 +859,25 @@ func (gs *GameState) applySettings(rows []string, scripts []kanacore.Script, aut
 	gs.settle()
 }
 
-// dropInactiveTiles removes tiles whose row is deselected or whose script is
-// inactive. Must be called under lock.
+// dropInactiveTiles removes kana tiles whose row is deselected or whose
+// script is inactive, and word tiles whose word is no longer playable. Must
+// be called under lock.
 func (gs *GameState) dropInactiveTiles() {
+	var playable map[string]bool // built on the first word tile
 	kept := gs.tiles[:0]
 	for _, t := range gs.tiles {
+		if t.word != nil {
+			if playable == nil {
+				playable = make(map[string]bool)
+				for _, e := range gs.playableWords() {
+					playable[e.Kana] = true
+				}
+			}
+			if playable[t.word.Kana] {
+				kept = append(kept, t)
+			}
+			continue
+		}
 		rowID, ok := kanacore.CharToRow[t.kana.Char]
 		if ok && (!gs.selectedRows[rowID] || !gs.activeScripts[kanacore.ScriptOf(rowID)]) {
 			continue

@@ -6,6 +6,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/test"
 	"kana/kanacore"
+	"kana/vocab"
 )
 
 func TestKanaTileMoveUpdatesAllObjects(t *testing.T) {
@@ -57,5 +58,52 @@ func TestTileTextCentredInsideFace(t *testing.T) {
 		if diff := left - right; diff > 1 || diff < -1 {
 			t.Fatalf("%s: text not centred (left %.1f, right %.1f)", char, left, right)
 		}
+	}
+}
+
+func TestWordTileLooksDifferent(t *testing.T) {
+	test.NewApp()
+	kana := newKanaTile(kanacore.Kana{Char: "か", Romaji: "ka"})
+	word := newWordTile(vocab.Entry{Kana: "か", Units: []string{"か"}}, 400)
+	if word.word == nil || word.word.Kana != "か" {
+		t.Fatalf("word = %+v", word.word)
+	}
+	if kana.word != nil {
+		t.Fatal("a kana tile carries no word")
+	}
+	if word.face.FillColor == kana.face.FillColor || word.face.StrokeWidth == 0 {
+		t.Fatal("a one-unit word must not look like a kana tile")
+	}
+	if len(word.Objects()) != 3 {
+		t.Fatalf("objects = %d, want 3", len(word.Objects()))
+	}
+}
+
+func TestWordTileWidthFollowsText(t *testing.T) {
+	test.NewApp()
+	short := newWordTile(vocab.Entry{Kana: "ねこ"}, 600)
+	long := newWordTile(vocab.Entry{Kana: "かんきょう"}, 600)
+	if long.Width() <= short.Width() {
+		t.Fatalf("long %.0f should be wider than short %.0f", long.Width(), short.Width())
+	}
+	if long.text.TextSize != wordTextSize {
+		t.Fatalf("a word that fits keeps the full size, got %v", long.text.TextSize)
+	}
+	long.Move(fyne.NewPos(40, 20))
+	left := long.text.Position().X - 40
+	right := 40 + long.Width() - (long.text.Position().X + long.text.Size().Width)
+	if diff := left - right; left < 0 || right < 0 || diff > 1 || diff < -1 {
+		t.Fatalf("text not centred (left %.1f, right %.1f)", left, right)
+	}
+}
+
+func TestWordTileShrinksToFitField(t *testing.T) {
+	test.NewApp()
+	tile := newWordTile(vocab.Entry{Kana: "コンピューター"}, 150)
+	if tile.Width() > 150 {
+		t.Fatalf("width %.1f exceeds the 150 px field", tile.Width())
+	}
+	if tile.text.TextSize >= wordTextSize {
+		t.Fatalf("font not shrunk: %v", tile.text.TextSize)
 	}
 }
