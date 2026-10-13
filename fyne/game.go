@@ -491,6 +491,8 @@ func (gs *GameState) tick() {
 	}
 }
 
+// spawnKana adds one falling tile: a word with probability wordShare when
+// words are playable, otherwise a kana.
 func (gs *GameState) spawnKana() {
 	gs.mu.Lock()
 	if gs.over || gs.paused {
@@ -498,22 +500,23 @@ func (gs *GameState) spawnKana() {
 		return
 	}
 
-	chars := gs.availableCharacters()
-	if len(chars) == 0 {
-		gs.mu.Unlock()
-		return
-	}
-	char := memory.Pick(gs.spawnCandidates(chars), gs.memory, gs.now(), gs.rnd)
-	romaji, _ := gs.charSet.GetRomaji(char)
-
-	kana := kanacore.Kana{
-		Char:   char,
-		Romaji: romaji,
-	}
-	tile := newKanaTile(kana)
-	correct := gs.overallStats[char].CorrectCount + gs.sessionStats[char].CorrectCount
+	var tile *KanaTile
 	base := gs.level.MinFall + rand.Float32()*(gs.level.MaxFall-gs.level.MinFall)
-	tile.fallSeconds = base * charFallFactor(correct) * tempoFactor(gs.tempoStep)
+	if entry, ok := gs.pickWord(); ok {
+		tile = newWordTile(entry, gs.canvasW)
+		tile.fallSeconds = base * wordFallFactor(len(entry.Units)) * tempoFactor(gs.tempoStep)
+	} else {
+		chars := gs.availableCharacters()
+		if len(chars) == 0 {
+			gs.mu.Unlock()
+			return
+		}
+		char := memory.Pick(gs.spawnCandidates(chars), gs.memory, gs.now(), gs.rnd)
+		romaji, _ := gs.charSet.GetRomaji(char)
+		tile = newKanaTile(kanacore.Kana{Char: char, Romaji: romaji})
+		correct := gs.overallStats[char].CorrectCount + gs.sessionStats[char].CorrectCount
+		tile.fallSeconds = base * charFallFactor(correct) * tempoFactor(gs.tempoStep)
+	}
 
 	maxX := gs.canvasW - tile.Width()
 	if maxX < 0 {

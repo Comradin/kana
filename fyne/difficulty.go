@@ -113,3 +113,22 @@ func formatStatus(score, limit int, level string, tempo float32) string {
 func missReason(missed int) string {
 	return fmt.Sprintf("%d tiles slipped through.", missed)
 }
+
+// wordShare is the chance that a spawn is a word: one percent per playable
+// word, at most 30 %.
+func wordShare(playable int) float64 {
+	return math.Min(0.3, float64(playable)/100)
+}
+
+// wordFallFactor gives longer words more time: 20 % per kana unit after the
+// first, at most double. It replaces the per-character factor for words.
+func wordFallFactor(units int) float32 {
+	f := 1 + 0.2*float32(units-1)
+	if f > 2 {
+		return 2
+	}
+	if f < 1 {
+		return 1
+	}
+	return f
+}

@@ -152,3 +152,40 @@ func (gs *GameState) playableWords() []vocab.Entry {
 func (gs *GameState) invalidatePlayable() {
 	gs.playableOK = false
 }
+
+// wordCandidates returns the playable readings without those already
+// falling as word tiles, unless that would leave none. Must be called under
+// lock.
+func (gs *GameState) wordCandidates(playable []vocab.Entry) []string {
+	falling := make(map[string]bool)
+	for _, t := range gs.tiles {
+		if t.word != nil {
+			falling[t.word.Kana] = true
+		}
+	}
+	all := make([]string, 0, len(playable))
+	free := make([]string, 0, len(playable))
+	for _, e := range playable {
+		all = append(all, e.Kana)
+		if !falling[e.Kana] {
+			free = append(free, e.Kana)
+		}
+	}
+	if len(free) == 0 {
+		return all
+	}
+	return free
+}
+
+// pickWord decides with gs.rnd whether this spawn is a word (wordShare) and,
+// if so, picks one with memory.Pick over the word memory. With no playable
+// word it returns false without drawing from gs.rnd. Must be called under
+// lock.
+func (gs *GameState) pickWord() (vocab.Entry, bool) {
+	playable := gs.playableWords()
+	if len(playable) == 0 || gs.rnd() >= wordShare(len(playable)) {
+		return vocab.Entry{}, false
+	}
+	kana := memory.Pick(gs.wordCandidates(playable), gs.wordMemory, gs.now(), gs.rnd)
+	return gs.words.Lookup(kana)
+}
