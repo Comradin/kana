@@ -18,6 +18,23 @@
 
 ---
 
+## Amendments after plan review (override the task code below)
+
+The plan's code was built and run against the real data (8,293 JLPT rows → 7,031 words, 2 dropped: あっ, レクリェーション; output 1.07 MB; non-strict `encoding/xml` handles the real DTD). Apply these changes while implementing:
+
+1. **Task 2 – BOM:** Go source must not contain a literal U+FEFF. Write it as the escape `\ufeff` (backslash-u) in both `csvlist_test.go` and `csvlist.go`.
+2. **Task 2 – read errors:** in the `readCSV` loop, only a `*csv.ParseError` (`errors.As`) is a skipped row; any other error records a problem and `break`s (otherwise the loop spins on a failing reader). An empty `kana` cell is reported as `line N: empty kana`.
+3. **Task 3 – no `mergeWithin`:** do not merge within a list in `LoadDir` (it would lose the second lesson of a repeated reading). `List.Words` keeps every row; `NewIndex` already merges meanings and collects lessons per list. In `TestLoadDir`, the `minna` list then has 2 words; add an index check that `NewIndex(nil, lists)` gives one せんせい entry with meanings `["Lehrer", "Lehrerin"]`. Delete `mergeWithin` and its call.
+4. **Task 3 – names:** compare base names case-insensitively (`strings.ToLower`) when counting collisions and when checking the reserved `jmdict` (so `Jmdict.csv` → `Jmdict (csv)`, and `a.CSV` + `a.csv` both get suffixes). If two names still collide after suffixing (`a.CSV`, `a.csv`), append ` 2`, ` 3` … in directory order. In `addJSONMeaning`, iterate object keys in sorted order.
+5. **Task 5 – test file:** delete the test's `outWord` type (it clashes with `build.go`'s; same package) and add `"sort"` to the test's import block. Ignore the paragraph after `build.go` that mentions "testWord".
+6. **Task 5 – empty sequence numbers:** the real `n1.csv` has 14 rows with an empty `jmdict_seq` (single-kanji readings like い 依, お 於). Skip rows with `Seq == ""` in `run`, count them in a new `Stats.NoSeq`, and print it in `Stats.String`. Add such a row to the fixture `n5.csv` (`,ぬ,,test`) and assert `stats.NoSeq == 1` and that ぬ is not written.
+7. **Task 5 – gloss cleanup:** some non-English glosses carry markup. In `readJMdict`, clean each gloss before use: strip a leading `^\d+\)\s*`; drop it if it then starts with `(`, `{` or `-`, contains any Hiragana, Katakana or CJK ideograph (U+3040–U+30FF, U+4E00–U+9FFF), or is shorter than 2 runes. Add fixture glosses `<gloss xml:lang="rus">1) учитель</gloss>` and `<gloss xml:lang="rus">{～をする} работать</gloss>` to せんせい and assert `ru == ["учитель"]`.
+8. **Task 5 – merge cap:** `maxGlossesMerged` is per language (as implemented). The spec is corrected to say so.
+9. **Task 6 – numbers:** expect about 7,000 words (not 8,000) and roughly 1 MB. Stop and report only if the file exceeds 5 MB or fewer than 5,000 words are written.
+10. **Reading fallback:** a JLPT row with an empty `kana` is dropped (the real data has none). Rows always carry their reading, so the spec's "first prioritised reading" fallback is not implemented; the spec is corrected.
+
+---
+
 ## File Structure
 
 - Create `vocab/vocab.go`: `Meanings`, `Word`, `List`, `SplitMeanings`, `Meanings.Add/For/Display`, `parseLevel`.
@@ -258,7 +275,7 @@ func TestReadCSVSeparators(t *testing.T) {
 		"comma":     "kana,meaning_de,meaning_en,lesson\nせんせい,Lehrer; Lehrerin,teacher,1\n",
 		"semicolon": "kana;meaning_de;meaning_en;lesson\nせんせい;\"Lehrer; Lehrerin\";teacher;1\n",
 		"tab":       "kana\tmeaning_de\tmeaning_en\tlesson\nせんせい\tLehrer; Lehrerin\tteacher\t1\n",
-		"bom":       "﻿kana,meaning_de,meaning_en,lesson\nせんせい,Lehrer; Lehrerin,teacher,1\n",
+		"bom":       "\ufeffkana,meaning_de,meaning_en,lesson\nせんせい,Lehrer; Lehrerin,teacher,1\n",
 		"case":      "Kana,Meaning_DE,MEANING_EN,Lesson\nせんせい,Lehrer; Lehrerin,teacher,1\n",
 	}
 	for name, in := range inputs {
@@ -345,7 +362,7 @@ func readCSV(name string, r io.Reader) List {
 		l.problem("file is empty")
 		return l
 	}
-	header = strings.TrimPrefix(header, "﻿")
+	header = strings.TrimPrefix(header, "\ufeff")
 	sep := ','
 	switch {
 	case strings.Contains(header, "\t"):

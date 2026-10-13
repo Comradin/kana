@@ -137,14 +137,16 @@ type Word struct {
     an existing published mapping (e.g. `stephenmk/yomitan-jlpt-vocab`); its licence is
     checked in stage 2 and recorded in `ATTRIBUTION.md`. If no usable mapping exists, match
     by kanji form + reading.
-  - **Reading:** the reading the JLPT list (or mapping) gives for the entry; if it gives none,
-    the first reading element with a priority tag, else the first.
+  - **Reading:** the reading the JLPT list (or mapping) gives for the row; rows without a
+    reading or without a JMdict sequence number are skipped and counted.
+  - **Gloss cleanup:** leading numbering (`1) `) is stripped; glosses starting with `(`, `{`
+    or `-`, containing kana or kanji, or shorter than two characters are dropped.
   - **Meanings:** per language, the glosses of the first sense that has glosses in that
     language (in JMdict, non-English glosses sit in their own senses), at most three.
   - Entries whose reading fails `KanaUnits` are dropped and counted in the tool's output.
   - Entries with the same reading are merged into one word: the easiest level (the highest
     number, e.g. N5 over N3) wins; meanings are merged per language (de-duplicated), at most five
-    glosses in total.
+    glosses per language.
 - `vocab/data/ATTRIBUTION.md`: JMdict © Electronic Dictionary Research and Development Group,
   CC BY-SA 4.0; JLPT levels © Jonathan Waller, CC BY, unofficial (no official JLPT lists
   exist since 2010); the mapping's source and licence. The data file is an adaptation under
