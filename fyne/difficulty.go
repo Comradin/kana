@@ -109,7 +109,7 @@ func formatStatus(score, limit int, level string, tempo float32) string {
 	return fmt.Sprintf("%s · %s · Tempo ×%.2f", s, level, tempo)
 }
 
-// missReason is the game-over reason after too many misses.
+// missReason is the game-over reason after too many misses (kana and words).
 func missReason(missed int) string {
-	return fmt.Sprintf("%d kana slipped through.", missed)
+	return fmt.Sprintf("%d tiles slipped through.", missed)
 }

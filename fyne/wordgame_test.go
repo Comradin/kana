@@ -415,3 +415,118 @@ func TestDropInactiveTilesRemovesUnplayableWords(t *testing.T) {
 		t.Fatalf("expected あい (word) and あ (kana) to remain, got %d tiles", len(gs.tiles))
 	}
 }
+
+func TestWordHitScoresPerUnit(t *testing.T) {
+	cases := []struct {
+		level        string
+		points, want int
+	}{
+		{"normal", pointsAuto, 30},
+		{"pro", pointsAuto, 90},
+		{"normal", 2, 60},
+	}
+	for _, c := range cases {
+		gs := newTestState()
+		gs.level = LevelByName(c.level)
+		gs.pointsSetting = c.points
+		withWords(gs, bw("あおい", 5, "blue"))
+		gs.tiles = []*KanaTile{wordTileAt(gs, "あおい", 0)}
+		gs.checkAnswer("aoi")
+		if len(gs.tiles) != 0 || gs.score != c.want {
+			t.Errorf("%s/%d: tiles %d, score %d, want %d", c.level, c.points, len(gs.tiles), gs.score, c.want)
+		}
+	}
+}
+
+func TestWordHitRecordsWordProgressOnly(t *testing.T) {
+	gs := newTestState()
+	withWords(gs, bw("しお", 5, "salt"))
+	gs.tiles = []*KanaTile{wordTileAt(gs, "しお", 0)}
+	gs.checkAnswer("sio") // any valid reading
+	if len(gs.tiles) != 0 {
+		t.Fatal("しお not answered by 'sio'")
+	}
+	if gs.wordSessionStats["しお"].CorrectCount != 1 || gs.answerStreak != 1 {
+		t.Fatalf("word stats %+v, streak %d", gs.wordSessionStats["しお"], gs.answerStreak)
+	}
+	if _, ok := gs.wordMemory["しお"]; !ok {
+		t.Fatal("a word hit must create word memory")
+	}
+	if len(gs.sessionStats) != 0 || len(gs.memory) != 0 {
+		t.Fatal("a word hit must not change any kana's stats")
+	}
+}
+
+func TestLowerTileWinsAcrossKinds(t *testing.T) {
+	for _, wordLower := range []bool{true, false} {
+		gs := newTestState()
+		withWords(gs, bw("え", 5, "picture"))
+		wy, ky := float32(100), float32(300)
+		if wordLower {
+			wy, ky = 300, 100
+		}
+		word := wordTileAt(gs, "え", wy)
+		kana := tileAt("え", "e", ky)
+		gs.tiles = []*KanaTile{word, kana}
+		gs.checkAnswer("e")
+		if len(gs.tiles) != 1 {
+			t.Fatalf("wordLower=%v: %d tiles left", wordLower, len(gs.tiles))
+		}
+		if wordLower && (gs.tiles[0] != kana || gs.wordSessionStats["え"].CorrectCount != 1 || len(gs.sessionStats) != 0) {
+			t.Fatal("the lower word tile should have been answered")
+		}
+		if !wordLower && (gs.tiles[0] != word || gs.sessionStats["え"].CorrectCount != 1 || len(gs.wordSessionStats) != 0) {
+			t.Fatal("the lower kana tile should have been answered")
+		}
+	}
+}
+
+func TestWordMiss(t *testing.T) {
+	gs := newTestState()
+	withWords(gs, bw("あい", 5, "love"))
+	gs.wordMemory["あい"] = memory.State{Stability: 1, LastSeen: time.Now()}
+	gs.tempoStep = 3
+	gs.canvasH = 600
+	gs.tiles = []*KanaTile{wordTileAt(gs, "あい", 599)}
+	gs.tick()
+	if len(gs.tiles) != 0 || gs.missed != 1 {
+		t.Fatalf("tiles %d, missed %d", len(gs.tiles), gs.missed)
+	}
+	if gs.wordSessionStats["あい"].MissCount != 1 {
+		t.Fatalf("word stats %+v", gs.wordSessionStats["あい"])
+	}
+	if s := gs.wordMemory["あい"].Stability; s < 0.29 || s > 0.31 {
+		t.Fatalf("word memory after miss = %v, want 0.3", s)
+	}
+	if gs.tempoStep != 1 {
+		t.Fatalf("tempoStep = %d, want 1", gs.tempoStep)
+	}
+	if !equalIDs(gs.missedWords, []string{"あい"}) || len(gs.missedKanas) != 0 || len(gs.sessionStats) != 0 {
+		t.Fatalf("missedWords %v, missedKanas %v", gs.missedWords, gs.missedKanas)
+	}
+}
+
+func TestWordMissesCountTowardsLimit(t *testing.T) {
+	gs := newTestState()
+	gs.level = LevelByName("pro")
+	gs.missed = 4
+	gs.canvasH = 600
+	withWords(gs, bw("あい", 5, "love"))
+	gs.tiles = []*KanaTile{wordTileAt(gs, "あい", 599)}
+	gs.tick()
+	if !gs.over || gs.overReason != "misses" {
+		t.Fatalf("over=%v reason=%q", gs.over, gs.overReason)
+	}
+}
+
+func TestSnapshotCarriesMissedWordsAndResetClears(t *testing.T) {
+	gs := newTestState()
+	gs.missedWords = []string{"あい"}
+	if snap := gs.snapshot(); !equalIDs(snap.MissedWords, []string{"あい"}) {
+		t.Fatalf("snapshot MissedWords = %v", snap.MissedWords)
+	}
+	gs.Reset()
+	if len(gs.missedWords) != 0 {
+		t.Fatal("Reset must clear missed words")
+	}
+}

@@ -58,7 +58,7 @@ func TestFormatStatusAndMissReason(t *testing.T) {
 	if got := formatStatus(240, 0, "Normal", 1); got != "Score: 240 · Normal · Tempo ×1.00" {
 		t.Errorf("formatStatus endless = %q", got)
 	}
-	if got := missReason(5); got != "5 kana slipped through." {
+	if got := missReason(5); got != "5 tiles slipped through." {
 		t.Errorf("missReason = %q", got)
 	}
 }
