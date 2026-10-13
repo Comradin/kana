@@ -3,3 +3,4 @@ kana.db
 kana-desktop
 dist/
 .DS_Store
+words/
