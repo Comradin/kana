@@ -2,3 +2,4 @@ kana.db
 .superpowers/
 kana-desktop
 dist/
+.DS_Store
