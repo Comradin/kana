@@ -1,6 +1,8 @@
 package vocab
 
 import (
+	"maps"
+	"slices"
 	"sort"
 
 	"kana/kanacore"
@@ -20,51 +22,105 @@ type Entry struct {
 type Index struct {
 	entries []Entry
 	byKana  map[string]int
+
+	// While WithLists merges: entries below shared are still those of the
+	// base index unless owned marks them as copied.
+	shared int
+	owned  map[int]bool
 }
 
 // NewIndex merges bundled words and private lists into one entry per
 // reading. Words whose reading cannot be split into units are dropped.
 func NewIndex(bundled []Word, lists []List) *Index {
 	ix := &Index{byKana: map[string]int{}}
-	add := func(w Word, list string) {
-		i, ok := ix.byKana[w.Kana]
-		if !ok {
-			units, valid := kanacore.KanaUnits(w.Kana)
-			if !valid {
-				return
-			}
-			ix.byKana[w.Kana] = len(ix.entries)
-			ix.entries = append(ix.entries, Entry{Kana: w.Kana, Units: units, Meanings: Meanings{}, Lists: map[string][]string{}})
-			i = len(ix.entries) - 1
-		}
-		e := &ix.entries[i]
-		e.Meanings.Merge(w.Meanings)
-		if list == "" {
-			if !e.Bundled || w.JLPT > e.JLPT {
-				e.JLPT = w.JLPT
-			}
-			e.Bundled = true
-			return
-		}
-		lessons := e.Lists[list]
-		if w.Lesson != "" && !contains(lessons, w.Lesson) {
-			lessons = append(lessons, w.Lesson)
-		}
-		e.Lists[list] = lessons
-	}
 	for _, w := range bundled {
-		add(w, "")
+		ix.add(w, "")
 	}
+	ix.addLists(lists)
+	ix.sort()
+	return ix
+}
+
+// WithLists returns a new index with the private lists merged into ix's
+// entries, the same as NewIndex(bundled, lists) for an ix built from
+// NewIndex(bundled, nil), without splitting the readings again. ix is not
+// changed: an entry a list touches is copied before the merge.
+func (ix *Index) WithLists(lists []List) *Index {
+	out := &Index{
+		entries: slices.Clone(ix.entries),
+		byKana:  maps.Clone(ix.byKana),
+		shared:  len(ix.entries),
+	}
+	out.addLists(lists)
+	out.shared = 0
+	out.sort()
+	return out
+}
+
+func (ix *Index) addLists(lists []List) {
 	for _, l := range lists {
 		for _, w := range l.Words {
-			add(w, l.Name)
+			ix.add(w, l.Name)
 		}
 	}
+}
+
+// add merges one word into its entry; list is "" for the bundled list.
+func (ix *Index) add(w Word, list string) {
+	i, ok := ix.byKana[w.Kana]
+	if !ok {
+		units, valid := kanacore.KanaUnits(w.Kana)
+		if !valid {
+			return
+		}
+		ix.byKana[w.Kana] = len(ix.entries)
+		ix.entries = append(ix.entries, Entry{Kana: w.Kana, Units: units, Meanings: Meanings{}, Lists: map[string][]string{}})
+		i = len(ix.entries) - 1
+	} else if i < ix.shared && !ix.owned[i] {
+		ix.entries[i] = ix.entries[i].clone()
+		if ix.owned == nil {
+			ix.owned = map[int]bool{}
+		}
+		ix.owned[i] = true
+	}
+	e := &ix.entries[i]
+	e.Meanings.Merge(w.Meanings)
+	if list == "" {
+		if !e.Bundled || w.JLPT > e.JLPT {
+			e.JLPT = w.JLPT
+		}
+		e.Bundled = true
+		return
+	}
+	lessons := e.Lists[list]
+	if w.Lesson != "" && !contains(lessons, w.Lesson) {
+		lessons = append(lessons, w.Lesson)
+	}
+	e.Lists[list] = lessons
+}
+
+// sort orders the entries by reading and rebuilds byKana.
+func (ix *Index) sort() {
 	sort.Slice(ix.entries, func(a, b int) bool { return ix.entries[a].Kana < ix.entries[b].Kana })
 	for i, e := range ix.entries {
 		ix.byKana[e.Kana] = i
 	}
-	return ix
+	ix.owned = nil
+}
+
+// clone copies the entry's Meanings and Lists, so merging into the copy
+// leaves the original untouched. Units is never modified and stays shared.
+func (e Entry) clone() Entry {
+	m := make(Meanings, len(e.Meanings))
+	for lang, items := range e.Meanings {
+		m[lang] = slices.Clone(items)
+	}
+	l := make(map[string][]string, len(e.Lists))
+	for name, lessons := range e.Lists {
+		l[name] = slices.Clone(lessons)
+	}
+	e.Meanings, e.Lists = m, l
+	return e
 }
 
 // Entries returns all entries sorted by reading. The slice and the entries'
