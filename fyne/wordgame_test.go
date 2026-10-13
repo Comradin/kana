@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -624,5 +625,116 @@ func TestWordSpawnAvoidsFallingWords(t *testing.T) {
 	gs.spawnKana()
 	if got := gs.tiles[2].word; got == nil || got.Kana != "あい" {
 		t.Fatal("with every word falling, the exclusion must be dropped")
+	}
+}
+
+func TestWordHitShowsFeedbackAtTile(t *testing.T) {
+	gs := newTestState()
+	withWords(gs, bw("あい", 5, "love"))
+	gs.tiles = []*KanaTile{wordTileAt(gs, "あい", 200), tileAt("か", "ka", 0)}
+	gs.checkAnswer("ka")
+	if len(gs.feedback) != 0 {
+		t.Fatal("a kana hit shows no feedback")
+	}
+	gs.checkAnswer("ai")
+	if len(gs.feedback) != 1 {
+		t.Fatalf("feedback = %d labels, want 1", len(gs.feedback))
+	}
+	f := gs.feedback[0]
+	if f.kind != feedbackHit || f.text.Text != "あい — love" || f.ticksLeft != feedbackTicks {
+		t.Fatalf("label = %v %q %d", f.kind, f.text.Text, f.ticksLeft)
+	}
+	if p := f.text.Position(); p.X != 10 || p.Y != 200 {
+		t.Fatalf("label at %v, want the tile's last position (10, 200)", p)
+	}
+}
+
+func TestWordMissShowsFeedbackAtBottom(t *testing.T) {
+	gs := newTestState()
+	gs.canvasH = 600
+	withWords(gs, bw("あい", 5, "love"))
+	gs.tiles = []*KanaTile{wordTileAt(gs, "あい", 599)}
+	gs.tick()
+	if len(gs.feedback) != 1 {
+		t.Fatalf("feedback = %d labels, want 1", len(gs.feedback))
+	}
+	f := gs.feedback[0]
+	if f.kind != feedbackMiss || f.text.Text != "あい · ai — love" || f.text.Color != cellMissedColor {
+		t.Fatalf("label = %v %q %v", f.kind, f.text.Text, f.text.Color)
+	}
+	if p := f.text.Position(); p.Y < 600-60 || p.Y+f.text.Size().Height > 600 {
+		t.Fatalf("miss label at y=%v, want at the bottom of the 600 px field", p.Y)
+	}
+}
+
+func TestLongFeedbackFitsTheField(t *testing.T) {
+	gs := newTestState()
+	gs.canvasW = 400
+	long := "あいうえお · aiueo — " + strings.Repeat("a very long meaning; ", 5)
+	gs.addFeedback(feedbackMiss, long, fyne.NewPos(300, 10))
+	f := gs.feedback[0]
+	if f.text.TextSize < feedbackMinTextSize {
+		t.Fatalf("text size %v below the %v pt minimum", f.text.TextSize, feedbackMinTextSize)
+	}
+	if w := f.text.MinSize().Width; w > 400 {
+		t.Fatalf("label is %v px wide, want at most the 400 px field", w)
+	}
+	if !strings.HasSuffix(f.text.Text, "…") || !strings.HasPrefix(f.text.Text, "あいうえお · aiueo") {
+		t.Fatalf("text = %q, want the start kept and an ellipsis", f.text.Text)
+	}
+	if p := f.text.Position(); p.X < 0 || p.X+f.text.Size().Width > 400 {
+		t.Fatalf("label at x=%v (width %v), want inside the field", p.X, f.text.Size().Width)
+	}
+
+	gs.addFeedback(feedbackHit, "あい — love", fyne.NewPos(10, 10))
+	if f := gs.feedback[1]; f.text.TextSize != feedbackTextSize || f.text.Text != "あい — love" {
+		t.Fatalf("short label = %q at %v pt, want unchanged at %v pt", f.text.Text, f.text.TextSize, feedbackTextSize)
+	}
+}
+
+func TestFeedbackExpiresAfter20Ticks(t *testing.T) {
+	gs := newTestState()
+	gs.addFeedback(feedbackHit, "あい — love", fyne.NewPos(10, 10))
+	for i := 0; i < feedbackTicks-1; i++ {
+		gs.tick()
+	}
+	if len(gs.feedback) != 1 {
+		t.Fatal("label gone before 20 ticks")
+	}
+	gs.tick()
+	if len(gs.feedback) != 0 {
+		t.Fatal("label still shown after 20 ticks")
+	}
+}
+
+func TestFeedbackFreezesAndHidesWhilePaused(t *testing.T) {
+	gs := newTestState()
+	gs.addFeedback(feedbackHit, "あい — love", fyne.NewPos(10, 10))
+	gs.buildSnapshot()
+	if n := len(tileObjects(gs)); n != 1 {
+		t.Fatalf("snapshot objects = %d, want the label", n)
+	}
+	gs.TogglePause()
+	if n := len(tileObjects(gs)); n != 0 {
+		t.Fatalf("label visible while paused: %d objects", n)
+	}
+	for i := 0; i < 30; i++ {
+		gs.tick()
+	}
+	if len(gs.feedback) != 1 || gs.feedback[0].ticksLeft != feedbackTicks {
+		t.Fatal("labels must not count down while paused")
+	}
+	gs.TogglePause()
+	if n := len(tileObjects(gs)); n != 1 {
+		t.Fatalf("label hidden after resuming: %d objects", n)
+	}
+}
+
+func TestResetClearsFeedback(t *testing.T) {
+	gs := newTestState()
+	gs.addFeedback(feedbackMiss, "あい · ai — love", fyne.NewPos(10, 10))
+	gs.Reset()
+	if len(gs.feedback) != 0 || len(tileObjects(gs)) != 0 {
+		t.Fatal("Reset must clear feedback labels")
 	}
 }

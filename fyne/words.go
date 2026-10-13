@@ -85,3 +85,46 @@ func missedWordsText(words []string) string {
 	}
 	return strings.Join(lines, "\n")
 }
+
+const (
+	maxMeaningItems = 3  // meanings shown after a hit or miss
+	maxMeaningRunes = 60 // longer meaning text ends in an ellipsis
+)
+
+// truncateRunes shortens s to at most n runes, ending in "…" when cut.
+func truncateRunes(s string, n int) string {
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	return strings.TrimRight(string(r[:n-1]), " ;,") + "…"
+}
+
+// meaningSnippet is the meaning text for feedback: the first three meanings
+// in lang (with vocab's fallback to English and any language), cut to about
+// 60 characters. "" when the word has no meanings.
+func meaningSnippet(m vocab.Meanings, lang string) string {
+	items := m.For(lang)
+	if len(items) > maxMeaningItems {
+		items = items[:maxMeaningItems]
+	}
+	return truncateRunes(strings.Join(items, "; "), maxMeaningRunes)
+}
+
+// hitFeedbackText is shown after a word hit: "はい — yes".
+func hitFeedbackText(e vocab.Entry, lang string) string {
+	if m := meaningSnippet(e.Meanings, lang); m != "" {
+		return e.Kana + " — " + m
+	}
+	return e.Kana
+}
+
+// missFeedbackText is shown after a missed word, with the solution:
+// "はい · hai — yes".
+func missFeedbackText(e vocab.Entry, lang string) string {
+	s := e.Kana + " · " + kanacore.Romaji(e.Kana)
+	if m := meaningSnippet(e.Meanings, lang); m != "" {
+		s += " — " + m
+	}
+	return s
+}
