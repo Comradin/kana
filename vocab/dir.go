@@ -10,8 +10,9 @@ import (
 	"strings"
 )
 
-// LoadDir reads every *.csv, *.tsv and *.json file in dir as a list. A
-// missing directory gives no lists and no error. Lists are sorted by name.
+// LoadDir reads every *.csv, *.tsv and *.json file in dir as a list, except
+// files whose name starts with ".". A missing directory gives no lists and
+// no error. Lists are sorted by name.
 //
 // A list is named after its file without the extension. When several files
 // share that name (ignoring case), or the name is the reserved jmdict, the
@@ -29,7 +30,9 @@ func LoadDir(dir string) ([]List, error) {
 	var files []file
 	count := map[string]int{}
 	for _, e := range entries {
-		if e.IsDir() {
+		// Dot files are hidden: ".csv" would be a list without a name and
+		// macOS writes "._x.csv" resource forks next to copied files.
+		if e.IsDir() || strings.HasPrefix(e.Name(), ".") {
 			continue
 		}
 		ext := strings.ToLower(filepath.Ext(e.Name()))

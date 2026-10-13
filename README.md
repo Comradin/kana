@@ -341,7 +341,15 @@ vocabulary trainer on.
   taken from it. Columns: `kana` (required), `meaning` (any language), `meaning_de`,
   `meaning_en` … per language, `lesson`, `jlpt` (`5` or `N5`). Several meanings are
   separated by `;`. A field containing the file's separator is quoted, as spreadsheet
-  programs do: `せんせい;"Lehrer; Lehrerin";1`.
+  programs do:
+
+  ```csv
+  kana;meaning;lesson
+  せんせい;"Lehrer; Lehrerin";1
+  ```
+
+  Of two columns with the same name the first is used. Files whose name starts with `.`
+  are ignored.
 - **JSON** (`*.json`): an array of `{"kana": "せんせい", "meaning": "teacher", "lesson": "1"}`;
   `meaning` may also be a list or an object per language (`{"de": "Lehrer", "en": "teacher"}`).
 
@@ -410,6 +418,14 @@ by hand via "Run workflow"): it downloads the latest `JMdict.gz` and JLPT mappin
 changed, opens or updates a `fix(vocab): update word data from JMdict` pull request on the
 `update-words` branch. Merging it makes release-please cut a patch release, so the new data
 reaches users.
+
+Two repository settings matter:
+
+- GitHub disables scheduled workflows in public repositories after 60 days without
+  repository activity. If that happens, re-enable `update-words` under Actions or run it by
+  hand.
+- The workflow opens the pull request with the default token, which needs
+  Settings → Actions → General → "Allow GitHub Actions to create and approve pull requests".
 
 ## License
 

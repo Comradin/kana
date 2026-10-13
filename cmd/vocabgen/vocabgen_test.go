@@ -7,6 +7,7 @@ import (
 	"os"
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 )
 
@@ -37,7 +38,7 @@ func TestGenerate(t *testing.T) {
 		byK[w.K] = w
 		order = append(order, w.K)
 	}
-	if want := []string{"アイディア", "アイデア", "せんせい", "ねこ", "はし"}; !reflect.DeepEqual(order, sortedCopy(want)) {
+	if want := []string{"アイディア", "アイデア", "せんせい", "ねこ", "はし", "ふく"}; !reflect.DeepEqual(order, sortedCopy(want)) {
 		t.Fatalf("words = %v", order)
 	}
 	s := byK["せんせい"]
@@ -62,6 +63,22 @@ func TestGenerate(t *testing.T) {
 	}
 	if !reflect.DeepEqual(byK["ねこ"].M["en"], []string{"cat"}) {
 		t.Fatalf("waller fallback: %+v", byK["ねこ"])
+	}
+	f := byK["ふく"]
+	if !reflect.DeepEqual(f.M["ru"], []string{"вытирать, стирать", "чистить", "протирать"}) {
+		t.Fatalf("ru = %q (glosses split on \";\", per-sense cap counts items)", f.M["ru"])
+	}
+	if !reflect.DeepEqual(f.M["en"], []string{"to wipe", "to dry"}) {
+		t.Fatalf("en = %q (English glosses are split too)", f.M["en"])
+	}
+	for _, w := range words {
+		for lang, items := range w.M {
+			for _, it := range items {
+				if strings.Contains(it, ";") {
+					t.Fatalf("%s %s: item %q contains \";\"", w.K, lang, it)
+				}
+			}
+		}
 	}
 	if _, ok := byK["ぬ"]; ok {
 		t.Fatal("row without sequence number must not be written")
@@ -88,7 +105,19 @@ func TestCleanGloss(t *testing.T) {
 		{"(почтительное обращение (к врачу)", "", false},
 		{"(…に, …と)", "", false},
 		{"{～をする} работать", "", false},
-		{"{biol.} subfamilie", "", false},
+		{"{biol.} subfamilie", "subfamilie", true},
+		{"calmado (tranquilo", "", false},
+		{"bla) bla", "", false},
+		{"1. завтрашний день", "завтрашний день", true},
+		{"а) конопля", "конопля", true},
+		{"een pil van een ~", "", false},
+		{"ein ～ machen", "", false},
+		{"escena (eng: scene)", "escena", true},
+		{"Tanz (eng)", "Tanz", true},
+		{"Schule (ger: Schule) Haus", "Schule (ger: Schule) Haus", true},
+		{"moški {formalno}", "moški (formalno)", true},
+		{"{～と言う} sagen", "", false},
+		{"Haus {いえ}", "", false},
 		{"Lat.} pons", "", false},
 		{"-kant", "", false},
 		{"(ср.) あいする", "", false},
@@ -104,6 +133,46 @@ func TestCleanGloss(t *testing.T) {
 				t.Fatalf("cleanGloss(%q) = %q, %v; want %q, %v", tt.in, got, ok, tt.want, tt.ok)
 			}
 		})
+	}
+}
+
+func TestSplitGloss(t *testing.T) {
+	tests := []struct {
+		in   string
+		want []string
+	}{
+		{"вытирать, стирать; чистить", []string{"вытирать, стирать", "чистить"}},
+		{"y (junto con; al igual que)", []string{"y (junto con, al igual que)"}},
+		{"a (b; c); d", []string{"a (b, c)", "d"}},
+		{"a; a;; b", []string{"a", "b"}},
+		{"a) b; c", []string{"a) b", "c"}},
+		{"teacher", []string{"teacher"}},
+	}
+	for _, tt := range tests {
+		if got := splitGloss(tt.in); !reflect.DeepEqual(got, tt.want) {
+			t.Errorf("splitGloss(%q) = %q, want %q", tt.in, got, tt.want)
+		}
+	}
+}
+
+func TestGlossItems(t *testing.T) {
+	tests := []struct {
+		lang, in string
+		want     []string
+	}{
+		{"ru", "сколько?; (с отриц.) немного", []string{"сколько?", "немного"}},
+		{"ru", "сходить с рельсов; (обр.) а) отклоняться от темы; б) не идти", []string{"сходить с рельсов", "отклоняться от темы", "не идти"}},
+		{"ru", "{～をする} делать; работать", nil},
+		{"ru", "{～する} делать; работать", []string{"делать", "работать"}},
+		{"ru", "{～な} ясный; {～の} светлый", []string{"ясный", "светлый"}},
+		{"de", "Haus; いえ", []string{"Haus"}},
+		{"es", "y (junto con; al igual que)", []string{"y (junto con, al igual que)"}},
+		{"en", "to wipe; (of) x", []string{"to wipe", "(of) x"}},
+	}
+	for _, tt := range tests {
+		if got := glossItems(tt.lang, tt.in); !reflect.DeepEqual(got, tt.want) {
+			t.Errorf("glossItems(%q, %q) = %q, want %q", tt.lang, tt.in, got, tt.want)
+		}
 	}
 }
 

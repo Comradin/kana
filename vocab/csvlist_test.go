@@ -98,3 +98,32 @@ func TestReadCSVReadError(t *testing.T) {
 		t.Fatalf("a read error is not a skipped row: skipped=%d", l.Skipped)
 	}
 }
+
+func TestReadCSVColumnOrder(t *testing.T) {
+	// The language-less meaning and meaning_de land in header order; with a
+	// map iteration they would not be deterministic.
+	in := "meaning_de,kana,meaning,meaning_\nKatze,ねこ,cat,ignored\n"
+	for i := 0; i < 20; i++ {
+		l := readCSV("x", strings.NewReader(in))
+		if len(l.Words) != 1 {
+			t.Fatalf("words = %d, problems %v", len(l.Words), l.Problems)
+		}
+		m := l.Words[0].Meanings
+		want := Meanings{"de": {"Katze"}, "": {"cat"}}
+		if !reflect.DeepEqual(m, want) {
+			t.Fatalf("meanings = %v, want %v (meaning_ ignored)", m, want)
+		}
+	}
+}
+
+func TestReadCSVDuplicateHeader(t *testing.T) {
+	in := "kana,meaning,lesson,Kana,meaning,lesson\nねこ,Katze,1,いぬ,Hund,2\n"
+	l := readCSV("x", strings.NewReader(in))
+	if len(l.Words) != 1 {
+		t.Fatalf("words = %d, problems %v", len(l.Words), l.Problems)
+	}
+	w := l.Words[0]
+	if w.Kana != "ねこ" || w.Lesson != "1" || !reflect.DeepEqual(w.Meanings[""], []string{"Katze"}) {
+		t.Fatalf("first column of a duplicate name wins: %+v", w)
+	}
+}

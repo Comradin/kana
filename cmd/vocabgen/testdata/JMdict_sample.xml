@@ -36,6 +36,12 @@
 <sense><gloss>ah</gloss></sense>
 </entry>
 <entry>
+<ent_seq>6</ent_seq>
+<r_ele><reb>ふく</reb></r_ele>
+<sense><gloss>to wipe; to dry</gloss></sense>
+<sense><gloss xml:lang="rus">вытирать, стирать; чистить</gloss><gloss xml:lang="rus">протирать</gloss><gloss xml:lang="rus">мыть</gloss></sense>
+</entry>
+<entry>
 <ent_seq>99</ent_seq>
 <r_ele><reb>いらない</reb></r_ele>
 <sense><gloss>not in any list</gloss></sense>

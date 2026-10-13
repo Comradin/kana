@@ -67,10 +67,12 @@ func NewIndex(bundled []Word, lists []List) *Index {
 	return ix
 }
 
-// Entries returns all entries sorted by reading.
+// Entries returns all entries sorted by reading. The slice and the entries'
+// Units, Meanings and Lists are shared with the index; do not modify them.
 func (ix *Index) Entries() []Entry { return ix.entries }
 
-// Lookup returns the entry for a reading.
+// Lookup returns the entry for a reading. Its Units, Meanings and Lists are
+// shared with the index; do not modify them.
 func (ix *Index) Lookup(kana string) (Entry, bool) {
 	i, ok := ix.byKana[kana]
 	if !ok {
