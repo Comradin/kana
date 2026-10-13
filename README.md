@@ -401,6 +401,16 @@ Repository settings this relies on (set once by hand):
 - `main` must have no required status checks: release PRs opened with the default token do
   not trigger CI, so a required check would block them forever.
 
+### Word data updates
+
+The EDRDG licence for JMdict asks for a procedure that regularly updates the data from the
+most recent version. `.github/workflows/update-words.yml` runs on the 3rd of every month (and
+by hand via "Run workflow"): it downloads the latest `JMdict.gz` and JLPT mapping, regenerates
+`vocab/data/words.json.gz` and `vocab/data/SOURCES`, runs the `vocab` tests and, if the words
+changed, opens or updates a `fix(vocab): update word data from JMdict` pull request on the
+`update-words` branch. Merging it makes release-please cut a patch release, so the new data
+reaches users.
+
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

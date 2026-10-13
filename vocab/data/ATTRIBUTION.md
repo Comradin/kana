@@ -11,14 +11,16 @@ JMdict it is licensed under the
   Swedish and Slovenian): © Electronic Dictionary Research and Development Group (EDRDG),
   used in conformance with the group's
   [licence](https://www.edrdg.org/edrdg/licence.html), CC BY-SA 4.0.
-  <https://www.edrdg.org/jmdict/j_jmdict.html>. Version used: `JMdict.gz` of
-  Tue, 13 Oct 2026 03:30:22 GMT (`Last-Modified`).
+  <https://www.edrdg.org/jmdict/j_jmdict.html>.
 - **JLPT levels**: Jonathan Waller, JLPT resources, <http://www.tanos.co.uk/jlpt/>, CC BY.
   These lists are unofficial: no official JLPT vocabulary lists have been published since
   2010.
 - **JMdict sequence mapping** of Waller's lists:
   [stephenmk/yomitan-jlpt-vocab](https://github.com/stephenmk/yomitan-jlpt-vocab),
-  CC BY-SA 4.0, commit `b062d4e38c4bdd0950ae1d4ec55f04b176182e03`.
+  CC BY-SA 4.0.
+
+The versions used for the committed file are recorded in [`SOURCES`](SOURCES): the
+`Last-Modified` date of `JMdict.gz` and the commit of the sequence mapping.
 
 ## What the file contains
 
@@ -27,7 +29,13 @@ JLPT level and up to five meanings per language. For each JMdict entry, a langua
 come from the first sense that has meanings in that language (at most three), and homophones
 are merged. Numbering, labels and grammar patterns are removed from non-English meanings.
 
-## Regenerating
+## Updates
+
+The data is regenerated monthly from the latest JMdict and mapping by
+`.github/workflows/update-words.yml`, which opens a pull request when the words changed, as
+the EDRDG licence asks for regular updates.
+
+## Regenerating by hand
 
 ```bash
 d=$(mktemp -d)
@@ -38,4 +46,4 @@ git -C "$d/jlpt" rev-parse HEAD
 go run ./cmd/vocabgen -jmdict "$d/JMdict.gz" -jlpt "$d/jlpt/original_data" -out vocab/data/words.json.gz
 ```
 
-The output is reproducible: the same inputs give a byte-identical file.
+Then update `SOURCES` with the two values printed above. The output is reproducible: the same inputs give a byte-identical file.
