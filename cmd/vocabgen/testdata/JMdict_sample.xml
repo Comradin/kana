@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE JMdict [
+<!ENTITY n "noun (common) (futsuumeishi)">
+]>
+<JMdict>
+<entry>
+<ent_seq>1</ent_seq>
+<k_ele><keb>先生</keb></k_ele>
+<r_ele><reb>せんせい</reb></r_ele>
+<sense><pos>&n;</pos><gloss>teacher</gloss><gloss>instructor</gloss><gloss>master</gloss><gloss>doctor</gloss></sense>
+<sense><gloss>second sense</gloss></sense>
+<sense><gloss xml:lang="ger">Lehrer</gloss><gloss xml:lang="ger">Meister</gloss></sense>
+<sense><gloss xml:lang="fre">professeur</gloss></sense>
+<sense><gloss xml:lang="rus">1) учитель</gloss><gloss xml:lang="rus">{～をする} работать</gloss></sense>
+</entry>
+<entry>
+<ent_seq>2</ent_seq>
+<r_ele><reb>はし</reb></r_ele>
+<sense><gloss>bridge</gloss></sense>
+<sense><gloss xml:lang="ger">Brücke</gloss></sense>
+</entry>
+<entry>
+<ent_seq>3</ent_seq>
+<r_ele><reb>はし</reb></r_ele>
+<sense><gloss>chopsticks</gloss></sense>
+</entry>
+<entry>
+<ent_seq>4</ent_seq>
+<r_ele><reb>アイデア</reb></r_ele>
+<r_ele><reb>アイディア</reb></r_ele>
+<sense><gloss>idea</gloss><gloss>(new) concept</gloss></sense>
+</entry>
+<entry>
+<ent_seq>5</ent_seq>
+<r_ele><reb>あっ</reb></r_ele>
+<sense><gloss>ah</gloss></sense>
+</entry>
+<entry>
+<ent_seq>99</ent_seq>
+<r_ele><reb>いらない</reb></r_ele>
+<sense><gloss>not in any list</gloss></sense>
+</entry>
+</JMdict>
