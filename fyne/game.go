@@ -37,7 +37,8 @@ type GameState struct {
 	over        bool
 	overReason  string
 	missedKanas []kanacore.Kana
-	missedWords []string // readings of missed words, in order
+	missedWords []string         // readings of missed words, in order
+	feedback    []*feedbackLabel // word hit/miss labels, oldest first
 
 	sessionStats  map[string]store.KanaStats
 	overallStats  map[string]store.KanaStats
@@ -341,6 +342,7 @@ func (gs *GameState) Reset() {
 	gs.overReason = ""
 	gs.missedKanas = nil
 	gs.missedWords = nil
+	gs.feedback = nil
 	gs.sessionStats = make(map[string]store.KanaStats)
 	gs.currentStreak = make(map[string]int)
 	gs.sessionDirty = false
@@ -454,6 +456,7 @@ func (gs *GameState) tick() {
 		gs.mu.Unlock()
 		return
 	}
+	gs.ageFeedback()
 
 	missedNow := false
 	for i := len(gs.tiles) - 1; i >= 0; i-- {
@@ -465,6 +468,7 @@ func (gs *GameState) tick() {
 			if tile.word != nil {
 				gs.recordWordMiss(tile.word.Kana)
 				gs.missedWords = append(gs.missedWords, tile.word.Kana)
+				gs.addFeedback(feedbackMiss, missFeedbackText(*tile.word, gs.meaningLang), tile.pos)
 			} else {
 				gs.recordMiss(tile.kana.Char)
 				gs.missedKanas = append(gs.missedKanas, tile.kana)
@@ -562,6 +566,7 @@ func (gs *GameState) checkAnswer(input string) {
 		if tile.word != nil {
 			gs.score += 10 * len(tile.word.Units) * gs.pointsFactor()
 			gs.recordWordCorrect(tile.word.Kana)
+			gs.addFeedback(feedbackHit, hitFeedbackText(*tile.word, gs.meaningLang), tile.pos)
 		} else {
 			gs.score += 10 * gs.pointsFactor()
 			announced = gs.recordCorrect(tile.kana.Char)
@@ -1205,10 +1210,11 @@ func (gs *GameState) FinishIntro() {
 	gs.mu.Unlock()
 }
 
-// buildSnapshot rebuilds the atomic snapshot of canvas objects. While the
-// learner has paused or the settings dialog is open, no tiles are published,
-// so the pause cannot be used to study them; the canvas shows the hint for a
-// user pause only. Must be called under lock.
+// buildSnapshot rebuilds the atomic snapshot of canvas objects: tiles, then
+// feedback labels on top. While the learner has paused or the settings
+// dialog is open, nothing is published, so the pause cannot be used to
+// study the tiles; the canvas shows the hint for a user pause only. Must be
+// called under lock.
 func (gs *GameState) buildSnapshot() {
 	hide := gs.userPaused || gs.settingsOpen
 	gs.showPauseHint.Store(gs.userPaused)
@@ -1216,9 +1222,12 @@ func (gs *GameState) buildSnapshot() {
 		gs.objectSnapshot.Store([]fyne.CanvasObject{})
 		return
 	}
-	objs := make([]fyne.CanvasObject, 0, len(gs.tiles)*3)
+	objs := make([]fyne.CanvasObject, 0, len(gs.tiles)*3+len(gs.feedback))
 	for _, tile := range gs.tiles {
 		objs = append(objs, tile.Objects()...)
+	}
+	for _, f := range gs.feedback {
+		objs = append(objs, f.text)
 	}
 	gs.objectSnapshot.Store(objs)
 }
