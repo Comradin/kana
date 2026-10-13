@@ -37,6 +37,7 @@ type GameState struct {
 	over        bool
 	overReason  string
 	missedKanas []kanacore.Kana
+	missedWords []string // readings of missed words, in order
 
 	sessionStats  map[string]store.KanaStats
 	overallStats  map[string]store.KanaStats
@@ -339,6 +340,7 @@ func (gs *GameState) Reset() {
 	gs.over = false
 	gs.overReason = ""
 	gs.missedKanas = nil
+	gs.missedWords = nil
 	gs.sessionStats = make(map[string]store.KanaStats)
 	gs.currentStreak = make(map[string]int)
 	gs.sessionDirty = false
@@ -460,8 +462,13 @@ func (gs *GameState) tick() {
 
 		if tile.pos.Y > gs.canvasH {
 			missedNow = true
-			gs.recordMiss(tile.kana.Char)
-			gs.missedKanas = append(gs.missedKanas, tile.kana)
+			if tile.word != nil {
+				gs.recordWordMiss(tile.word.Kana)
+				gs.missedWords = append(gs.missedWords, tile.word.Kana)
+			} else {
+				gs.recordMiss(tile.kana.Char)
+				gs.missedKanas = append(gs.missedKanas, tile.kana)
+			}
 			gs.tiles = append(gs.tiles[:i], gs.tiles[i+1:]...)
 			gs.missed++
 			gs.checkMissedLimit()
@@ -525,8 +532,9 @@ func (gs *GameState) spawnKana() {
 	}
 }
 
-// checkAnswer removes the lowest tile whose kana matches input (canonical or
-// alternative romaji). Acquires the lock itself; releases before triggering
+// checkAnswer removes the lowest tile that input answers: a kana tile by its
+// canonical or alternative romaji, a word tile by any valid reading of the
+// whole word. Acquires the lock itself; releases before triggering
 // canvas.Refresh() so the UI updates immediately on correct answers.
 func (gs *GameState) checkAnswer(input string) {
 	gs.mu.Lock()
@@ -536,7 +544,7 @@ func (gs *GameState) checkAnswer(input string) {
 	}
 	best := -1
 	for i, tile := range gs.tiles {
-		if !gs.charSet.Matches(tile.kana.Char, input) {
+		if !gs.answers(tile, input) {
 			continue
 		}
 		if best < 0 || tile.pos.Y > gs.tiles[best].pos.Y {
@@ -547,8 +555,14 @@ func (gs *GameState) checkAnswer(input string) {
 	if matched {
 		tile := gs.tiles[best]
 		gs.tiles = append(gs.tiles[:best], gs.tiles[best+1:]...)
-		gs.score += 10 * gs.pointsFactor()
-		announced := gs.recordCorrect(tile.kana.Char)
+		announced := false
+		if tile.word != nil {
+			gs.score += 10 * len(tile.word.Units) * gs.pointsFactor()
+			gs.recordWordCorrect(tile.word.Kana)
+		} else {
+			gs.score += 10 * gs.pointsFactor()
+			announced = gs.recordCorrect(tile.kana.Char)
+		}
 		if gs.scoreLimit > 0 && gs.score >= gs.scoreLimit {
 			gs.endGame("score")
 		}
@@ -563,6 +577,14 @@ func (gs *GameState) checkAnswer(input string) {
 	if matched && canvas != nil {
 		canvas.Refresh()
 	}
+}
+
+// answers reports whether input answers the tile. Must be called under lock.
+func (gs *GameState) answers(tile *KanaTile, input string) bool {
+	if tile.word != nil {
+		return kanacore.ReadingMatches(tile.word.Kana, input)
+	}
+	return gs.charSet.Matches(tile.kana.Char, input)
 }
 
 // pointsFactor is the points multiplier in effect. Must be called under lock.
@@ -1222,6 +1244,7 @@ func (gs *GameState) snapshot() StatsSnapshot {
 		SessionStats:  sessionCopy,
 		SelectedRows:  rowsCopy,
 		MissedKanas:   append([]kanacore.Kana{}, gs.missedKanas...),
+		MissedWords:   append([]string{}, gs.missedWords...),
 		Score:         gs.score,
 		ScoreLimit:    gs.scoreLimit,
 		Missed:        gs.missed,

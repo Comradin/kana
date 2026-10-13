@@ -1,11 +1,14 @@
 package main
 
 import (
+	"fmt"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 
 	"fyne.io/fyne/v2/lang"
+	"kana/kanacore"
 	"kana/store"
 	"kana/vocab"
 )
@@ -56,4 +59,29 @@ func resolveMeaningLang(stored, system string) string {
 		}
 	}
 	return "en"
+}
+
+// missedWordsText lists each missed word once, sorted, as
+// "せんせい (sensei)", three per line so the game-over dialog stays narrow.
+// "" when no word was missed.
+func missedWordsText(words []string) string {
+	seen := map[string]bool{}
+	var uniq []string
+	for _, w := range words {
+		if !seen[w] {
+			seen[w] = true
+			uniq = append(uniq, w)
+		}
+	}
+	sort.Strings(uniq)
+	var lines []string
+	for i := 0; i < len(uniq); i += 3 {
+		end := min(i+3, len(uniq))
+		parts := make([]string, 0, 3)
+		for _, w := range uniq[i:end] {
+			parts = append(parts, fmt.Sprintf("%s (%s)", w, kanacore.Romaji(w)))
+		}
+		lines = append(lines, strings.Join(parts, ", "))
+	}
+	return strings.Join(lines, "\n")
 }

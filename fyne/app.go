@@ -155,38 +155,16 @@ func showGameOverDialog(gs *GameState, snap StatsSnapshot, reason string, statsP
 		reasonText = "Session ended."
 	}
 
-	// Unique missed characters
-	unique := make(map[string]kanacore.Kana)
-	for _, k := range snap.MissedKanas {
-		if _, exists := unique[k.Char]; !exists {
-			unique[k.Char] = k
-		}
-	}
-	keys := make([]string, 0, len(unique))
-	for k := range unique {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	missedParts := make([]string, 0, len(keys))
-	for _, char := range keys {
-		k := unique[char]
-		missedParts = append(missedParts, fmt.Sprintf("%s (%s)", k.Char, k.Romaji))
-	}
-
-	missedText := "None!"
-	if len(missedParts) > 0 {
-		missedText = strings.Join(missedParts, ", ")
-	}
-
 	content := container.NewVBox(
 		widget.NewLabelWithStyle(title, fyne.TextAlignCenter, fyne.TextStyle{Bold: true}),
 		widget.NewLabel(scoreText),
 		widget.NewLabel(fmt.Sprintf("Missed: %d/%d", snap.Missed, snap.MissLimit)),
 		widget.NewLabel(reasonText),
 		widget.NewSeparator(),
-		widget.NewLabel("Characters missed:"),
-		widget.NewLabel(missedText),
 	)
+	for _, line := range missedLines(snap.MissedKanas, snap.MissedWords) {
+		content.Add(widget.NewLabel(line))
+	}
 
 	dialog.ShowCustomConfirm("", "Play Again", "Quit", content, func(playAgain bool) {
 		if !playAgain {
@@ -212,4 +190,44 @@ func showGameOverDialog(gs *GameState, snap StatsSnapshot, reason string, statsP
 		gameCanvas.Refresh()
 		showPendingDialogs(gs, statsPanel, inputBar, w)
 	}, w)
+}
+
+// missedLines are the game-over dialog's lines about missed tiles: the
+// missed characters and the missed words, each under its heading. Only when
+// nothing was missed does it say "None!"; when only words were missed the
+// characters heading is left out.
+func missedLines(kanas []kanacore.Kana, words []string) []string {
+	wordsText := missedWordsText(words)
+	if len(kanas) == 0 && wordsText == "" {
+		return []string{"Characters missed:", "None!"}
+	}
+	var lines []string
+	if len(kanas) > 0 {
+		lines = append(lines, "Characters missed:", missedKanaText(kanas))
+	}
+	if wordsText != "" {
+		lines = append(lines, "Words missed:", wordsText)
+	}
+	return lines
+}
+
+// missedKanaText lists each missed kana once, sorted, as "か (ka)".
+func missedKanaText(kanas []kanacore.Kana) string {
+	unique := make(map[string]kanacore.Kana)
+	for _, k := range kanas {
+		if _, exists := unique[k.Char]; !exists {
+			unique[k.Char] = k
+		}
+	}
+	keys := make([]string, 0, len(unique))
+	for k := range unique {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	parts := make([]string, 0, len(keys))
+	for _, char := range keys {
+		k := unique[char]
+		parts = append(parts, fmt.Sprintf("%s (%s)", k.Char, k.Romaji))
+	}
+	return strings.Join(parts, ", ")
 }

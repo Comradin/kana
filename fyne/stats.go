@@ -36,6 +36,7 @@ type StatsSnapshot struct {
 	SessionStats  map[string]store.KanaStats
 	SelectedRows  map[string]bool
 	MissedKanas   []kanacore.Kana
+	MissedWords   []string // readings of missed words, in order
 	Score         int
 	ScoreLimit    int
 	Missed        int
