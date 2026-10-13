@@ -17,8 +17,8 @@ This document outlines planned improvements and features for the Kana learning g
 
 ### Priority: Medium
 - [ ] Show words made only of kana the learner already knows (e.g. は + い → はい), in hiragana and katakana
-- [ ] Bundled word list derived from JMdict (EDRDG, CC BY-SA 4.0, attribution required), filtered by frequency tags
-- [ ] Import private word lists (CSV/JSON: kana, kanji, meaning, tags) from a user directory, never from the repository
+- [x] Bundled word list derived from JMdict (EDRDG, CC BY-SA 4.0, attribution required), JLPT words with Waller's levels (`vocab/data/`); the game uses it from stage 3
+- [x] Import private word lists (CSV/TSV/JSON: kana, meaning, lesson, jlpt) from a user directory, never from the repository (`vocab.LoadDir`); the game uses them from stage 3
 
 ## Learning Progress System
 

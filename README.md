@@ -240,6 +240,21 @@ Character data and row definitions live in `kanacore/`:
 - `kana_rows.go`: groups (`Groups`, `GroupsFor`), rows with entries and alternative romaji, `ProgressionStepsFor`; scripts (`Script`, `Scripts`), katakana rows generated from the hiragana rows by a Unicode shift plus the katakana-only extended rows, `kata:`-prefixed row IDs
 - `words.go`: splits and matches kana words for the upcoming vocabulary trainer — `KanaUnits` (split a word into kana units), `ReadingMatches` (accept every allowed romaji spelling, including っ, ー and ん variants) and `Romaji` (the canonical spelling)
 
+### Word Lists (`vocab/`)
+
+Word data for the upcoming vocabulary trainer, independent of the game and the store:
+
+- `vocab.go`: `Word`, `Meanings` (per language, with fallback for display), `List`
+- `csvlist.go`, `jsonlist.go`, `dir.go`: private word lists (CSV/TSV/JSON) and `LoadDir`
+- `index.go`: `NewIndex` (one entry per reading across all sources) and `Playable` (words made
+  only of known kana, filtered by JLPT level, list and lesson)
+- `bundled.go`: `Bundled`, the embedded JLPT word list (`data/words.json.gz`)
+
+### Word Data Generator (`cmd/vocabgen/`)
+
+A maintainer tool that builds `vocab/data/words.json.gz` from JMdict and the JLPT lists
+(see [Word data](#word-data)).
+
 ### Spaced Repetition (`memory/`)
 
 A pure package modelling the forgetting curve, independent of the game and the store:
@@ -299,6 +314,38 @@ It holds:
 
 The database is created automatically on first run. If a `kana.db` from an older version is
 found in the working directory, it is moved to the new location once on startup.
+
+## Word data
+
+The vocabulary trainer ships with a list of about 7,000 JLPT words
+(`vocab/data/words.json.gz`). It is built from:
+
+- **JMdict** by the [Electronic Dictionary Research and Development Group](https://www.edrdg.org/)
+  (meanings in nine languages), CC BY-SA 4.0
+- **JLPT levels** from [Jonathan Waller's lists](http://www.tanos.co.uk/jlpt/), CC BY
+  (unofficial; there are no official JLPT vocabulary lists since 2010)
+- the **JMdict sequence mapping** of
+  [stephenmk/yomitan-jlpt-vocab](https://github.com/stephenmk/yomitan-jlpt-vocab), CC BY-SA 4.0
+
+The data file is licensed under CC BY-SA 4.0; the code stays MIT. Details, versions and how to
+regenerate it: [`vocab/data/ATTRIBUTION.md`](vocab/data/ATTRIBUTION.md).
+
+### Private word lists
+
+Your own lists (for example from a textbook) go in the `words` folder next to `kana.db`:
+`$XDG_DATA_HOME/kana/words/`, or `~/.local/share/kana/words/`. They are read from there only
+and never belong in the repository. The game uses them from the next stage of the
+vocabulary trainer on.
+
+- **CSV/TSV** (`*.csv`, `*.tsv`): a header row; the separator (tab, semicolon or comma) is
+  taken from it. Columns: `kana` (required), `meaning` (any language), `meaning_de`,
+  `meaning_en` … per language, `lesson`, `jlpt` (`5` or `N5`). Several meanings are
+  separated by `;`. A field containing the file's separator is quoted, as spreadsheet
+  programs do: `せんせい;"Lehrer; Lehrerin";1`.
+- **JSON** (`*.json`): an array of `{"kana": "せんせい", "meaning": "teacher", "lesson": "1"}`;
+  `meaning` may also be a list or an object per language (`{"de": "Lehrer", "en": "teacher"}`).
+
+Rows whose reading is not kana are skipped and reported.
 
 ## Dependencies
 
