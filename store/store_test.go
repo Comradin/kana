@@ -122,3 +122,102 @@ func TestMemorySeededOnceFromKanaStats(t *testing.T) {
 		t.Fatalf("re-open must not re-seed: %+v", got["か"])
 	}
 }
+
+func TestWordStatsRoundTrip(t *testing.T) {
+	st := openTemp(t)
+	got, err := st.WordStatistics()
+	if err != nil || len(got) != 0 {
+		t.Fatalf("empty WordStatistics = %v, %v", got, err)
+	}
+	if err := st.SaveWordStats("せんせい", 3, 1); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SaveWordStats("せんせい", 4, 1); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SaveWordStats("ねこ", -2, -1); err != nil {
+		t.Fatal(err)
+	}
+	got, err = st.WordStatistics()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w := got["せんせい"]; w != (WordStats{Kana: "せんせい", CorrectCount: 4, MissCount: 1}) {
+		t.Fatalf("せんせい = %+v, want absolute values 4/1", w)
+	}
+	if w := got["ねこ"]; w.CorrectCount != 0 || w.MissCount != 0 {
+		t.Fatalf("negative counts must be stored as 0, got %+v", w)
+	}
+	if err := st.SaveWordStats("", 1, 0); err == nil {
+		t.Fatal("an empty reading must be rejected")
+	}
+}
+
+func TestWordStatsSeparateFromKanaStats(t *testing.T) {
+	st := openTemp(t)
+	if err := st.SaveKanaStats("か", 5, 0, 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SaveWordStats("か", 1, 0); err != nil {
+		t.Fatal(err)
+	}
+	kana, _ := st.KanaStatistics()
+	words, _ := st.WordStatistics()
+	if kana["か"].CorrectCount != 5 || words["か"].CorrectCount != 1 {
+		t.Fatalf("kana か = %+v, word か = %+v; the mosquito must not share the character's stats", kana["か"], words["か"])
+	}
+}
+
+func TestWordStatsSurviveReopen(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "test.db")
+	st, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SaveWordStats("ねこ", 2, 0); err != nil {
+		t.Fatal(err)
+	}
+	_ = st.Close()
+	st, err = Open(path) // migrate runs again on an existing database
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	if got, _ := st.WordStatistics(); got["ねこ"].CorrectCount != 2 {
+		t.Fatalf("after reopen = %+v", got)
+	}
+}
+
+func TestWordLevelAndMeaningLang(t *testing.T) {
+	st := openTemp(t)
+	if l, err := st.WordLevel(); err != nil || l != DefaultWordLevel || DefaultWordLevel != 5 {
+		t.Fatalf("unset WordLevel = %d, %v; want 5", l, err)
+	}
+	if m, err := st.MeaningLang(); err != nil || m != "" {
+		t.Fatalf("unset MeaningLang = %q, %v; want \"\" (follow the system)", m, err)
+	}
+	if err := st.SaveWordLevel(3); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SaveWordLevel(0); err == nil {
+		t.Fatal("level 0 must be rejected")
+	}
+	if err := st.SaveWordLevel(6); err == nil {
+		t.Fatal("level 6 must be rejected")
+	}
+	if l, _ := st.WordLevel(); l != 3 {
+		t.Fatalf("WordLevel = %d, want 3", l)
+	}
+	if err := st.SaveMeaningLang("de"); err != nil {
+		t.Fatal(err)
+	}
+	if m, _ := st.MeaningLang(); m != "de" {
+		t.Fatalf("MeaningLang = %q, want de", m)
+	}
+	if err := st.setSetting(wordLevelKey, "N9"); err != nil {
+		t.Fatal(err)
+	}
+	if l, err := st.WordLevel(); err != nil || l != DefaultWordLevel {
+		t.Fatalf("invalid stored level = %d, %v; want the default", l, err)
+	}
+}
