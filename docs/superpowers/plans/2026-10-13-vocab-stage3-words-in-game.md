@@ -14,6 +14,20 @@
 
 ---
 
+## Amendments after plan review (apply while implementing)
+
+The plan was applied task by task in a scratch copy; every task built and passed on its own. Apply these additions:
+
+1. **Task 3 – bundled index once:** build `vocab.NewIndex(bundled, nil)`'s work once per process. Cache the bundled `[]vocab.Word` *and* a prepared bundled index via `sync.OnceValues`; `loadWords` then merges the private lists without re-splitting all 7,029 bundled readings (e.g. add a `vocab.(*Index).WithLists([]List) *Index` that copies the bundled entries' slice/map headers and adds the lists — entries must not be mutated in place, so copy an entry before merging into it). Keep `NewIndex` behaviour unchanged; add a `vocab` test that `NewIndex(b, l)` and `NewIndex(b, nil).WithLists(l)` give equal entries and that the base index is unchanged afterwards.
+2. **Task 3 – cache reset tests:** add a test that after accepting the katakana offer (`enableKatakanaLocked` path) a katakana word with secure units becomes playable, and one that `Reset` rebuilds the cache.
+3. **Task 5 – game-over text:** show "Characters missed: None!" only when both missed kana and missed words are empty; when only words were missed, omit the characters line.
+4. **Task 7 – long feedback labels:** in `addFeedback`, shrink the label's `TextSize` (down to a 10 pt minimum) until `MinSize().Width <= gs.canvasW` when the canvas width is known, then truncate further with "…" if still too wide; position stays clamped inside the field. Add a test with a long meaning on a 400 px canvas asserting the label fits.
+5. **Task 9 – README anchors:** match the headings exactly as they appear in README.md, which include backticks ("### Desktop App (`fyne/`)", "### Persistence (`store/`)", "### Character Data (`kanacore/`)"); the private-lists sentence spans two lines at README.md:~337 — edit it in place.
+
+Accepted as is: the playable cache rebuild (~8 ms at N1) only on the listed invalidation points; `pickWord` cost per spawn.
+
+---
+
 ## Notes on the spec
 
 Places where the spec does not match the real code, and how this plan resolves them:
