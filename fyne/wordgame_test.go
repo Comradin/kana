@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/test"
 	"kana/kanacore"
 	"kana/memory"
@@ -379,5 +380,38 @@ func TestResetRebuildsPlayable(t *testing.T) {
 	gs.Reset() // no store: the stored stats reload as empty
 	if got := playableKana(gs); len(got) != 0 {
 		t.Fatalf("playable after Reset = %v, want none (cache not rebuilt?)", got)
+	}
+}
+
+// wordTileAt is a word tile at (10, y) for a reading in gs.words.
+func wordTileAt(gs *GameState, kana string, y float32) *KanaTile {
+	e, ok := gs.words.Lookup(kana)
+	if !ok {
+		panic("no word " + kana)
+	}
+	tile := newWordTile(e, gs.canvasW)
+	tile.fallSeconds = 20
+	tile.Move(fyne.NewPos(10, y))
+	return tile
+}
+
+func TestSpawnCandidatesIgnoreWordTiles(t *testing.T) {
+	gs := newTestState()
+	withWords(gs, bw("い", 5, "stomach"))
+	gs.tiles = []*KanaTile{wordTileAt(gs, "い", 0), tileAt("あ", "a", 0)}
+	if got := gs.spawnCandidates([]string{"あ", "い"}); !equalIDs(got, []string{"い"}) {
+		t.Fatalf("candidates = %v, want [い]: a falling word い must not block the kana い", got)
+	}
+}
+
+func TestDropInactiveTilesRemovesUnplayableWords(t *testing.T) {
+	gs := newTestState()
+	gs.activeScripts[kanacore.ScriptKatakana] = true
+	withWords(gs, bw("アイ", 5, "eye"), bw("あい", 5, "love"))
+	secure(gs, "ア", "イ", "あ", "い")
+	gs.tiles = []*KanaTile{wordTileAt(gs, "アイ", 0), wordTileAt(gs, "あい", 0), tileAt("あ", "a", 0)}
+	gs.applySettings([]string{"vowels", "kata:vowels"}, []kanacore.Script{kanacore.ScriptHiragana}, false, 0, LevelNormal, pointsAuto)
+	if len(gs.tiles) != 2 || gs.tiles[0].word == nil || gs.tiles[0].word.Kana != "あい" || gs.tiles[1].word != nil {
+		t.Fatalf("expected あい (word) and あ (kana) to remain, got %d tiles", len(gs.tiles))
 	}
 }

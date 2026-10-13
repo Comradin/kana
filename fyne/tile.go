@@ -7,18 +7,26 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"kana/kanacore"
+	"kana/vocab"
 )
 
 const (
 	tileW     float32 = 52 // single glyph
 	tileWideW float32 = 84 // two glyphs (yōon)
 	tileH     float32 = 60
+
+	wordTextSize    float32 = 32
+	minWordTextSize float32 = 10
+	wordTilePad     float32 = 12 // space left and right of a word
 )
 
 var (
 	tileFaceColor   = color.RGBA{R: 0xee, G: 0xdf, B: 0xc0, A: 0xff}
 	tileShadowColor = color.RGBA{R: 0xb8, G: 0x95, B: 0x6a, A: 0xff}
 	kanaTextColor   = color.RGBA{R: 0x2c, G: 0x1a, B: 0x0e, A: 0xff}
+
+	wordTileFaceColor   = color.RGBA{R: 0xdc, G: 0xe6, B: 0xd2, A: 0xff}
+	wordTileBorderColor = color.RGBA{R: 0x5e, G: 0x7f, B: 0x52, A: 0xff}
 )
 
 // tileWidthFor returns the tile width for a kana, wider for two-glyph kana.
@@ -29,9 +37,11 @@ func tileWidthFor(char string) float32 {
 	return tileW
 }
 
-// KanaTile is a falling kana card rendered as three canvas objects.
+// KanaTile is a falling card rendered as three canvas objects. It carries
+// either a kana or, when word is set, a word; a word tile's kana is unset.
 type KanaTile struct {
 	kana        kanacore.Kana
+	word        *vocab.Entry // nil for a kana tile
 	pos         fyne.Position
 	width       float32
 	shadow      *canvas.Rectangle
@@ -54,6 +64,36 @@ func newKanaTile(k kanacore.Kana) *KanaTile {
 	text.Resize(fyne.MeasureText(text.Text, text.TextSize, text.TextStyle))
 
 	t := &KanaTile{kana: k, width: w, shadow: shadow, face: face, text: text}
+	t.Move(fyne.NewPos(0, 0))
+	return t
+}
+
+// newWordTile builds a word tile: a sage face with a border, as wide as the
+// word plus padding, so even a one-unit word (か) does not look like a kana
+// tile. A word wider than maxW (the field width) gets a smaller font, down
+// to minWordTextSize, so the tile fits.
+func newWordTile(e vocab.Entry, maxW float32) *KanaTile {
+	text := canvas.NewText(e.Kana, kanaTextColor)
+	text.TextSize = wordTextSize
+	size := fyne.MeasureText(text.Text, text.TextSize, text.TextStyle)
+	avail := maxW - 2*wordTilePad
+	for size.Width > avail && text.TextSize > minWordTextSize {
+		text.TextSize--
+		size = fyne.MeasureText(text.Text, text.TextSize, text.TextStyle)
+	}
+	text.Resize(size)
+	w := size.Width + 2*wordTilePad
+
+	shadow := canvas.NewRectangle(tileShadowColor)
+	shadow.Resize(fyne.NewSize(w, tileH))
+
+	face := canvas.NewRectangle(wordTileFaceColor)
+	face.StrokeColor = wordTileBorderColor
+	face.StrokeWidth = 2
+	face.Resize(fyne.NewSize(w, tileH))
+
+	word := e
+	t := &KanaTile{word: &word, width: w, shadow: shadow, face: face, text: text}
 	t.Move(fyne.NewPos(0, 0))
 	return t
 }
