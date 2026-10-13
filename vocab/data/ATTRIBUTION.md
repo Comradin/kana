@@ -19,6 +19,9 @@ JMdict it is licensed under the
   [stephenmk/yomitan-jlpt-vocab](https://github.com/stephenmk/yomitan-jlpt-vocab),
   CC BY-SA 4.0.
 
+The app credits these sources in-app as well: in the vocabulary status panel (from stage 3
+of the vocabulary trainer) and on a Sources tab (from stage 4).
+
 The versions used for the committed file are recorded in [`SOURCES`](SOURCES): the
 `Last-Modified` date of `JMdict.gz` and the commit of the sequence mapping.
 
@@ -27,7 +30,9 @@ The versions used for the committed file are recorded in [`SOURCES`](SOURCES): t
 Every JLPT word whose reading can be typed, keyed by its kana reading, with its easiest
 JLPT level and up to five meanings per language. For each JMdict entry, a language's meanings
 come from the first sense that has meanings in that language (at most three), and homophones
-are merged. Numbering, labels and grammar patterns are removed from non-English meanings.
+are merged. Numbering, labels and source-language notes are removed from non-English meanings;
+meanings of derived phrases and ones that cannot be cleaned (unbalanced parentheses, kana) are
+left out. A meaning never contains `;`: glosses are split there.
 
 ## Updates
 

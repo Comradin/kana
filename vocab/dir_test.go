@@ -109,3 +109,35 @@ func TestLoadDirNames(t *testing.T) {
 		t.Fatalf("names = %v, want %v", names, want)
 	}
 }
+
+func TestLoadDirSkipsDotFiles(t *testing.T) {
+	dir := t.TempDir()
+	for name, content := range map[string]string{
+		".csv":         "kana\nねこ\n",                  // would be a list with an empty name
+		"._x.csv":      "\x00\x05\x16\x07AppleDouble", // macOS resource fork
+		".hidden.json": `[{"kana":"いぬ"}]`,
+		"x.csv":        "kana\nとり\n",
+	} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	lists, err := LoadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(lists) != 1 || lists[0].Name != "x" || len(lists[0].Problems) != 0 {
+		t.Fatalf("lists = %+v, want only x", lists)
+	}
+}
+
+func TestReadJSONBOMAndEmptyKana(t *testing.T) {
+	l := readJSON("x", strings.NewReader("\ufeff[{\"kana\":\"ねこ\"},{\"kana\":\"  \"},{\"meaning\":\"m\"}]"))
+	if len(l.Words) != 1 || l.Words[0].Kana != "ねこ" {
+		t.Fatalf("BOM: words = %+v, problems %v", l.Words, l.Problems)
+	}
+	want := []string{"entry 2: empty kana", "entry 3: empty kana"}
+	if l.Skipped != 2 || !reflect.DeepEqual(l.Problems, want) {
+		t.Fatalf("skipped=%d problems=%q, want %q", l.Skipped, l.Problems, want)
+	}
+}

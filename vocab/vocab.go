@@ -75,7 +75,8 @@ func (m Meanings) Merge(other Meanings) {
 
 // For returns the meanings to show for lang: lang itself, then the
 // language-less meanings, then English, then the first language in
-// alphabetical order. Nil if there are none.
+// alphabetical order. Nil if there are none. The slice is shared with m;
+// do not modify it.
 func (m Meanings) For(lang string) []string {
 	for _, k := range []string{lang, "", "en"} {
 		if len(m[k]) > 0 {

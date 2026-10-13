@@ -20,7 +20,11 @@ type bundledWord struct {
 // Bundled returns the word list shipped with the app (JMdict meanings, JLPT
 // levels from Jonathan Waller's lists; see data/ATTRIBUTION.md).
 func Bundled() ([]Word, error) {
-	zr, err := gzip.NewReader(bytes.NewReader(bundledData))
+	return decodeBundled(bundledData)
+}
+
+func decodeBundled(data []byte) ([]Word, error) {
+	zr, err := gzip.NewReader(bytes.NewReader(data))
 	if err != nil {
 		return nil, fmt.Errorf("bundled words: %w", err)
 	}
@@ -31,7 +35,11 @@ func Bundled() ([]Word, error) {
 	}
 	words := make([]Word, len(raw))
 	for i, r := range raw {
-		words[i] = Word{Kana: r.K, JLPT: r.J, Meanings: Meanings(r.M), Source: BundledSource}
+		m := Meanings(r.M)
+		if m == nil {
+			m = Meanings{}
+		}
+		words[i] = Word{Kana: r.K, JLPT: r.J, Meanings: m, Source: BundledSource}
 	}
 	return words, nil
 }

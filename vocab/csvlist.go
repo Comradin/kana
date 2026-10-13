@@ -38,9 +38,15 @@ func readCSV(name string, r io.Reader) List {
 		l.problem(fmt.Sprintf("header: %v", err))
 		return l
 	}
+	// Column names are case-insensitive; of duplicate names the first wins.
+	for i, c := range cols {
+		cols[i] = strings.ToLower(strings.TrimSpace(c))
+	}
 	idx := map[string]int{}
 	for i, c := range cols {
-		idx[strings.ToLower(strings.TrimSpace(c))] = i
+		if _, dup := idx[c]; !dup {
+			idx[c] = i
+		}
 	}
 	kanaCol, ok := idx["kana"]
 	if !ok {
@@ -82,14 +88,15 @@ func readCSV(name string, r io.Reader) List {
 		}
 		w := Word{Kana: kana, Meanings: Meanings{}, Source: name,
 			Lesson: field(rec, "lesson"), JLPT: parseLevel(field(rec, "jlpt"))}
-		for col, i := range idx {
-			if i >= len(rec) {
+		// Meanings in header order, so that the result is deterministic.
+		for i, col := range cols {
+			if i >= len(rec) || idx[col] != i {
 				continue
 			}
 			switch {
 			case col == "meaning":
 				w.Meanings.Add("", SplitMeanings(rec[i])...)
-			case strings.HasPrefix(col, "meaning_"):
+			case strings.HasPrefix(col, "meaning_") && col != "meaning_":
 				lang := strings.TrimPrefix(col, "meaning_")
 				w.Meanings.Add(lang, SplitMeanings(rec[i])...)
 			}

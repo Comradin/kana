@@ -28,7 +28,7 @@ The work ships in four stages, each with its own plan and PR (see Stages).
 | Word playable (words only) | Every kana unit is **unlocked** (in an active row of an active script). The learner chose the practice explicitly. |
 | っ/ッ and ー | Known in both modes when their script is active; ー is known when either script is active (it also occurs in hiragana readings). |
 | Extended katakana | Both: a new katakana-only learning-path group with tiles and intros, and part of words. A word with ティ needs ティ itself to be known. |
-| Bundled words | Only words with a JLPT level (about 8,000, N5–N1), shown in their kana reading. No kanji. |
+| Bundled words | Only words with a JLPT level (about 7,000, N5–N1), shown in their kana reading. No kanji. |
 | JLPT level | Setting "Vocabulary up to N5 … N1", default N5. Bundled words above the level are never played. Private lists ignore the level. |
 | Level offer | When 90 % of the bundled words of the current level that use only active scripts are secure, a dialog offers the next level. Declined → not asked again for that level. |
 | Private lists | CSV/TSV and JSON in `~/.local/share/kana/words/` (honours `XDG_DATA_HOME`). |
@@ -139,8 +139,18 @@ type Word struct {
     by kanji form + reading.
   - **Reading:** the reading the JLPT list (or mapping) gives for the row; rows without a
     reading or without a JMdict sequence number are skipped and counted.
-  - **Gloss cleanup:** leading numbering (`1) `) is stripped; glosses starting with `(`, `{`
-    or `-`, containing kana or kanji, or shorter than two characters are dropped.
+  - **Gloss cleanup** (gentle: strip clear markup, drop what cannot be made plain, never
+    guess). English glosses are kept as they are. Every gloss, English included, is split on
+    `;` like a private list's meanings (a `;` inside parentheses becomes `,`), so meaning
+    items never contain `;`; the split items count towards the caps below. A non-English
+    gloss with `~` or `～` outside a marker of the word's own grammatical form (`{～な}`,
+    `{～の}`, `{～する}` …) is the meaning of a derived phrase and dropped whole. Each
+    non-English item is then cleaned: leading numbering (`1) `, `1. `, `а) `, `: `), form
+    markers and `(…)` labels are stripped, repeatedly and in any order; a trailing
+    source-language note (`(eng: scene)`, `(ger)` …) is stripped; other `{…}` clarifications
+    become `(…)` (`moški {formalno}` → `moški (formalno)`). An item is dropped if it then
+    starts with `(` or `-`, has unbalanced parentheses, stray braces, kana or kanji, or is
+    shorter than two characters.
   - **Meanings:** per language, the glosses of the first sense that has glosses in that
     language (in JMdict, non-English glosses sit in their own senses), at most three.
   - Entries whose reading fails `KanaUnits` are dropped and counted in the tool's output.
@@ -280,7 +290,8 @@ offer use them instead of calling `KanaUnits` again.
   "はい · hai — yes" at the bottom in the error colour. They are part of the snapshot, hidden
   whenever tiles are hidden, and cleared by `Reset`. The meaning comes from `meaning_lang`,
   then `en`, then any language; a word without meanings shows only kana (and romaji for a
-  miss).
+  miss). Long meanings are truncated for display: at most the first 3 items, and an ellipsis
+  past about 60 characters.
 - **Word tiles:** a distinct face colour and border, so a one-unit word (か) does not look like
   a kana tile. Width is text plus padding; if wider than the field, the font shrinks to fit.
   The spawn x-position keeps the tile inside the field.

@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"kana/kanacore"
+	"kana/vocab"
 )
 
 // maxGlossesMerged caps the meanings per language of a merged word.
@@ -73,10 +74,13 @@ func run(jmdictPath, jlptDir string, w io.Writer) (Stats, error) {
 		if r.Level > ow.J {
 			ow.J = r.Level
 		}
-		for lang, items := range g {
-			for _, it := range items {
-				if len(ow.M[lang]) < maxGlossesMerged && !has(ow.M[lang], it) {
-					ow.M[lang] = append(ow.M[lang], it)
+		for lang, glosses := range g {
+			for _, gl := range glosses {
+				// Already split for JMdict; Waller's fallback may need it.
+				for _, it := range vocab.SplitMeanings(gl) {
+					if len(ow.M[lang]) < maxGlossesMerged && !has(ow.M[lang], it) {
+						ow.M[lang] = append(ow.M[lang], it)
+					}
 				}
 			}
 		}

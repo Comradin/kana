@@ -8,6 +8,8 @@ import (
 	"regexp"
 	"strings"
 	"unicode/utf8"
+
+	"kana/vocab"
 )
 
 // langCodes maps JMdict's ISO 639-2 codes to ISO 639-1.
@@ -31,28 +33,51 @@ type xmlEntry struct {
 }
 
 var (
-	glossNumber = regexp.MustCompile(`^(\d+\))?\s*:?\s*`)
+	// glossNumber is a leading "1) ", "1. ", "а) " (Cyrillic) or ": ".
+	glossNumber = regexp.MustCompile(`^(?:\d+[.)]|[а-я]\))?\s*:?\s*`)
 	// glossForm is a marker for a grammatical form of the word itself
 	// ("{～な} неясный": as a na-adjective, "unclear"), not a derived phrase.
-	glossForm = regexp.MustCompile(`^\{～\[?(な|の|に|と|で|する|である|たる)\]?\}\s*`)
+	glossForm    = regexp.MustCompile(`^\{～\[?(な|の|に|と|で|する|である|たる)\]?\}\s*`)
+	glossFormAny = regexp.MustCompile(`\{～\[?(な|の|に|と|で|する|である|たる)\]?\}`)
+	// glossBraces is a "{…}" group; one without "～" or "~" is a
+	// clarification such as "{formalno}", one with them a derived phrase.
+	glossBraces = regexp.MustCompile(`\{([^{}]*)\}`)
+	// glossSourceLang is a trailing note on the word's origin: "(eng: scene)".
+	glossSourceLang = regexp.MustCompile(`\s*\((?:eng|por|ger|fre|ita|lat|dut|spa|rus|chi|kor|san|ara|gre|heb|hin|mon|swe|fin|nor|dan|pol|tur|haw|may|tha|vie|ind)(?::[^)]*)?\)$`)
 )
 
-// cleanGloss tidies a non-English gloss. It strips a leading "1) " or ": ",
-// leading "(…)" labels such as "(уст.)" and markers of the word's own
-// grammatical form such as "{～な}". It rejects what is left if it is not a
-// plain meaning: another "{…}" pattern (the meaning of a derived phrase such
-// as "{～をする}"), an unbalanced "(", a "-" affix, text with kana, kanji or
-// stray braces, or fewer than two characters.
+// cleanGloss tidies a non-English gloss, gently: it strips what is clearly
+// markup and rejects a gloss it cannot make plain rather than guess.
+//
+// It strips, in any order and repeated, a leading "1) ", "1. ", "а) " or
+// ": ", markers of the word's own grammatical form such as "{～な}" and
+// "(…)" labels such as "(уст.)"; then a trailing source-language note such
+// as "(eng: scene)". Other "{…}" clarifications become "(…)" first:
+// "moški {formalno}" → "moški (formalno)".
+//
+// It rejects what is left if it is not a plain meaning: a "~" or "～" (the
+// meaning of a derived phrase such as "{～をする} работать"), unbalanced
+// parentheses, a leading "(" or "-", stray braces, kana or kanji, or fewer
+// than two characters.
 func cleanGloss(s string) (string, bool) {
-	s = glossNumber.ReplaceAllString(strings.TrimSpace(s), "")
+	s = strings.TrimSpace(s)
+	s = glossBraces.ReplaceAllStringFunc(s, func(g string) string {
+		if glossForm.MatchString(g) || strings.ContainsAny(g, "~～") {
+			return g // a form marker (stripped below) or a phrase (rejected)
+		}
+		return "(" + g[1:len(g)-1] + ")"
+	})
 	for {
-		t := strings.TrimSpace(glossForm.ReplaceAllString(stripLabel(s), ""))
+		t := glossNumber.ReplaceAllString(s, "")
+		t = strings.TrimSpace(glossForm.ReplaceAllString(stripLabel(t), ""))
 		if t == s {
 			break
 		}
 		s = t
 	}
-	if utf8.RuneCountInString(s) < 2 || strings.HasPrefix(s, "-") || strings.HasPrefix(s, "(") || strings.ContainsAny(s, "{}") {
+	s = strings.TrimSpace(glossSourceLang.ReplaceAllString(s, ""))
+	if utf8.RuneCountInString(s) < 2 || strings.HasPrefix(s, "-") || strings.HasPrefix(s, "(") ||
+		strings.ContainsAny(s, "{}~～") || strings.Count(s, "(") != strings.Count(s, ")") {
 		return "", false
 	}
 	for _, r := range s {
@@ -61,6 +86,51 @@ func cleanGloss(s string) (string, bool) {
 		}
 	}
 	return s, true
+}
+
+// glossItems turns a gloss into meaning items. A meaning item never
+// contains ";", the separator of private lists, so the gloss is split like
+// they are. English glosses are clean and only split. The others may carry
+// markup: a gloss with a "~" or "～" outside a form marker is the meaning of
+// a derived phrase and rejected as a whole; otherwise each item is cleaned
+// on its own, as each may start with its own label or numbering.
+func glossItems(lang, gloss string) []string {
+	gloss = strings.TrimSpace(gloss)
+	if lang == "en" {
+		return splitGloss(gloss)
+	}
+	if strings.ContainsAny(glossFormAny.ReplaceAllString(gloss, ""), "~～") {
+		return nil
+	}
+	var out []string
+	for _, it := range splitGloss(gloss) {
+		if it, ok := cleanGloss(it); ok {
+			out = append(out, it)
+		}
+	}
+	return out
+}
+
+// splitGloss splits a gloss into meaning items like vocab.SplitMeanings. A
+// ";" inside parentheses separates parts of a note, not meanings, and
+// becomes ",": "y (junto con; al igual que)" stays one item.
+func splitGloss(s string) []string {
+	if !strings.Contains(s, ";") {
+		return vocab.SplitMeanings(s)
+	}
+	b := []rune(s)
+	depth := 0
+	for i, r := range b {
+		switch {
+		case r == '(':
+			depth++
+		case r == ')' && depth > 0:
+			depth--
+		case r == ';' && depth > 0:
+			b[i] = ','
+		}
+	}
+	return vocab.SplitMeanings(string(b))
 }
 
 // stripLabel removes one leading parenthesised group, nested ones included.
@@ -86,7 +156,8 @@ func stripLabel(s string) string {
 
 // readJMdict streams the JMdict XML (plain or .gz) and returns, for every
 // entry whose sequence number is wanted, the glosses per language: those of
-// the first sense that has usable glosses in that language, at most three.
+// the first sense that has usable glosses in that language, split on ";",
+// at most three items.
 func readJMdict(path string, wanted map[string]bool) (map[string]map[string][]string, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -138,20 +209,18 @@ func readJMdict(path string, wanted map[string]bool) (map[string]map[string][]st
 				if !ok {
 					continue
 				}
-				// English glosses are clean; the others may carry markup.
-				text := strings.TrimSpace(g.Text)
-				if code != "en" {
-					text, ok = cleanGloss(text)
-				}
-				if !ok || text == "" {
+				items := glossItems(code, g.Text)
+				if len(items) == 0 {
 					continue
 				}
 				if _, taken := glosses[code]; taken && !fresh[code] {
 					continue
 				}
 				fresh[code] = true
-				if len(glosses[code]) < maxGlossesPerLang {
-					glosses[code] = append(glosses[code], text)
+				for _, it := range items {
+					if len(glosses[code]) < maxGlossesPerLang && !has(glosses[code], it) {
+						glosses[code] = append(glosses[code], it)
+					}
 				}
 			}
 		}

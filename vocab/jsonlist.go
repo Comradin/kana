@@ -1,6 +1,7 @@
 package vocab
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -17,18 +18,26 @@ type jsonWord struct {
 	JLPT    json.RawMessage `json:"jlpt"`
 }
 
-// readJSON reads a word list: an array of objects with kana, meaning
+// readJSON reads a word list (an optional UTF-8 BOM is skipped): an array of objects with kana, meaning
 // (string, array of strings, or an object of language → string or array),
 // lesson and jlpt (number or string).
 func readJSON(name string, r io.Reader) List {
 	l := List{Name: name}
+	br := bufio.NewReader(r)
+	if b, err := br.Peek(3); err == nil && string(b) == "\ufeff" {
+		br.Discard(3)
+	}
 	var raw []jsonWord
-	if err := json.NewDecoder(r).Decode(&raw); err != nil {
+	if err := json.NewDecoder(br).Decode(&raw); err != nil {
 		l.problem(fmt.Sprintf("invalid JSON: %v", err))
 		return l
 	}
 	for i, jw := range raw {
 		kana := strings.TrimSpace(jw.Kana)
+		if kana == "" {
+			l.skip(fmt.Sprintf("entry %d: empty kana", i+1))
+			continue
+		}
 		if _, ok := kanacore.KanaUnits(kana); !ok {
 			l.skip(fmt.Sprintf("entry %d: %s is not kana", i+1, kana))
 			continue
