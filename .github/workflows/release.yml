@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - feat/releases # TEMPORARY: dry run on the release branch, removed before merge
   workflow_dispatch:
 
 concurrency:
