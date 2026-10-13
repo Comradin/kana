@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strings"
 	"testing"
 
 	"fyne.io/fyne/v2/test"
@@ -251,5 +252,36 @@ func TestPathSegW(t *testing.T) {
 		if got := pathSegW(steps); got != want {
 			t.Errorf("pathSegW(%d) = %v, want %v", steps, got, want)
 		}
+	}
+}
+
+func TestPanelShowsWordsLineAndSource(t *testing.T) {
+	test.NewApp()
+	p := newStatsPanel()
+	snap := panelSnap([]string{"vowels"}, both)
+	snap.Words = WordsStatus{Playable: 42, Secure: 17, Level: 5}
+	p.Update(snap)
+	if p.wordsText.Text != "Words: 42 playable · 17 secure · up to N5" {
+		t.Fatalf("words line = %q", p.wordsText.Text)
+	}
+	var lines []string
+	for _, txt := range p.sourceTexts {
+		lines = append(lines, txt.Text)
+	}
+	if got := strings.Join(lines, " "); got != "Word data: JMdict (EDRDG, CC BY-SA 4.0), JLPT levels by J. Waller" {
+		t.Fatalf("attribution = %q", got)
+	}
+}
+
+func TestPanelCountsWordHits(t *testing.T) {
+	test.NewApp()
+	p := newStatsPanel()
+	snap := panelSnap([]string{"vowels"}, both)
+	snap.SessionStats["あ"] = store.KanaStats{Char: "あ", CorrectCount: 1}
+	snap.WordCorrect = 1
+	snap.Missed = 2
+	p.Update(snap)
+	if p.correctText.Text != "2" || p.accuracyText.Text != "50 %" {
+		t.Fatalf("correct %q, accuracy %q; want 2 and 50 %%", p.correctText.Text, p.accuracyText.Text)
 	}
 }

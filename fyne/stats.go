@@ -47,6 +47,9 @@ type StatsSnapshot struct {
 	LevelLabel string
 	Tempo      float32 // shown speed-up, 1 / tempoFactor
 	MissLimit  int
+
+	WordCorrect int         // word hits this session
+	Words       WordsStatus // the words line
 }
 
 // vowelColIndex returns the column index (0–4) for a kana based on its romaji vowel ending.
@@ -109,6 +112,9 @@ type StatsPanel struct {
 
 	correctText, missedText, accuracyText *canvas.Text
 
+	wordsText   *canvas.Text   // "Words: … playable · … secure · up to N5"
+	sourceTexts []*canvas.Text // word data attribution
+
 	pathLines map[kanacore.Script]*fyne.Container
 	pathSegs  map[kanacore.Script][]*canvas.Rectangle
 	pathCount map[kanacore.Script]*canvas.Text
@@ -166,7 +172,9 @@ func newStatsPanel() *StatsPanel {
 	session := container.NewGridWithColumns(3, c1, c2, c3)
 
 	// One path line per script: name, one segment per step, count; "Next" below.
-	top := container.NewVBox(session)
+	p.wordsText = smallText("", 11)
+	p.wordsText.Color = panelSubColor
+	top := container.NewVBox(session, p.wordsText)
 	for _, info := range kanacore.Scripts() {
 		steps := len(kanacore.ProgressionStepsFor(info.Script))
 		widths := []float32{pathLabelW}
@@ -275,7 +283,14 @@ func newStatsPanel() *StatsPanel {
 	// the grid is 288px wide, so the padded content is 292px, exactly
 	// matching the panel's 300-2*theme.Padding() width.
 	padded := container.New(layout.NewCustomPaddedLayout(0, 0, 0, 4), grids)
-	p.content = container.NewBorder(top, legend, nil, nil, container.NewVScroll(padded))
+	source := container.NewVBox()
+	for _, line := range wordDataSource {
+		txt := smallText(line, 10)
+		txt.Color = panelSubColor
+		p.sourceTexts = append(p.sourceTexts, txt)
+		source.Add(txt)
+	}
+	p.content = container.NewBorder(top, container.NewVBox(legend, source), nil, nil, container.NewVScroll(padded))
 	p.ExtendBaseWidget(p)
 	return p
 }
@@ -316,7 +331,7 @@ func (p *StatsPanel) MinSize() fyne.Size {
 
 // Update maps a snapshot onto the panel.
 func (p *StatsPanel) Update(snap StatsSnapshot) {
-	correct := 0
+	correct := snap.WordCorrect
 	for _, st := range snap.SessionStats {
 		correct += st.CorrectCount
 	}
@@ -327,6 +342,7 @@ func (p *StatsPanel) Update(snap StatsSnapshot) {
 	} else {
 		p.accuracyText.Text = "–"
 	}
+	p.wordsText.Text = formatWordsLine(snap.Words)
 
 	for _, info := range kanacore.Scripts() {
 		box := p.pathLines[info.Script]

@@ -1266,5 +1266,7 @@ func (gs *GameState) snapshot() StatsSnapshot {
 		LevelLabel:    gs.level.Label,
 		Tempo:         1 / tempoFactor(gs.tempoStep),
 		MissLimit:     gs.level.MissLimit,
+		WordCorrect:   gs.sessionWordCorrect(),
+		Words:         gs.wordsStatus(),
 	}
 }

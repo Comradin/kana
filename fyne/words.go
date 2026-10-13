@@ -128,3 +128,26 @@ func missFeedbackText(e vocab.Entry, lang string) string {
 	}
 	return s
 }
+
+// maxWordsLineRunes keeps the words line inside the 292 px status panel.
+const maxWordsLineRunes = 48
+
+// wordDataSource attributes the bundled word data; two lines so it fits the
+// status panel. Stage 4 moves it to the settings' Sources tab.
+var wordDataSource = []string{"Word data: JMdict (EDRDG, CC BY-SA 4.0),", "JLPT levels by J. Waller"}
+
+// WordsStatus is the status panel's words line.
+type WordsStatus struct {
+	Err      string // the bundled list failed to load
+	Playable int    // words playable now
+	Secure   int    // playable words with 3 or more correct answers
+	Level    int    // words are played up to this JLPT level
+}
+
+// formatWordsLine is the status panel's words line.
+func formatWordsLine(ws WordsStatus) string {
+	if ws.Err != "" {
+		return truncateRunes("Words unavailable: "+ws.Err, maxWordsLineRunes)
+	}
+	return fmt.Sprintf("Words: %d playable · %d secure · up to N%d", ws.Playable, ws.Secure, ws.Level)
+}
