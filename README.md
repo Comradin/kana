@@ -20,10 +20,13 @@ Kana is a Fyne v2 desktop app (`kana-desktop`).
 - **Romaji Input**: Type the romanized equivalent and press Enter to score
 - **Words**: once you can read them, Japanese words fall among the kana tiles (green border).
   A word appears when every kana in it is secure (answered correctly three times) in an
-  active script: bundled JLPT words up to your level (N5 by default) and every word from your
-  own lists. Type the whole reading (`sensei`, `kitte`, `koohii`, `ko-hi-`); a hit shows the
-  meaning, a missed word shows its romaji and meaning. One spawn in a hundred is a word per
-  playable word, at most 30 %; longer words fall more slowly (up to twice the time).
+  active script: every word from your own lists (see [Private word lists](#private-word-lists)).
+  The bundled JLPT words are off for now, until they arrive in small packages with an
+  introduction; with the `bundled_words` setting on they are played up to your level (N5 by
+  default). Type the whole reading (`sensei`, `kitte`, `koohii`, `ko-hi-`; spaces are
+  ignored, so `shitsurei desu ga` works); a hit shows the meaning, a missed word shows its
+  romaji and meaning. One spawn in a hundred is a word per playable word, at most 10 %;
+  longer words fall more slowly (up to twice the time).
 - **Learning path**: start with あいうえお, unlock two rows at a time; each automatically unlocked row is introduced before it is asked, and the game pauses while new rows are introduced
 - **Two scripts**: hiragana and katakana progress independently; switch scripts in the settings. After the basic hiragana you are offered katakana once.
 - **Score Limit Mode**: Set a target score or 0 for endless practice
@@ -78,7 +81,7 @@ Kana is a Fyne v2 desktop app (`kana-desktop`).
 ### Desktop App (Fyne)
 - Warm paper tile aesthetic — stamp-style kana tiles on a parchment background
 - Split layout: game canvas on the left, stats panel on the right; window starts at 1000 × 760
-- Stats panel: a session line, one learning-path line per active script, a side-by-side hiragana/katakana kana grid (new/learning/mastered, with a red border on a character missed this session), a words line (playable, secure, level) and the word data attribution
+- Stats panel: a session line, one learning-path line per active script, a side-by-side hiragana/katakana kana grid (new/learning/mastered, with a red border on a character missed this session), a words line (playable, secure, level or "own lists", or where to add a list) and the word data attribution
 - In-game settings via gear icon (no pre-game setup form)
 - Game-over dialog with missed character and word review and Play Again
 
@@ -244,16 +247,16 @@ Character data and row definitions live in `kanacore/`:
 
 - `kana.go`: `Kana` struct, `CharacterSet`, `NewCharacterSet`, `Matches` (canonical romaji plus accepted alternatives)
 - `kana_rows.go`: groups (`Groups`, `GroupsFor`), rows with entries and alternative romaji, `ProgressionStepsFor`; scripts (`Script`, `Scripts`), katakana rows generated from the hiragana rows by a Unicode shift plus the katakana-only extended rows, `kata:`-prefixed row IDs
-- `words.go`: splits and matches kana words for the vocabulary trainer — `KanaUnits` (split a word into kana units), `ReadingMatches` (accept every allowed romaji spelling, including っ, ー and ん variants) and `Romaji` (the canonical spelling)
+- `words.go`: splits and matches kana words for the vocabulary trainer — `KanaUnits` (split a word into kana units), `ReadingMatches` (accept every allowed romaji spelling, including っ, ー and ん variants; whitespace is ignored) and `Romaji` (the canonical spelling)
 
 ### Word Lists (`vocab/`)
 
 Word data for the vocabulary trainer, independent of the game and the store:
 
 - `vocab.go`: `Word`, `Meanings` (per language, with fallback for display), `List`
-- `csvlist.go`, `jsonlist.go`, `dir.go`: private word lists (CSV/TSV/JSON) and `LoadDir`
+- `csvlist.go`, `jsonlist.go`, `dir.go`: private word lists (CSV/TSV/JSON, with header aliases) and `LoadDir`
 - `index.go`: `NewIndex` (one entry per reading across all sources) and `Playable` (words made
-  only of known kana, filtered by JLPT level, list and lesson)
+  only of known kana, filtered by JLPT level, list and lesson, optionally without bundled-only words)
 - `bundled.go`: `Bundled`, the embedded JLPT word list (`data/words.json.gz`)
 
 ### Word Data Generator (`cmd/vocabgen/`)
@@ -296,7 +299,7 @@ Built on [Fyne v2](https://fyne.io) with goroutine-based game loop:
 
 ### Persistence (`store/`)
 
-- `store/store.go`: SQLite persistence, including active scripts, the katakana offer flag, the chosen difficulty level, the points setting and per-character spaced-repetition memory states (seeded once from past correct counts), per-word statistics and the word settings (`word_level`, `meaning_lang`)
+- `store/store.go`: SQLite persistence, including active scripts, the katakana offer flag, the chosen difficulty level, the points setting and per-character spaced-repetition memory states (seeded once from past correct counts), per-word statistics and the word settings (`word_level`, `bundled_words`, `meaning_lang`)
 
 ### Game Timing
 - Tick loop: 100ms
@@ -322,7 +325,8 @@ It holds:
   spawn next
 - Per-word statistics (`word_stats`: correct and miss count per reading) and per-word
   spaced-repetition memory (`word:` items in the `memory` table)
-- The JLPT level words are played up to (`word_level`, default N5) and the meaning language
+- The JLPT level words are played up to (`word_level`, default N5), whether bundled words are
+  played (`bundled_words`, default off; no UI yet) and the meaning language
   (`meaning_lang`; unset means the system language if the word list has it, else English)
 
 The database is created automatically on first run. If a `kana.db` from an older version is
@@ -349,8 +353,9 @@ The game names these sources in the status panel.
 
 Your own lists (for example from a textbook) go in the `words` folder next to `kana.db`:
 `$XDG_DATA_HOME/kana/words/`, or `~/.local/share/kana/words/`. They are read from there only
-and never belong in the repository. Their words fall in the game like bundled words, at any
-JLPT level; the folder is read when the app starts.
+and never belong in the repository. Their words fall in the game at any JLPT level; the
+folder is read when the app starts. While bundled words are off, these lists are the only
+source of words, and without one the status panel says where to add it.
 
 - **CSV/TSV** (`*.csv`, `*.tsv`): a header row; the separator (tab, semicolon or comma) is
   taken from it. Columns: `kana` (required), `meaning` (any language), `meaning_de`,
@@ -363,8 +368,13 @@ JLPT level; the folder is read when the app starts.
   せんせい;"Lehrer; Lehrerin";1
   ```
 
-  Of two columns with the same name the first is used. Files whose name starts with `.`
-  are ignored.
+  Column names are case-insensitive, and some other names are understood: `japanisch`,
+  `japanische schrift` or `reading` for `kana`; `deutsch` or `german` for `meaning_de`;
+  `englisch` or `english` for `meaning_en`; `lektion` for `lesson`. A column under its own
+  name wins over one of these, and any other column (such as a romaji column) is ignored,
+  so an export with the header `Japanische Schrift,Japanisch (Romaji),Deutsch,Lektion`
+  loads as is. Of two columns with the same name the first is used. Files whose name
+  starts with `.` are ignored.
 - **JSON** (`*.json`): an array of `{"kana": "せんせい", "meaning": "teacher", "lesson": "1"}`;
   `meaning` may also be a list or an object per language (`{"de": "Lehrer", "en": "teacher"}`).
 

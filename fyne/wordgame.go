@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+
 	"kana/kanacore"
 	"kana/memory"
 	"kana/store"
@@ -106,8 +108,10 @@ func (gs *GameState) loadWords() {
 	}
 	var lists []vocab.List
 	if dir, err := wordsDir(); err == nil {
+		gs.wordsDir = dir
 		lists, _ = vocab.LoadDir(dir)
 	}
+	gs.hasLists = len(lists) > 0
 	gs.words = base.WithLists(lists)
 	gs.invalidatePlayable()
 }
@@ -132,7 +136,8 @@ func (gs *GameState) unitKnown(unit string) bool {
 }
 
 // playableWords returns the entries playable in mixed mode: bundled words up
-// to wordLevel plus every private word, all of whose units are known. The
+// to wordLevel (only with useBundled) plus every private word, all of whose
+// units are known. The
 // result is cached until invalidatePlayable; do not modify it. Must be
 // called under lock.
 func (gs *GameState) playableWords() []vocab.Entry {
@@ -140,7 +145,7 @@ func (gs *GameState) playableWords() []vocab.Entry {
 		return nil
 	}
 	if !gs.playableOK {
-		gs.playable = vocab.Playable(gs.words.Entries(), gs.unitKnown, vocab.Filter{MaxLevel: gs.wordLevel})
+		gs.playable = vocab.Playable(gs.words.Entries(), gs.unitKnown, vocab.Filter{MaxLevel: gs.wordLevel, NoBundled: !gs.useBundled})
 		gs.playableOK = true
 	}
 	return gs.playable
@@ -194,7 +199,11 @@ func (gs *GameState) pickWord(always bool) (vocab.Entry, bool) {
 // wordsStatus summarises the words for the status panel. Must be called
 // under lock.
 func (gs *GameState) wordsStatus() WordsStatus {
-	ws := WordsStatus{Err: gs.wordsErr, Level: gs.wordLevel}
+	ws := WordsStatus{Err: gs.wordsErr, Level: gs.wordLevel, Bundled: gs.useBundled, HasLists: gs.hasLists}
+	if gs.wordsDir != "" {
+		home, _ := os.UserHomeDir()
+		ws.Dir = displayDir(gs.wordsDir, home)
+	}
 	for _, e := range gs.playableWords() {
 		ws.Playable++
 		if gs.wordCorrect(e.Kana) >= secureCorrect {

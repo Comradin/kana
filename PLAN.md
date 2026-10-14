@@ -19,6 +19,8 @@ This document outlines planned improvements and features for the Kana learning g
 - [x] Show words made only of kana the learner already knows (e.g. は + い → はい), in hiragana and katakana (mixed mode)
 - [x] Bundled word list derived from JMdict (EDRDG, CC BY-SA 4.0, attribution required), JLPT words with Waller's levels (`vocab/data/`); used by the game
 - [x] Import private word lists (CSV/TSV/JSON: kana, meaning, lesson, jlpt) from a user directory, never from the repository (`vocab.LoadDir`); used by the game
+- [x] Throttle words after play-testing: at most 10 % word spawns, bundled words off by default (`bundled_words`), spaces in answers ignored, German/English header aliases in CSV/TSV lists
+- [ ] Word packages with an intro dialog, which re-enable the bundled words (stage 4)
 
 ## Learning Progress System
 

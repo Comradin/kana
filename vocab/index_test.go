@@ -77,6 +77,11 @@ func TestPlayable(t *testing.T) {
 		{"minna lesson 1", Filter{MaxLevel: 5, List: "minna", Lesson: "1"}, all, []string{"せんせい"}},
 		{"unknown list", Filter{MaxLevel: 5, List: "nope"}, all, nil},
 		{"known units", Filter{MaxLevel: 5}, func(u string) bool { return u == "ね" || u == "こ" }, []string{"ねこ"}},
+		// かんきょう and はし are bundled and in minna, so they stay playable
+		// without bundled words, at any level.
+		{"mixed without bundled", Filter{MaxLevel: 5, NoBundled: true}, all, []string{"かんきょう", "せんせい", "はし"}},
+		{"jmdict without bundled", Filter{MaxLevel: 5, List: BundledSource, NoBundled: true}, all, nil},
+		{"minna without bundled", Filter{MaxLevel: 5, List: "minna", NoBundled: true}, all, []string{"かんきょう", "せんせい", "はし"}},
 	}
 	for _, c := range cases {
 		got := kanaOf(Playable(ix.Entries(), c.known, c.filter))

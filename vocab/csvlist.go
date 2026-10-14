@@ -11,6 +11,19 @@ import (
 	"kana/kanacore"
 )
 
+// headerAliases maps other (lower-case) column names to the canonical ones,
+// so lists exported from other tools load without renaming.
+var headerAliases = map[string]string{
+	"japanisch":          "kana",
+	"japanische schrift": "kana",
+	"reading":            "kana",
+	"deutsch":            "meaning_de",
+	"german":             "meaning_de",
+	"englisch":           "meaning_en",
+	"english":            "meaning_en",
+	"lektion":            "lesson",
+}
+
 // readCSV reads a word list with a header row. The separator (tab,
 // semicolon or comma) is taken from the header line.
 func readCSV(name string, r io.Reader) List {
@@ -41,6 +54,16 @@ func readCSV(name string, r io.Reader) List {
 	// Column names are case-insensitive; of duplicate names the first wins.
 	for i, c := range cols {
 		cols[i] = strings.ToLower(strings.TrimSpace(c))
+	}
+	// An alias stands for its canonical name unless that column exists.
+	present := map[string]bool{}
+	for _, c := range cols {
+		present[c] = true
+	}
+	for i, c := range cols {
+		if canon, ok := headerAliases[c]; ok && !present[canon] {
+			cols[i] = canon
+		}
 	}
 	idx := map[string]int{}
 	for i, c := range cols {

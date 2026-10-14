@@ -127,3 +127,41 @@ func TestReadCSVDuplicateHeader(t *testing.T) {
 		t.Fatalf("first column of a duplicate name wins: %+v", w)
 	}
 }
+
+func TestReadCSVHeaderAliases(t *testing.T) {
+	in := "Japanische Schrift,Japanisch (Romaji),Deutsch,Lektion\nせんせい,sensei,Lehrer; Lehrerin,1\n"
+	l := readCSV("minna", strings.NewReader(in))
+	if len(l.Words) != 1 || len(l.Problems) != 0 {
+		t.Fatalf("words=%d problems=%v", len(l.Words), l.Problems)
+	}
+	w := l.Words[0]
+	want := Meanings{"de": {"Lehrer", "Lehrerin"}}
+	if w.Kana != "せんせい" || w.Lesson != "1" || !reflect.DeepEqual(w.Meanings, want) {
+		t.Fatalf("word = %+v, want せんせい, lesson 1, meanings %v (romaji ignored)", w, want)
+	}
+
+	aliases := map[string]string{
+		"japanisch,english":        "kana,meaning_en",
+		" Reading ,GERMAN,lektion": "kana,meaning_de,lesson",
+		"japanisch,englisch":       "kana,meaning_en",
+	}
+	for alias, canon := range aliases {
+		a := readCSV("x", strings.NewReader(alias+"\nねこ,cat,2\n"))
+		c := readCSV("x", strings.NewReader(canon+"\nねこ,cat,2\n"))
+		if len(a.Words) != 1 || !reflect.DeepEqual(a.Words, c.Words) {
+			t.Errorf("%q: %+v, want %+v", alias, a.Words, c.Words)
+		}
+	}
+}
+
+func TestReadCSVCanonicalColumnWinsOverAlias(t *testing.T) {
+	in := "deutsch,reading,kana,meaning_de,lektion,lesson\nfalsch,いぬ,ねこ,Katze,9,1\n"
+	l := readCSV("x", strings.NewReader(in))
+	if len(l.Words) != 1 {
+		t.Fatalf("words = %d, problems %v", len(l.Words), l.Problems)
+	}
+	w := l.Words[0]
+	if w.Kana != "ねこ" || w.Lesson != "1" || !reflect.DeepEqual(w.Meanings, Meanings{"de": {"Katze"}}) {
+		t.Fatalf("canonical columns must win: %+v", w)
+	}
+}

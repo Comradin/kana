@@ -27,6 +27,7 @@ const (
 	pointsFactorKey    = "points_factor"
 	wordLevelKey       = "word_level"
 	meaningLangKey     = "meaning_lang"
+	bundledWordsKey    = "bundled_words"
 	databaseFilePerm   = 0o644
 	databaseDirPerm    = 0o755
 	defaultOpenTimout  = 5 * time.Second
@@ -227,6 +228,27 @@ func (s *Store) SaveAutoProgress(enabled bool) error {
 		return s.setSetting(autoProgressKey, "1")
 	}
 	return s.setSetting(autoProgressKey, "0")
+}
+
+// BundledWords reports whether the bundled word list is played in mixed
+// mode. It is off unless saved as on.
+func (s *Store) BundledWords() (bool, error) {
+	value, err := s.getSetting(bundledWordsKey)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return value == "1", nil
+}
+
+// SaveBundledWords turns the bundled word list on or off.
+func (s *Store) SaveBundledWords(enabled bool) error {
+	if enabled {
+		return s.setSetting(bundledWordsKey, "1")
+	}
+	return s.setSetting(bundledWordsKey, "0")
 }
 
 // ScoreLimit returns the configured score threshold for ending a session.

@@ -101,7 +101,8 @@ func ReadingMatches(word, input string) bool {
 	if !ok {
 		return false
 	}
-	in := strings.ReplaceAll(strings.ToLower(strings.TrimSpace(input)), "’", "'")
+	// Whitespace anywhere is ignored, so "shitsurei desu ga" matches too.
+	in := strings.ReplaceAll(strings.Join(strings.Fields(strings.ToLower(input)), ""), "’", "'")
 	if in == "" {
 		return false
 	}

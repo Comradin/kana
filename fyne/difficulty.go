@@ -115,9 +115,9 @@ func missReason(missed int) string {
 }
 
 // wordShare is the chance that a spawn is a word: one percent per playable
-// word, at most 30 %.
+// word, at most 10 %.
 func wordShare(playable int) float64 {
-	return math.Min(0.3, float64(playable)/100)
+	return math.Min(0.1, float64(playable)/100)
 }
 
 // wordFallFactor gives longer words more time: 20 % per kana unit after the

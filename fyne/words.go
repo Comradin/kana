@@ -144,12 +144,36 @@ type WordsStatus struct {
 	Playable int    // words playable now
 	Secure   int    // playable words with 3 or more correct answers
 	Level    int    // words are played up to this JLPT level
+	Bundled  bool   // bundled words are played
+	HasLists bool   // at least one private list was found
+	Dir      string // the private list folder for display; "" if unknown
 }
 
-// formatWordsLine is the status panel's words line.
+// formatWordsLine is the status panel's words line. With bundled words off,
+// a bundled load error does not matter and is not shown.
 func formatWordsLine(ws WordsStatus) string {
-	if ws.Err != "" {
+	switch {
+	case ws.Bundled && ws.Err != "":
 		return truncateRunes("Words unavailable: "+ws.Err, maxWordsLineRunes)
+	case ws.Bundled:
+		return fmt.Sprintf("Words: %d playable · %d secure · up to N%d", ws.Playable, ws.Secure, ws.Level)
+	case ws.HasLists:
+		return fmt.Sprintf("Words: %d playable · %d secure · own lists", ws.Playable, ws.Secure)
+	case ws.Dir != "":
+		return truncateRunes("Words: add a list to "+ws.Dir, maxWordsLineRunes)
+	default:
+		return "Words: add a word list"
 	}
-	return fmt.Sprintf("Words: %d playable · %d secure · up to N%d", ws.Playable, ws.Secure, ws.Level)
+}
+
+// displayDir shortens a folder inside home to "~/…" for display.
+func displayDir(dir, home string) string {
+	if home == "" {
+		return dir
+	}
+	rel, err := filepath.Rel(home, dir)
+	if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return dir
+	}
+	return "~" + string(filepath.Separator) + rel
 }
