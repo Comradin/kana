@@ -80,8 +80,8 @@ func TestFormatWordsLine(t *testing.T) {
 	if got := formatWordsLine(WordsStatus{Err: "broken data", Playable: 3, Level: 5}); got != "Words unavailable: broken data" {
 		t.Errorf("error line = %q", got)
 	}
-	long := formatWordsLine(WordsStatus{Err: strings.Repeat("x", 100)})
+	long := formatWordsLine(WordsStatus{Err: strings.Repeat("x", 500)})
 	if r := []rune(long); len(r) != maxWordsLineRunes || !strings.HasSuffix(long, "…") {
-		t.Errorf("long error = %q (%d runes)", long, len(r))
+		t.Errorf("long error = %q (%d runes), want the %d-rune safety cap", long, len(r), maxWordsLineRunes)
 	}
 }

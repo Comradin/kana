@@ -135,13 +135,14 @@ func TestWithListsMatchesNewIndex(t *testing.T) {
 // meanings slice has spare capacity: an append in place would let the
 // second merge overwrite the first one's meaning.
 func TestWithListsDoesNotShareMeanings(t *testing.T) {
-	base := NewIndex([]Word{
-		word("いぬ", 5, BundledSource, "", "en", "dog"),
-		word("いぬ", 5, BundledSource, "", "en", "hound"),
-		word("いぬ", 5, BundledSource, "", "en", "spy"),
-	}, nil)
+	base := NewIndex([]Word{word("いぬ", 5, BundledSource, "", "en", "dog")}, nil)
+	// Give the base meanings spare capacity, so an append that does not
+	// copy first would write into memory a and b share.
+	en := make([]string, 3, 5)
+	copy(en, []string{"dog", "hound", "spy"})
+	base.entries[base.byKana["いぬ"]].Meanings["en"] = en
 	if e, _ := base.Lookup("いぬ"); cap(e.Meanings["en"]) <= len(e.Meanings["en"]) {
-		t.Skip("no spare capacity to alias")
+		t.Fatal("precondition: the base meanings need spare capacity")
 	}
 	a := base.WithLists([]List{{Name: "a", Words: []Word{word("いぬ", 0, "a", "1", "en", "doggy")}}})
 	b := base.WithLists([]List{{Name: "b", Words: []Word{word("いぬ", 0, "b", "2", "en", "pup")}}})

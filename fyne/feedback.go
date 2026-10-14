@@ -45,7 +45,7 @@ func (gs *GameState) addFeedback(kind feedbackKind, msg string, pos fyne.Positio
 	txt := canvas.NewText(msg, c)
 	txt.TextSize = feedbackTextSize
 	txt.TextStyle = fyne.TextStyle{Bold: true}
-	fitText(txt, gs.canvasW)
+	fitText(txt, gs.canvasW, feedbackMinTextSize)
 	size := txt.MinSize()
 	txt.Resize(size)
 	y := pos.Y
@@ -57,19 +57,37 @@ func (gs *GameState) addFeedback(kind feedbackKind, msg string, pos fyne.Positio
 }
 
 // fitText makes txt at most maxW wide: it lowers the text size down to
-// feedbackMinTextSize, then drops characters from the end, ending in "…".
-// A maxW of 0 or less (the canvas size is not known yet) leaves txt as is.
-func fitText(txt *canvas.Text, maxW float32) {
+// minSize, then cuts the text to the longest prefix that fits, ending in
+// "…" (at least one rune is kept). A maxW of 0 or less (the size is not
+// known yet) leaves txt as is.
+func fitText(txt *canvas.Text, maxW, minSize float32) {
 	if maxW <= 0 {
 		return
 	}
-	for txt.MinSize().Width > maxW && txt.TextSize > feedbackMinTextSize {
+	for txt.MinSize().Width > maxW && txt.TextSize > minSize {
 		txt.TextSize--
 	}
 	full := txt.Text
-	for n := len([]rune(full)) - 1; n > 1 && txt.MinSize().Width > maxW; n-- {
-		txt.Text = truncateRunes(full, n)
+	runes := len([]rune(full))
+	if runes <= 2 || txt.MinSize().Width <= maxW {
+		return
 	}
+	fits := func(n int) bool {
+		txt.Text = truncateRunes(full, n)
+		return txt.MinSize().Width <= maxW
+	}
+	// Binary search for the largest n in [2, runes-1] that fits; 2 is the
+	// floor even if it does not.
+	lo, hi := 2, runes-1
+	for lo < hi {
+		mid := (lo + hi + 1) / 2
+		if fits(mid) {
+			lo = mid
+		} else {
+			hi = mid - 1
+		}
+	}
+	txt.Text = truncateRunes(full, lo)
 }
 
 // clampTo keeps v within [0, hi]; a negative hi gives 0.

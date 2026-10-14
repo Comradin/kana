@@ -1,6 +1,7 @@
 package main
 
 import (
+	"maps"
 	"math/rand"
 	"sync"
 	"sync/atomic"
@@ -311,6 +312,8 @@ func (gs *GameState) Start(canvas *GameCanvas) {
 }
 
 // Reset clears state and prepares for a new session. Caller must call Start().
+// It merges the session first; kana or word session stats that fail to
+// merge (the baseline read fails) are discarded with the rest of the state.
 func (gs *GameState) Reset() {
 	gs.mu.Lock()
 	// Flush any pending session data to the store before wiping state.
@@ -496,7 +499,8 @@ func (gs *GameState) tick() {
 }
 
 // spawnKana adds one falling tile: a word with probability wordShare when
-// words are playable, otherwise a kana.
+// words are playable, otherwise a kana. With no kana available it spawns a
+// word if one is playable, else nothing.
 func (gs *GameState) spawnKana() {
 	gs.mu.Lock()
 	if gs.over || gs.paused {
@@ -506,15 +510,14 @@ func (gs *GameState) spawnKana() {
 
 	var tile *KanaTile
 	base := gs.level.MinFall + rand.Float32()*(gs.level.MaxFall-gs.level.MinFall)
-	if entry, ok := gs.pickWord(); ok {
+	chars := gs.availableCharacters()
+	if entry, ok := gs.pickWord(len(chars) == 0); ok {
 		tile = newWordTile(entry, gs.canvasW)
 		tile.fallSeconds = base * wordFallFactor(len(entry.Units)) * tempoFactor(gs.tempoStep)
+	} else if len(chars) == 0 {
+		gs.mu.Unlock()
+		return
 	} else {
-		chars := gs.availableCharacters()
-		if len(chars) == 0 {
-			gs.mu.Unlock()
-			return
-		}
 		char := memory.Pick(gs.spawnCandidates(chars), gs.memory, gs.now(), gs.rnd)
 		romaji, _ := gs.charSet.GetRomaji(char)
 		tile = newKanaTile(kanacore.Kana{Char: char, Romaji: romaji})
@@ -698,8 +701,9 @@ func (gs *GameState) lowerTempo() {
 // mergeSessionStats writes (baseline + session) to store for kana and words.
 // Memory is saved first, so a failing stats read cannot lose it. The kana
 // and word merges are independent: each has its own baseline read and early
-// return, so a skipped or failed one never skips the other. Must be called
-// under lock.
+// return, so a skipped or failed one never skips the other. A failed merge
+// stays dirty for a later retry, but Reset discards it, for kana and words
+// alike. Must be called under lock.
 func (gs *GameState) mergeSessionStats() {
 	gs.saveMemory()
 	gs.mergeWordStats()
@@ -745,7 +749,11 @@ func (gs *GameState) mergeKanaStats() {
 		delete(gs.sessionStats, char)
 	}
 
-	gs.invalidatePlayable() // the stored baseline may differ
+	// overallStats now holds the stored baseline plus the session. It
+	// equals the old overall + session unless another process changed the
+	// stored stats, which can make a kana (un)secure; the cache is cheap to
+	// rebuild, so it is cleared for that case.
+	gs.invalidatePlayable()
 	gs.sessionDirty = false
 }
 
@@ -853,9 +861,13 @@ func (gs *GameState) applySettings(rows []string, scripts []kanacore.Script, aut
 	gs.mu.Lock()
 	defer gs.mu.Unlock()
 
-	katakanaWasOn := gs.activeScripts[kanacore.ScriptKatakana]
+	oldScripts := gs.activeScripts
+	katakanaWasOn := oldScripts[kanacore.ScriptKatakana]
 	gs.setSelectedRowsLocked(rows)
 	gs.activeScripts = scriptSet(scripts)
+	if !maps.Equal(oldScripts, gs.activeScripts) {
+		gs.invalidatePlayable() // words need their kana's script active
+	}
 	gs.saveActiveScripts()
 	if !katakanaWasOn && gs.activeScripts[kanacore.ScriptKatakana] {
 		gs.enableKatakanaLocked()
@@ -883,7 +895,6 @@ func (gs *GameState) applySettings(rows []string, scripts []kanacore.Script, aut
 		_ = gs.store.SavePointsFactor(gs.pointsSetting)
 	}
 
-	gs.invalidatePlayable()
 	gs.dropInactiveTiles()
 	gs.buildSnapshot()
 	gs.settle()
