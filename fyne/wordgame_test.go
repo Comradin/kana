@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/test"
 	"kana/kanacore"
 	"kana/memory"
@@ -765,5 +766,60 @@ func TestSnapshotShowsBundledError(t *testing.T) {
 	gs.mu.Unlock()
 	if got := formatWordsLine(snap.Words); got != "Words unavailable: broken data" {
 		t.Fatalf("line = %q", got)
+	}
+}
+
+func TestFitTextKeepsTheLongestFittingPrefix(t *testing.T) {
+	test.NewApp()
+	full := strings.Repeat("abcdefghij ", 20)
+	txt := canvas.NewText(full, kanaTextColor)
+	txt.TextSize = 12
+	fitText(txt, 150, 12)
+	if w := txt.MinSize().Width; w > 150 {
+		t.Fatalf("text is %v px wide, want at most 150", w)
+	}
+	n := len([]rune(txt.Text))
+	longer := canvas.NewText(truncateRunes(full, n+1), kanaTextColor)
+	longer.TextSize = 12
+	if longer.MinSize().Width <= 150 {
+		t.Fatalf("cut to %d runes (%q), but %d runes still fit", n, txt.Text, n+1)
+	}
+}
+
+func TestApplySettingsKeepsPlayableCacheUnlessScriptsChange(t *testing.T) {
+	gs := newTestState()
+	selectRows(gs, "vowels")
+	withWords(gs, bw("あい", 5, "love"))
+	secure(gs, "あ", "い")
+	cached := gs.playableWords()
+	if len(cached) != 1 {
+		t.Fatalf("playable = %v, want [あい]", cached)
+	}
+	hira := []kanacore.Script{kanacore.ScriptHiragana}
+
+	gs.applySettings([]string{"vowels"}, hira, false, 50, LevelNormal, pointsAuto)
+	if !gs.playableOK || &gs.playable[0] != &cached[0] {
+		t.Fatal("changing only the score limit must keep the playable cache")
+	}
+
+	gs.applySettings([]string{"vowels", "kata:vowels"}, []kanacore.Script{kanacore.ScriptHiragana, kanacore.ScriptKatakana}, false, 50, LevelNormal, pointsAuto)
+	if gs.playableOK {
+		t.Fatal("changing the active scripts must clear the playable cache")
+	}
+}
+
+func TestSpawnFallsBackToWordWithoutKana(t *testing.T) {
+	gs := newTestState()
+	withWords(gs, bw("あい", 5, "love"))
+	secure(gs, "あ", "い")
+	gs.playableWords() // cached while hiragana is active
+	gs.activeScripts = map[kanacore.Script]bool{}
+	if chars := gs.availableCharacters(); len(chars) != 0 {
+		t.Fatalf("availableCharacters = %v, want none", chars)
+	}
+	gs.rnd = func() float64 { return 0.99 } // a kana spawn by wordShare
+	gs.spawnKana()
+	if len(gs.tiles) != 1 || gs.tiles[0].word == nil || gs.tiles[0].word.Kana != "あい" {
+		t.Fatalf("tiles = %d, want one word tile あい when no kana is available", len(gs.tiles))
 	}
 }

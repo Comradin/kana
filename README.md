@@ -147,7 +147,7 @@ go run ./fyne/
 2. Jump straight into the game; open the gear icon to adjust rows, difficulty level, points per hit, auto-progression, and score limit
 3. As characters fall, type their romaji equivalent and press Enter
 4. Each correct kana scores 10 points (a word 10 per kana unit), scaled by the points setting (Auto by level, or a fixed ×1/×2/×3/×5)
-5. The game ends when you reach your score target, miss as many characters as the level allows (5–10), or quit
+5. The game ends when you reach your score target, miss as many tiles as the level allows (5–10), or quit
 
 ### Controls
 
@@ -287,7 +287,7 @@ Built on [Fyne v2](https://fyne.io) with goroutine-based game loop:
 - `wordgame.go`: word progress (stats, memory, merge), the playable-word rule and cache, word spawning
 - `feedback.go`: the labels shown after a word hit or miss
 - `intro.go`: Pending dialogs (katakana offer and row intros) through one entry point, `showPendingDialogs`
-- `stats.go`: `StatsPanel` widget — a session line, one learning-path line per active script, and a side-by-side hiragana/katakana kana grid of each character's learning state
+- `stats.go`: `StatsPanel` widget — a session line, the words line (playable and secure words, or why words are unavailable), one learning-path line per active script, a side-by-side hiragana/katakana kana grid of each character's learning state, and the word data attribution lines
 - `progress.go`: computes each script's learning-path status (`PathStatus`) and total correct counts per character
 - `statswidgets.go`: the fixed-column grid layout and the kana cell widget used by the stats panel
 - `input.go`: `InputBar` — score, level, tempo, miss count, text entry

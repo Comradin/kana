@@ -31,6 +31,15 @@ func pathSegW(steps int) float32 {
 	return min(float32(math.Floor(float64(avail/float32(steps)))), pathSegMax)
 }
 
+// Status panel text: the panel's content is statsTextW wide (300 px minus
+// the theme padding on both sides); the words line starts at
+// statsWordsTextSize and shrinks down to statsMinTextSize before it is cut.
+const (
+	statsTextW         float32 = 292
+	statsWordsTextSize float32 = 11
+	statsMinTextSize   float32 = 9
+)
+
 // StatsSnapshot is a lock-free copy of the game state fields needed by the panel.
 type StatsSnapshot struct {
 	SessionStats  map[string]store.KanaStats
@@ -172,7 +181,7 @@ func newStatsPanel() *StatsPanel {
 	session := container.NewGridWithColumns(3, c1, c2, c3)
 
 	// One path line per script: name, one segment per step, count; "Next" below.
-	p.wordsText = smallText("", 11)
+	p.wordsText = smallText("", statsWordsTextSize)
 	p.wordsText.Color = panelSubColor
 	top := container.NewVBox(session, p.wordsText)
 	for _, info := range kanacore.Scripts() {
@@ -343,6 +352,8 @@ func (p *StatsPanel) Update(snap StatsSnapshot) {
 		p.accuracyText.Text = "–"
 	}
 	p.wordsText.Text = formatWordsLine(snap.Words)
+	p.wordsText.TextSize = statsWordsTextSize
+	fitText(p.wordsText, statsTextW, statsMinTextSize)
 
 	for _, info := range kanacore.Scripts() {
 		box := p.pathLines[info.Script]

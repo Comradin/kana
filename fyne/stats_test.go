@@ -285,3 +285,26 @@ func TestPanelCountsWordHits(t *testing.T) {
 		t.Fatalf("correct %q, accuracy %q; want 2 and 50 %%", p.correctText.Text, p.accuracyText.Text)
 	}
 }
+
+func TestPanelFitsWordsErrorToItsWidth(t *testing.T) {
+	test.NewApp()
+	p := newStatsPanel()
+	snap := panelSnap([]string{"vowels"}, both)
+	snap.Words = WordsStatus{Err: strings.Repeat("W", 48)}
+	p.Update(snap)
+	if w := p.wordsText.MinSize().Width; w > statsTextW {
+		t.Fatalf("words line is %v px wide, want at most %v px", w, statsTextW)
+	}
+	if p.wordsText.TextSize < statsMinTextSize {
+		t.Fatalf("text size %v below the %v pt minimum", p.wordsText.TextSize, statsMinTextSize)
+	}
+	if !strings.HasPrefix(p.wordsText.Text, "Words unavailable: W") || !strings.HasSuffix(p.wordsText.Text, "…") {
+		t.Fatalf("words line = %q, want the start kept and an ellipsis", p.wordsText.Text)
+	}
+
+	snap.Words = WordsStatus{Playable: 42, Secure: 17, Level: 5}
+	p.Update(snap)
+	if p.wordsText.TextSize != statsWordsTextSize || p.wordsText.Text != "Words: 42 playable · 17 secure · up to N5" {
+		t.Fatalf("short line = %q at %v pt, want it whole at %v pt", p.wordsText.Text, p.wordsText.TextSize, statsWordsTextSize)
+	}
+}

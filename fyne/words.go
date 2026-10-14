@@ -19,8 +19,9 @@ var meaningLangs = []string{"en", "de", "fr", "ru", "es", "hu", "nl", "sv", "sl"
 // loadBundled decodes the bundled word list once per process.
 var loadBundled = sync.OnceValues(vocab.Bundled)
 
-// bundledWords returns the bundled word list. Tests replace it to simulate
-// a broken list.
+// bundledWords reports whether the bundled word list loaded. It is a test
+// hook for error injection only: tests replace it to simulate a broken
+// list. The words themselves always come from bundledIndex.
 var bundledWords = loadBundled
 
 // bundledIndex is the index of the bundled word list, built once per
@@ -129,8 +130,9 @@ func missFeedbackText(e vocab.Entry, lang string) string {
 	return s
 }
 
-// maxWordsLineRunes keeps the words line inside the 292 px status panel.
-const maxWordsLineRunes = 48
+// maxWordsLineRunes is a safety cap on the words line; the status panel
+// fits the line to its width (see StatsPanel.Update).
+const maxWordsLineRunes = 200
 
 // wordDataSource attributes the bundled word data; two lines so it fits the
 // status panel. Stage 4 moves it to the settings' Sources tab.
