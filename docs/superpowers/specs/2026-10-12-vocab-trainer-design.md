@@ -301,6 +301,25 @@ offer use them instead of calling `KanaUnits` again.
   JMdict (EDRDG, CC BY-SA 4.0), JLPT levels by J. Waller", so the app attributes the data it
   uses from the first release that uses it.
 
+### Stage 3 revision after play-testing (2026-10-14)
+
+With secure kana, every N5 word became playable at once and up to 30 % of tiles were words
+the learner had never seen. Until stage 4 introduces words in small packages with an intro
+dialog, stage 3 is throttled:
+
+- **Word share** `p = min(0.1, len(playable) / 100)` (was 0.3).
+- **Bundled words are off by default.** New setting `bundled_words` (default false; UI in
+  stage 4). With it off, mixed mode plays only private-list words; the status line then says
+  "Words: 23 playable · 5 secure · own lists", or, with no private lists, "Words: add a list
+  to ~/.local/share/kana/words" (the real directory).
+- **Spaces in input are ignored** by `ReadingMatches` (`shitsurei desuga`).
+- **Header aliases** in CSV/TSV lists (case-insensitive): `kana` ← `japanisch`,
+  `japanische schrift`, `reading`; `meaning_de` ← `deutsch`, `german`; `meaning_en` ←
+  `englisch`, `english`; `lesson` ← `lektion`; other columns (e.g. a romaji column) are
+  ignored. An explicit `kana`/`meaning_*`/`lesson` column wins over an alias.
+
+Stage 4 adds word packages with an intro dialog and re-enables bundled words through them.
+
 ## Stage 4: Words-only mode, settings, level offer
 
 ### Words-only mode
