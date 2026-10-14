@@ -4,3 +4,6 @@ kana-desktop
 dist/
 .DS_Store
 words/
+# Private word lists never belong in this public repository (see README)
+/*.csv
+/*.tsv
