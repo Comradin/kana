@@ -64,6 +64,9 @@ type GameState struct {
 	meaningLang          string                  // language meanings are shown in
 	words                *vocab.Index            // every word reading; nil = no words
 	wordsErr             string                  // bundled list failed to load
+	useBundled           bool                    // bundled words are played (setting bundled_words)
+	hasLists             bool                    // at least one private list was found
+	wordsDir             string                  // the private list folder; "" if unknown
 	playable             []vocab.Entry           // cached playableWords result
 	playableOK           bool                    // playable is up to date
 
@@ -167,6 +170,9 @@ func NewGameState(st *store.Store) *GameState {
 		}
 		if level, err := st.WordLevel(); err == nil {
 			gs.wordLevel = level
+		}
+		if on, err := st.BundledWords(); err == nil {
+			gs.useBundled = on
 		}
 		if l, err := st.MeaningLang(); err == nil {
 			storedLang = l

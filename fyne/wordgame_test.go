@@ -572,8 +572,8 @@ func TestWordShareOfSpawns(t *testing.T) {
 		t.Fatalf("%d words spawned while no vowel is secure", n)
 	}
 	secure(gs, "あ", "い", "う", "え", "お")
-	if n := countWordSpawns(gs, 1000); n < 250 || n > 350 {
-		t.Fatalf("%d/1000 word spawns with 60 playable, want about 300", n)
+	if n := countWordSpawns(gs, 1000); n < 70 || n > 130 {
+		t.Fatalf("%d/1000 word spawns with 60 playable, want about 100 (the 10 %% cap)", n)
 	}
 }
 
@@ -581,10 +581,10 @@ func TestFewPlayableWordsSpawnRarely(t *testing.T) {
 	gs := newTestState()
 	selectRows(gs, "vowels")
 	gs.rnd = rand.New(rand.NewSource(3)).Float64
-	withWords(gs, vowelWords(10)...)
+	withWords(gs, vowelWords(5)...)
 	secure(gs, "あ", "い", "う", "え", "お")
-	if n := countWordSpawns(gs, 1000); n < 60 || n > 140 {
-		t.Fatalf("%d/1000 word spawns with 10 playable, want about 100", n)
+	if n := countWordSpawns(gs, 1000); n < 25 || n > 80 {
+		t.Fatalf("%d/1000 word spawns with 5 playable, want about 50", n)
 	}
 }
 
@@ -747,7 +747,7 @@ func TestSnapshotWordsStatus(t *testing.T) {
 	gs.wordOverallStats["あい"] = store.WordStats{Kana: "あい", CorrectCount: 2}
 	gs.wordSessionStats["あい"] = store.WordStats{Kana: "あい", CorrectCount: 1}
 	snap := gs.snapshot()
-	if snap.Words != (WordsStatus{Playable: 2, Secure: 1, Level: 5}) {
+	if snap.Words != (WordsStatus{Bundled: true, Playable: 2, Secure: 1, Level: 5}) {
 		t.Fatalf("Words = %+v, want 2 playable, 1 secure, N5", snap.Words)
 	}
 	if snap.WordCorrect != 1 {
@@ -762,6 +762,7 @@ func TestSnapshotShowsBundledError(t *testing.T) {
 	t.Cleanup(func() { bundledWords = orig })
 	gs := NewGameState(nil)
 	gs.mu.Lock()
+	gs.useBundled = true
 	snap := gs.snapshot()
 	gs.mu.Unlock()
 	if got := formatWordsLine(snap.Words); got != "Words unavailable: broken data" {
@@ -821,5 +822,81 @@ func TestSpawnFallsBackToWordWithoutKana(t *testing.T) {
 	gs.spawnKana()
 	if len(gs.tiles) != 1 || gs.tiles[0].word == nil || gs.tiles[0].word.Kana != "あい" {
 		t.Fatalf("tiles = %d, want one word tile あい when no kana is available", len(gs.tiles))
+	}
+}
+
+// isolateWordsDir points the data directory at a fresh temp dir and returns
+// its (empty, not yet created) words folder.
+func isolateWordsDir(t *testing.T) string {
+	t.Helper()
+	data := t.TempDir()
+	t.Setenv("XDG_DATA_HOME", data)
+	return filepath.Join(data, "kana", "words")
+}
+
+func TestBundledWordsSettingIsLoaded(t *testing.T) {
+	test.NewApp()
+	isolateWordsDir(t)
+	st := openTestStore(t)
+	_ = st.SaveSelectedRows([]string{"vowels"})
+	if NewGameState(st).useBundled {
+		t.Fatal("bundled words must be off by default")
+	}
+	_ = st.SaveBundledWords(true)
+	if !NewGameState(st).useBundled {
+		t.Fatal("stored bundled_words=1 not loaded")
+	}
+}
+
+func TestBundledOffPlaysOnlyPrivateWords(t *testing.T) {
+	gs := newTestState()
+	gs.useBundled = false
+	gs.words = vocab.NewIndex(
+		[]vocab.Word{bw("あい", 5, "love"), bw("あお", 4, "blue")},
+		[]vocab.List{{Name: "mine", Words: []vocab.Word{
+			{Kana: "あお", Source: "mine", Meanings: vocab.Meanings{}},
+			{Kana: "いえ", Source: "mine", Meanings: vocab.Meanings{}},
+		}}},
+	)
+	secure(gs, "あ", "い", "う", "え", "お")
+	// あい is bundled only; あお is N4 but also private, so the level gate
+	// does not apply to it.
+	if got := playableKana(gs); !equalIDs(got, []string{"あお", "いえ"}) {
+		t.Fatalf("playable with bundled off = %v, want [あお いえ]", got)
+	}
+	gs.useBundled = true
+	gs.invalidatePlayable()
+	if got := playableKana(gs); !equalIDs(got, []string{"あい", "あお", "いえ"}) {
+		t.Fatalf("playable with bundled on = %v", got)
+	}
+}
+
+func TestWordsLineWithoutBundledWords(t *testing.T) {
+	test.NewApp()
+	dir := isolateWordsDir(t)
+	home, _ := os.UserHomeDir()
+
+	gs := NewGameState(nil)
+	gs.mu.Lock()
+	ws := gs.wordsStatus()
+	gs.mu.Unlock()
+	if want := "Words: add a list to " + displayDir(dir, home); formatWordsLine(ws) != want {
+		t.Fatalf("no lists: line = %q, want %q", formatWordsLine(ws), want)
+	}
+
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "mine.csv"), []byte("kana,meaning\nあお,blue\nねこ,cat\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gs = NewGameState(nil)
+	gs.mu.Lock()
+	secure(gs, "あ", "お")
+	gs.wordOverallStats["あお"] = store.WordStats{Kana: "あお", CorrectCount: 3}
+	ws = gs.wordsStatus()
+	gs.mu.Unlock()
+	if got := formatWordsLine(ws); got != "Words: 1 playable · 1 secure · own lists" {
+		t.Fatalf("own lists: line = %q", got)
 	}
 }

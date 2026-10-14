@@ -34,6 +34,7 @@ func newTestState() *GameState {
 		wordMemory:       map[string]memory.State{},
 		wordMemoryDirty:  map[string]bool{},
 		wordLevel:        5,
+		useBundled:       true,
 		meaningLang:      "en",
 	}
 	gs.charSet = kanacore.AllKana()

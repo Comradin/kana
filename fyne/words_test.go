@@ -1,6 +1,7 @@
 package main
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -74,14 +75,44 @@ func TestFeedbackTexts(t *testing.T) {
 }
 
 func TestFormatWordsLine(t *testing.T) {
-	if got := formatWordsLine(WordsStatus{Playable: 42, Secure: 17, Level: 5}); got != "Words: 42 playable · 17 secure · up to N5" {
-		t.Errorf("line = %q", got)
+	cases := []struct {
+		name string
+		ws   WordsStatus
+		want string
+	}{
+		{"bundled", WordsStatus{Bundled: true, Playable: 42, Secure: 17, Level: 5}, "Words: 42 playable · 17 secure · up to N5"},
+		{"bundled error", WordsStatus{Bundled: true, Err: "broken data", Playable: 3, Level: 5}, "Words unavailable: broken data"},
+		{"own lists", WordsStatus{HasLists: true, Playable: 23, Secure: 5, Level: 5}, "Words: 23 playable · 5 secure · own lists"},
+		{"own lists, bundled error", WordsStatus{HasLists: true, Err: "broken data", Playable: 23, Secure: 5}, "Words: 23 playable · 5 secure · own lists"},
+		{"no lists", WordsStatus{Dir: "~/.local/share/kana/words"}, "Words: add a list to ~/.local/share/kana/words"},
+		{"no lists, no folder", WordsStatus{}, "Words: add a word list"},
 	}
-	if got := formatWordsLine(WordsStatus{Err: "broken data", Playable: 3, Level: 5}); got != "Words unavailable: broken data" {
-		t.Errorf("error line = %q", got)
+	for _, c := range cases {
+		if got := formatWordsLine(c.ws); got != c.want {
+			t.Errorf("%s: line = %q, want %q", c.name, got, c.want)
+		}
 	}
-	long := formatWordsLine(WordsStatus{Err: strings.Repeat("x", 500)})
+	long := formatWordsLine(WordsStatus{Bundled: true, Err: strings.Repeat("x", 500)})
 	if r := []rune(long); len(r) != maxWordsLineRunes || !strings.HasSuffix(long, "…") {
 		t.Errorf("long error = %q (%d runes), want the %d-rune safety cap", long, len(r), maxWordsLineRunes)
+	}
+}
+
+func TestDisplayDir(t *testing.T) {
+	p := filepath.FromSlash
+	home := p("/home/me")
+	cases := map[string]string{
+		p("/home/me/.local/share/kana/words"): "~" + p("/.local/share/kana/words"),
+		p("/home/me"):                         p("/home/me"),
+		p("/home/mex/words"):                  p("/home/mex/words"),
+		p("/data/kana/words"):                 p("/data/kana/words"),
+	}
+	for dir, want := range cases {
+		if got := displayDir(dir, home); got != want {
+			t.Errorf("displayDir(%q) = %q, want %q", dir, got, want)
+		}
+	}
+	if got := displayDir(p("/data/words"), ""); got != p("/data/words") {
+		t.Errorf("without a home: %q", got)
 	}
 }

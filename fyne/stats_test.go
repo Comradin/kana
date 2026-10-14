@@ -259,7 +259,7 @@ func TestPanelShowsWordsLineAndSource(t *testing.T) {
 	test.NewApp()
 	p := newStatsPanel()
 	snap := panelSnap([]string{"vowels"}, both)
-	snap.Words = WordsStatus{Playable: 42, Secure: 17, Level: 5}
+	snap.Words = WordsStatus{Bundled: true, Playable: 42, Secure: 17, Level: 5}
 	p.Update(snap)
 	if p.wordsText.Text != "Words: 42 playable · 17 secure · up to N5" {
 		t.Fatalf("words line = %q", p.wordsText.Text)
@@ -290,7 +290,7 @@ func TestPanelFitsWordsErrorToItsWidth(t *testing.T) {
 	test.NewApp()
 	p := newStatsPanel()
 	snap := panelSnap([]string{"vowels"}, both)
-	snap.Words = WordsStatus{Err: strings.Repeat("W", 48)}
+	snap.Words = WordsStatus{Bundled: true, Err: strings.Repeat("W", 48)}
 	p.Update(snap)
 	if w := p.wordsText.MinSize().Width; w > statsTextW {
 		t.Fatalf("words line is %v px wide, want at most %v px", w, statsTextW)
@@ -302,9 +302,18 @@ func TestPanelFitsWordsErrorToItsWidth(t *testing.T) {
 		t.Fatalf("words line = %q, want the start kept and an ellipsis", p.wordsText.Text)
 	}
 
-	snap.Words = WordsStatus{Playable: 42, Secure: 17, Level: 5}
+	snap.Words = WordsStatus{Bundled: true, Playable: 42, Secure: 17, Level: 5}
 	p.Update(snap)
 	if p.wordsText.TextSize != statsWordsTextSize || p.wordsText.Text != "Words: 42 playable · 17 secure · up to N5" {
 		t.Fatalf("short line = %q at %v pt, want it whole at %v pt", p.wordsText.Text, p.wordsText.TextSize, statsWordsTextSize)
+	}
+
+	snap.Words = WordsStatus{Dir: "~/" + strings.Repeat("folder/", 12) + "words"}
+	p.Update(snap)
+	if w := p.wordsText.MinSize().Width; w > statsTextW {
+		t.Fatalf("add-a-list line is %v px wide, want at most %v px", w, statsTextW)
+	}
+	if !strings.HasPrefix(p.wordsText.Text, "Words: add a list to ~/folder") {
+		t.Fatalf("add-a-list line = %q, want its start kept", p.wordsText.Text)
 	}
 }
