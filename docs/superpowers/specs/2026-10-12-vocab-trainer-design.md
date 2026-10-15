@@ -389,6 +389,15 @@ The dialog gets four outer tabs; it must still fit the 1000 × 760 window:
   missing and opens it via `fyne.CurrentApp().OpenURL`.
 - The stage 3 attribution line in the status panel is removed once the Sources tab exists.
 
+## Stage 5 (planned, decided 2026-10-15): meaning mode
+
+A mode where the learner types the **meaning** instead of the reading. Any stored
+alternative counts (that is why meanings are lists). Matching is lenient: case-insensitive,
+parenthesised additions optional, a leading article ignored, umlauts may be written as
+ae/oe/ue/ss. After a hit the reading and romaji are shown. When several falling words share a
+meaning, the lowest tile wins. Offered first for private lists only, because bundled JMdict
+meanings are often too specific or too many. To be specified in its own brainstorming.
+
 ## Testing
 
 - **kanacore (stage 1):**
