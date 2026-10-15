@@ -1,7 +1,7 @@
 # Design: Vocabulary Trainer Stage 4a — Word Packages, Settings Tabs, Kana Font
 
 **Date:** 2026-10-15
-**Status:** Approved (design discussion)
+**Status:** Approved (design discussion), revised after spec review — the section "Review resolutions" is authoritative where it is more specific
 **Branch:** `feat/word-packages` (from `main` after PR #17)
 **Builds on:** `2026-10-12-vocab-trainer-design.md` (stages 1–3, and "Planned for stage 4")
 
@@ -22,18 +22,74 @@ management (problems, reload, open folder), meaning language setting.
 |---|---|
 | Introduced | A word is introduced once it was shown in a package intro. Only introduced words fall (and their kana must still be secure). |
 | Package size | Setting: 3, 5 (default) or 10. |
-| Next package | When at least `ceil(0.8 × size of the newest package)` of its words are secure (≥ 3 correct). The first package comes as soon as the source has a playable word. |
+| Next package | When at least `ceil(0.8 × p)` of the newest package's words that are playable now are secure (≥ 3 correct), `p` being that playable count; if none of them is playable, the package counts as complete. The first package comes as soon as the source has a playable word. |
 | Learning source | Setting "New words from": one private list (shown by a prettified file name) or "JLPT". Default: the first private list by name if any, else JLPT. |
 | JLPT order | Level by level from the setting `word_level` (N5 first); within a level by frequency rank (JMdict priority tags), then fewer kana units, then reading. |
 | Private list order | By lesson (numeric if all lessons of the list are integers, else first appearance), then file order; words without lesson last, in file order. |
 | Intro dialog | Each word large with romaji and meaning; per word a "Already known" checkbox. Checked words count as secure and the package is refilled from the source. Pauses the game like kana intros. |
-| Level offer | When every bundled word of level `word_level` is introduced, offer "N5 finished — continue with N4?". Yes lowers `word_level`; Later: not asked again this session. If words remain but none is playable yet, the status line says to learn more kana instead. |
+| Level offer | When every bundled word with JLPT ≥ `word_level` (i.e. that level and all easier ones) is introduced, offer "N5 finished — continue with N4?". Yes lowers `word_level`; Later: not asked again this session. If words remain but none is playable yet, the status line says to learn more kana instead. |
 | Word share | Unchanged: `min(0.1, playable_introduced / 100)`. |
 | Existing progress | On first start, every reading with a `word_stats` row or a `word:` memory state counts as introduced. |
 | `bundled_words` | Removed; the learning source replaces it. The store key is ignored. |
 | Settings dialog | Tabs Kana, Words, Game, Sources. Save/Cancel apply to all tabs. |
 | Attribution | Moves from the status panel to the Sources tab. |
 | Kana font | Setting: Noto Sans JP (default), M PLUS Rounded 1c, or System. Full font files (Regular + Bold) ship with the app. |
+
+## Review resolutions
+
+1. **80 % rule:** counts only `newestPackage` readings that are playable now (numerator and
+   denominator); none playable → complete. Prevents a deadlock when a script is switched off,
+   a list file disappears, or words become unplayable.
+2. **Package membership:** `ReplacementWord(exclude []string) (vocab.Entry, bool)` appends the
+   replacement to `pendingPackage` under the lock. `FinishPackage(shown, known []string)`:
+   every reading in `shown` (ticked or not) becomes introduced; `newestPackage = shown − known`.
+   Unticking a word keeps its replacement (the package just grows by one). No replacement
+   available → the box is ticked, nothing is added.
+3. **"Already known":** writes `word_stats` with `correct = max(3, current)` directly (store and
+   `wordOverallStats`, not session stats, so the session tiles stay honest) and a memory state
+   `memory.Seed(3, now)` (dirty). No points, no tempo change.
+4. **Re-check points** for `maybeOfferPackage()`: after a word hit; after a kana hit that makes a
+   kana secure; at the end of `checkAnswer` next to `maybeOfferKatakana` (after the score/end
+   check); at the end of `Reset`, `FinishIntro`, `EnableKatakana`, `DeclineKatakana`,
+   `FinishPackage`, `AcceptLevelOffer`; after settings Save. At start, `NewGameState` sets
+   `pendingPackage` directly (no event), like `startLearningPath` sets `pendingIntro`; the first
+   `showPendingDialogs` shows it after any kana intro. If an event send fails (buffer full),
+   nothing is set pending and the next re-check point tries again.
+5. **Load failure:** `introducedLoadFailed` (like `wordMemoryLoadFailed`): no packages are
+   offered, nothing is written, only already-known memory states are unaffected; the status
+   line says "Words unavailable: could not load progress".
+6. **Persistence:** `FinishPackage` saves the introduced readings and `newest_package`
+   immediately (rare event; no batching through the merge). `introduced_words` is created after
+   `ensureMemory` with the same `sqlite_master` check and one transaction for create + seed.
+7. **Level offer:** condition per the Decisions table (JLPT ≥ `word_level` all introduced).
+   `levelOfferDeclined` lives for the app run (survives `Reset`). Exhausted level after Later:
+   status "Words: JLPT N5 finished"; after N1: "Words: JLPT finished".
+8. **Stage 3 leftovers removed:** `bundled_words` (store getters/setters, `useBundled`,
+   `WordsStatus.Bundled`, `Filter.NoBundled`); the stage 3 level gate on playable words.
+9. **`applySettings`:** when source, level, package size or scripts change → invalidate the
+   playable cache, run `dropInactiveTiles`, and (source change) clear `newestPackage`.
+10. **vocab:** `Entry.ListPos` is deep-copied by `clone()`; `Rank` is taken only from bundled
+    words; rank 0 (missing `"r"`) sorts as 99; `NextPackage` uses a per-source order computed
+    once per index (cached), then filters.
+11. **vocabgen:** `xmlEntry` parses `r_ele` (`reb`, `re_pri`) and `k_ele` (`ke_pri`). Rank from the
+    `re_pri` of the `reb` equal to the row's reading; if that has no tags, the best tag over all
+    `re_pri`/`ke_pri` of the entry. `SOURCES` is rewritten with the inputs actually used.
+12. **Counts:** status "introduced" = introduced readings present in the index; Words tab
+    "left in source" = not-introduced entries of the source (JLPT: bundled with JLPT ≥
+    `word_level`). Intro title for a package spanning lessons: "minna no nihongo · lessons 2–3".
+13. **Fonts:**
+    - Four package-level `fyne.Resource` vars with distinct names, created once (Fyne caches
+      custom fonts by resource and never evicts them).
+    - Each font is parsed once with `github.com/go-text/typesetting/font` (`font.ParseTTF`,
+      `face.NominalGlyph`) for the coverage check; the module becomes a direct dependency.
+    - Set `FontSource` before measuring and size tiles with `text.MinSize()` (not
+      `fyne.MeasureText`, which ignores `FontSource`).
+    - The coverage check runs on the final text (after `fitText`, so "…" counts). Its purpose
+      is a consistent look: without it, missing runes fall back to system fonts rune by rune.
+    - A font change after Save applies to new tiles and labels; falling tiles keep theirs. The
+      status grid cells get `SetKanaFont(res)`.
+14. **Dialog plumbing:** `PendingDialogs` returns a struct (intro rows, katakana offer, package,
+    level offer). A validation error in a tab switches to that tab.
 
 ## Word packages
 
@@ -82,8 +138,9 @@ func NextPackage(ix *Index, src Source, introduced map[string]bool, n int, known
 - `introduced map[string]bool`, loaded from the store; `introducedDirty` saved in
   `mergeSessionStats` like word stats (independent merge; failures keep the dirty set).
 - `newestPackage []string` (readings), persisted so the 80 % rule survives restarts.
-- **Playable for spawning** = stage 3 playable ∩ introduced. The stage 3 `Filter` keeps the
-  level gate for bundled entries; private-list entries pass.
+- **Playable for spawning** = introduced ∩ known (all units known, as in stage 3), across all
+  sources and levels. `word_level` and the source only steer `NextPackage`; an introduced word
+  keeps falling even if the level or source changes later.
 - **Package check** `maybeOfferPackage()` (under lock), called after a word hit, after a kana
   hit that makes a kana secure (it may make words playable), at start (after the kana intro
   for a first launch), after settings are saved, and after the level offer is accepted:
@@ -143,8 +200,10 @@ is JLPT. Fitted to width as in stage 3.
 
 - Pretty list name: replace `-` and `_` with spaces (`minna-no-nihongo` → `minna no nihongo`);
   the stored setting is the real list name.
-- `word_source` setting: `jlpt` or `list:<name>`; unknown or missing list → JLPT, and the
-  Words tab says "List <name> not found".
+- `word_source` setting: `jlpt` or `list:<name>`. A missing list stays selected: no packages
+  are offered, the status line shows the add-a-list hint, and the Words tab says "List <name>
+  not found". The automatic default is resolved once (first list by name, else JLPT) and
+  saved on first start, so adding a list later does not switch the source silently.
 - Changing the source keeps introduced words falling; new packages come from the new source;
   `newestPackage` is cleared so the next package can come at once.
 - The dialog still pauses the game; Save applies all tabs and calls `maybeOfferPackage()`.
@@ -207,7 +266,8 @@ is JLPT. Fitted to width as in stage 3.
   - status line texts;
   - settings tabs carry the values; Sources tab lists all five sources;
   - kana font: resources load; coverage check (a Cyrillic string → nil `FontSource`);
-    tiles use the chosen font; `system` → nil.
+    tiles use the chosen font; `system` → nil. The coverage test uses a rune neither font
+    has (e.g. Thai ก, confirmed against the pinned files), not Cyrillic (Noto Sans JP has it).
 - **Manual:** on macOS, Windows and Linux (release packages), kana render in both fonts;
   a first package appears for a beginner with secure vowels and k-row.
 
