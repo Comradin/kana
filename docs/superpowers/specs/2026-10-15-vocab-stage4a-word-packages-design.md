@@ -40,9 +40,11 @@ management (problems, reload, open folder), meaning language setting.
 1. **80 % rule:** counts only `newestPackage` readings that are playable now (numerator and
    denominator); none playable → complete. Prevents a deadlock when a script is switched off,
    a list file disappears, or words become unplayable.
-2. **Package membership:** `ReplacementWord(exclude []string) (vocab.Entry, bool)` appends the
-   replacement to `pendingPackage` under the lock. `FinishPackage(shown, known []string)`:
-   every reading in `shown` (ticked or not) becomes introduced; `newestPackage = shown − known`.
+2. **Package membership:** `pendingPackage` is the single source of truth.
+   `ReplacementWord() (vocab.Entry, bool)` takes the next `NextPackage` entry not already in
+   `pendingPackage` and appends it under the lock. `FinishPackage(known []string)`: every
+   reading in `pendingPackage` (ticked or not) becomes introduced;
+   `newestPackage = pendingPackage − known`.
    Unticking a word keeps its replacement (the package just grows by one). No replacement
    available → the box is ticked, nothing is added.
 3. **"Already known":** writes `word_stats` with `correct = max(3, current)` directly (store and
@@ -50,16 +52,20 @@ management (problems, reload, open folder), meaning language setting.
    `memory.Seed(3, now)` (dirty). No points, no tempo change.
 4. **Re-check points** for `maybeOfferPackage()`: after a word hit; after a kana hit that makes a
    kana secure; at the end of `checkAnswer` next to `maybeOfferKatakana` (after the score/end
-   check); at the end of `Reset`, `FinishIntro`, `EnableKatakana`, `DeclineKatakana`,
+   check); at the end of `Reset` (after its `paused` recomputation), `FinishIntro`, `EnableKatakana`, `DeclineKatakana`,
    `FinishPackage`, `AcceptLevelOffer`; after settings Save. At start, `NewGameState` sets
    `pendingPackage` directly (no event), like `startLearningPath` sets `pendingIntro`; the first
    `showPendingDialogs` shows it after any kana intro. If an event send fails (buffer full),
-   nothing is set pending and the next re-check point tries again.
-5. **Load failure:** `introducedLoadFailed` (like `wordMemoryLoadFailed`): no packages are
-   offered, nothing is written, only already-known memory states are unaffected; the status
-   line says "Words unavailable: could not load progress".
+   nothing is set pending and the next re-check point tries again. Whenever
+   `maybeOfferPackage` sets a pending package or level offer it also sets `paused = true`
+   (as `announceRows` does); `settle()` only ever unpauses.
+5. **Load failure:** `introducedLoadFailed` (like `wordMemoryLoadFailed`): introduced words
+   cannot be determined, so the playable set is empty (no words fall), no packages are offered
+   and nothing is written to `introduced_words`; kana play is unaffected. The status line says
+   "Words unavailable: could not load progress".
 6. **Persistence:** `FinishPackage` saves the introduced readings and `newest_package`
-   immediately (rare event; no batching through the merge). `introduced_words` is created after
+   immediately (rare event; no batching through the merge). A failed save leaves the reading
+   in `introducedDirty`, which `mergeSessionStats` retries. `introduced_words` is created after
    `ensureMemory` with the same `sqlite_master` check and one transaction for create + seed.
 7. **Level offer:** condition per the Decisions table (JLPT ≥ `word_level` all introduced).
    `levelOfferDeclined` lives for the app run (survives `Reset`). Exhausted level after Later:
@@ -105,8 +111,8 @@ management (problems, reload, open folder), meaning language setting.
   - else 99.
   - Merged homophones take the lowest (best) rank. Waller-fallback rows without an entry → 99.
 - `vocab.Word` and `vocab.Entry` gain `Rank int`. For private-list words it is 0 (unused).
-- The data is regenerated (same JMdict/mapping inputs as recorded in `vocab/data/SOURCES`,
-  or the current ones; `SOURCES` is updated accordingly). `update-words.yml` keeps working
+- The data is regenerated from current inputs; `SOURCES` is rewritten with the inputs
+  actually used. `update-words.yml` keeps working
   unchanged.
 
 ### Selection (`vocab`)
@@ -135,41 +141,42 @@ func NextPackage(ix *Index, src Source, introduced map[string]bool, n int, known
 
 ### Game state (`fyne`)
 
-- `introduced map[string]bool`, loaded from the store; `introducedDirty` saved in
-  `mergeSessionStats` like word stats (independent merge; failures keep the dirty set).
+- `introduced map[string]bool`, loaded from the store; saved immediately by `FinishPackage`
+  (Resolution 6); `introducedDirty` only holds readings whose immediate save failed, retried
+  in `mergeSessionStats`.
 - `newestPackage []string` (readings), persisted so the 80 % rule survives restarts.
 - **Playable for spawning** = introduced ∩ known (all units known, as in stage 3), across all
   sources and levels. `word_level` and the source only steer `NextPackage`; an introduced word
   keeps falling even if the level or source changes later.
-- **Package check** `maybeOfferPackage()` (under lock), called after a word hit, after a kana
-  hit that makes a kana secure (it may make words playable), at start (after the kana intro
-  for a first launch), after settings are saved, and after the level offer is accepted:
+- **Package check** `maybeOfferPackage()` (under lock), called at the re-check points listed in
+  Resolution 4:
   1. Not when over, or while a package or level offer is already pending.
-  2. If `newestPackage` is non-empty and fewer than `ceil(0.8 × len)` of it are secure → stop.
+  2. Let `p` = readings of `newestPackage` that are playable now. If `p` is non-empty and fewer
+     than `ceil(0.8 × len(p))` of them are secure → stop.
   3. `pkg := NextPackage(index, source, introduced, packageSize, unitKnown)`.
-  4. If `pkg` is empty: for the JLPT source, if every bundled entry of level `word_level` is
-     introduced, `word_level > 1` and the offer was not declined this session → queue the
-     level offer; else stop (the status line explains, see below).
-  5. Else queue a **package event** with `pkg` and set `pendingPackage`.
+  4. If `pkg` is empty: for the JLPT source, if every bundled entry with JLPT ≥ `word_level` is
+     introduced, `word_level > 1` and the offer was not declined this run → queue the level
+     offer; else stop (the status line explains: "learn more kana", "JLPT N5 finished",
+     "JLPT finished", "<list> finished").
+  5. Else queue a **package event** with `pkg`, set `pendingPackage` and `paused = true`.
 - **Pause invariant** (as for kana intros and the katakana offer): `pendingPackage []string`
   and `pendingLevelOffer bool` keep the game paused (`settle()`), `PendingDialogs` reports
   them, `showPendingDialogs` shows them after kana intros and the katakana offer (order:
   kana intro, katakana offer, word package, level offer), `Reset` clears them, `watchEvents`
-  handles the new event kinds and drops them when over. Set pending only when the event send
-  succeeds.
-- **Finishing a package** `FinishPackage(known []string)`: marks every reading of the
-  package introduced (and dirty); sets `newestPackage` to the package readings; for each
-  reading in `known`: sets its session word stats so that overall + session correct ≥ 3 and
-  creates a word memory state as if answered correctly once (`memory.Correct` with
-  `known=false`); invalidates the playable cache; clears `pendingPackage`; `settle()`.
-- **Refill in the dialog:** when the learner ticks "Already known", the dialog asks the game
-  for a replacement (`ReplacementWord(exclude []string) (vocab.Entry, bool)` — the next
-  `NextPackage` entry not in the dialog) and adds it to the dialog; ticked words stay listed
-  (struck through) and are passed in `known`. The package shown to the learner is the
-  unticked words plus the replacements; all of them (ticked too) end up introduced.
+  handles the new event kinds and drops them when over. For event-driven offers, set pending
+  only when the event send succeeds (the start path sets it directly, Resolution 4).
+- **Finishing a package** `FinishPackage(known []string)`: every reading in `pendingPackage`
+  becomes introduced (saved immediately); `newestPackage = pendingPackage − known` (saved
+  immediately); each reading in `known` is marked secure as in Resolution 3; the playable cache
+  is invalidated; `pendingPackage` is cleared; `settle()`; then `maybeOfferPackage()`.
+- **Refill in the dialog:** when the learner ticks "Already known", the dialog calls
+  `ReplacementWord()`, which appends the next entry to `pendingPackage` and returns it; the
+  dialog adds a row for it. Ticked words stay listed (struck through) and are passed in
+  `known`. Unticking keeps the replacement. No replacement → the box is ticked, nothing added.
 - **Level offer** `AcceptLevelOffer()` lowers `word_level` by one (not below 1), saves it,
   clears pending, invalidates, `settle()`, then `maybeOfferPackage()`.
-  `DeclineLevelOffer()` sets a session flag `levelOfferDeclined`, clears pending, `settle()`.
+  `DeclineLevelOffer()` sets `levelOfferDeclined` (for the app run, survives `Reset`), clears
+  pending, `settle()`.
 - `Reset` keeps `introduced` and `newestPackage` (they are progress, not session state).
 
 ### Intro dialog (`fyne/intro.go`)
@@ -226,10 +233,12 @@ is JLPT. Fitted to width as in stage 3.
 - Coverage check: a text uses the chosen font only if the font has a glyph for every rune of
   the text (checked once per text with the font's cmap via `github.com/go-text/typesetting`,
   already a Fyne dependency); otherwise `FontSource` stays nil (theme font + system fallback).
-  This covers e.g. Cyrillic meanings if the font lacks them.
+  The check keeps a text in one consistent font; without it Fyne would fall back to system
+  fonts rune by rune for missing glyphs.
 - `system`: `FontSource` nil everywhere (today's behaviour).
 - Widgets (labels, buttons, entries, dialogs' text) keep the theme font.
-- Changing the font applies after Save to new and falling tiles, the grid and new labels.
+- Changing the font applies after Save to new tiles, new labels and the status grid
+  (`SetKanaFont`); tiles already falling keep their font.
 - The Game tab shows each choice with a preview "あ ア き キ ー" in that font.
 
 ## Store
@@ -237,8 +246,8 @@ is JLPT. Fitted to width as in stage 3.
 - Table `introduced_words (kana TEXT PRIMARY KEY, introduced_at INTEGER NOT NULL)`; created in
   `migrate`, and on creation seeded in the same transaction from `word_stats` readings and
   `memory` items with prefix `word:`.
-- Settings: `package_size` (3/5/10, default 5), `word_source` (default "" = auto: first list
-  or JLPT), `kana_font` (default `noto`), `newest_package` (readings joined with `\n`).
+- Settings: `package_size` (3/5/10, default 5), `word_source` (default "" = auto, resolved
+  on first start to the first list by name or JLPT and saved), `kana_font` (default `noto`), `newest_package` (readings joined with `\n`).
 - `IntroducedWords() (map[string]bool, error)`, `SaveIntroduced(kana string, at time.Time)`.
 - `bundled_words` getters/setters are removed.
 
@@ -256,18 +265,25 @@ is JLPT. Fitted to width as in stage 3.
   - only introduced words spawn;
   - first package offered when a source word is playable; next only at ≥ 80 % secure
     (5 → 4, 3 → 3, 10 → 8);
-  - `FinishPackage` with known words: they are secure and get memory; introduced persisted;
-  - refill: `ReplacementWord` excludes shown words;
+  - `FinishPackage` with known words: `word_stats` correct ≥ 3 and `memory.Seed(3)` state,
+    session tiles unchanged; introduced and `newest_package` persisted immediately;
+    `newestPackage` excludes known words;
+  - refill: `ReplacementWord` appends an entry not yet in `pendingPackage`; none left → false;
+  - 80 % rule counts only playable package words; no playable → complete (script switched off);
+  - re-check after `Reset` offers a package again and pauses the new game;
+  - `introducedLoadFailed`: no words fall, no packages, status hint;
   - pause invariant with a pending package and with a pending level offer; `Reset` clears
     pending but keeps `introduced`/`newestPackage`;
   - level offer when the level is exhausted, not after Later in the same session, accept
     lowers the level and offers a package;
-  - source change clears `newestPackage`; missing list → JLPT;
+  - source change clears `newestPackage`; missing list → no packages, hint shown, Words tab
+    says "List … not found"; auto source resolved and saved on first start;
+  - introduced words keep falling after the level or source changes;
   - status line texts;
   - settings tabs carry the values; Sources tab lists all five sources;
-  - kana font: resources load; coverage check (a Cyrillic string → nil `FontSource`);
-    tiles use the chosen font; `system` → nil. The coverage test uses a rune neither font
-    has (e.g. Thai ก, confirmed against the pinned files), not Cyrillic (Noto Sans JP has it).
+  - kana font: resources load; coverage check with a rune neither font has (e.g. Thai ก,
+    confirmed against the pinned files) → nil `FontSource`; tiles use the chosen font and are
+    sized with it; `system` → nil.
 - **Manual:** on macOS, Windows and Linux (release packages), kana render in both fonts;
   a first package appears for a beginner with secure vowels and k-row.
 
