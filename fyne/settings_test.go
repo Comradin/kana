@@ -294,6 +294,7 @@ func TestSourcesTabCreditsEverySource(t *testing.T) {
 		"JMdict <https://www.edrdg.org/jmdict/j_jmdict.html>",
 		"JLPT levels", "Jonathan Waller, CC BY", "Unofficial",
 		"JMdict mapping", "stephenmk/yomitan-jlpt-vocab",
+		"Noto Sans JP", "M PLUS Rounded 1c", "SIL Open Font License 1.1",
 	} {
 		if !strings.Contains(all, want) {
 			t.Errorf("Sources tab lacks %q:\n%s", want, all)

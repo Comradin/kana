@@ -83,6 +83,8 @@ type GameState struct {
 	autoProgress  bool
 	activeScripts map[kanacore.Script]bool
 
+	kanaFont fontChoice // the font kana are shown in
+
 	level         LevelInfo // chosen difficulty
 	pointsSetting int       // pointsAuto or a fixed factor
 	answerStreak  int       // correct answers in a row this game
@@ -151,6 +153,7 @@ func NewGameState(st *store.Store) *GameState {
 		introducedDirty:  map[string]bool{},
 		packageSize:      store.DefaultPackageSize,
 		wordSource:       jlptSource,
+		kanaFont:         fontByID(store.DefaultKanaFont),
 	}
 
 	for _, id := range kanacore.DefaultRowIDs() {
@@ -202,6 +205,9 @@ func NewGameState(st *store.Store) *GameState {
 		}
 		if src, err := st.WordSource(); err == nil {
 			storedSource, sourceLoaded = src, true
+		}
+		if id, err := st.KanaFont(); err == nil {
+			gs.kanaFont = fontByID(id)
 		}
 		if l, err := st.MeaningLang(); err == nil {
 			storedLang = l
@@ -560,7 +566,7 @@ func (gs *GameState) spawnKana() {
 	base := gs.level.MinFall + rand.Float32()*(gs.level.MaxFall-gs.level.MinFall)
 	chars := gs.availableCharacters()
 	if entry, ok := gs.pickWord(len(chars) == 0); ok {
-		tile = newWordTile(entry, gs.canvasW)
+		tile = newWordTile(entry, gs.canvasW, gs.kanaFont)
 		tile.fallSeconds = base * wordFallFactor(len(entry.Units)) * tempoFactor(gs.tempoStep)
 	} else if len(chars) == 0 {
 		gs.mu.Unlock()
@@ -568,7 +574,7 @@ func (gs *GameState) spawnKana() {
 	} else {
 		char := memory.Pick(gs.spawnCandidates(chars), gs.memory, gs.now(), gs.rnd)
 		romaji, _ := gs.charSet.GetRomaji(char)
-		tile = newKanaTile(kanacore.Kana{Char: char, Romaji: romaji})
+		tile = newKanaTile(kanacore.Kana{Char: char, Romaji: romaji}, gs.kanaFont)
 		correct := gs.overallStats[char].CorrectCount + gs.sessionStats[char].CorrectCount
 		tile.fallSeconds = base * charFallFactor(correct) * tempoFactor(gs.tempoStep)
 	}
@@ -1170,6 +1176,24 @@ func (gs *GameState) SetSettingsOpen(open bool) {
 		gs.settle()
 	}
 	gs.buildSnapshot()
+}
+
+// KanaFont returns the kana font in use.
+func (gs *GameState) KanaFont() fontChoice {
+	gs.mu.Lock()
+	defer gs.mu.Unlock()
+	return gs.kanaFont
+}
+
+// SetKanaFont switches the kana font and saves it. New tiles, labels and
+// dialogs use it; falling tiles keep theirs.
+func (gs *GameState) SetKanaFont(id string) {
+	gs.mu.Lock()
+	defer gs.mu.Unlock()
+	gs.kanaFont = fontByID(id)
+	if gs.store != nil {
+		_ = gs.store.SaveKanaFont(gs.kanaFont.id)
+	}
 }
 
 // IsUserPaused reports whether the learner has paused the game.

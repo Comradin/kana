@@ -50,7 +50,8 @@ type KanaTile struct {
 	fallSeconds float32 // time to cross the canvas; see fallStep
 }
 
-func newKanaTile(k kanacore.Kana) *KanaTile {
+// newKanaTile builds a kana tile in the kana font kf.
+func newKanaTile(k kanacore.Kana, kf fontChoice) *KanaTile {
 	w := tileWidthFor(k.Char)
 
 	shadow := canvas.NewRectangle(tileShadowColor)
@@ -61,25 +62,27 @@ func newKanaTile(k kanacore.Kana) *KanaTile {
 
 	text := canvas.NewText(k.Char, kanaTextColor)
 	text.TextSize = 32
-	text.Resize(fyne.MeasureText(text.Text, text.TextSize, text.TextStyle))
+	setKanaFont(text, kf)
+	text.Resize(text.MinSize())
 
 	t := &KanaTile{kana: k, width: w, shadow: shadow, face: face, text: text}
 	t.Move(fyne.NewPos(0, 0))
 	return t
 }
 
-// newWordTile builds a word tile: a sage face with a border, as wide as the
-// word plus padding, so even a one-unit word (か) does not look like a kana
-// tile. A word wider than maxW (the field width) gets a smaller font, down
-// to minWordTextSize, so the tile fits.
-func newWordTile(e vocab.Entry, maxW float32) *KanaTile {
+// newWordTile builds a word tile in the kana font kf: a sage face with a
+// border, as wide as the word plus padding, so even a one-unit word (か)
+// does not look like a kana tile. A word wider than maxW (the field width)
+// gets a smaller font, down to minWordTextSize, so the tile fits.
+func newWordTile(e vocab.Entry, maxW float32, kf fontChoice) *KanaTile {
 	text := canvas.NewText(e.Kana, kanaTextColor)
 	text.TextSize = wordTextSize
-	size := fyne.MeasureText(text.Text, text.TextSize, text.TextStyle)
+	setKanaFont(text, kf)
+	size := text.MinSize()
 	avail := maxW - 2*wordTilePad
 	for size.Width > avail && text.TextSize > minWordTextSize {
 		text.TextSize--
-		size = fyne.MeasureText(text.Text, text.TextSize, text.TextStyle)
+		size = text.MinSize()
 	}
 	text.Resize(size)
 	w := size.Width + 2*wordTilePad

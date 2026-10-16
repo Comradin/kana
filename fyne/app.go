@@ -22,6 +22,7 @@ func buildWindow(a fyne.App, st *store.Store) fyne.Window {
 	gs := NewGameState(st)
 
 	statsPanel := newStatsPanel()
+	statsPanel.SetKanaFont(gs.KanaFont())
 	gameCanvas := newGameCanvas(gs)
 
 	inputBar := newInputBar(gs, statsPanel, gameCanvas, w)

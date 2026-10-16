@@ -66,7 +66,7 @@ func TestPackageViewAlreadyKnown(t *testing.T) {
 	}
 	extra := []vocab.Entry{{Kana: "いえ", Meanings: vocab.Meanings{"en": {"house"}}}}
 	calls := 0
-	v := newPackageView(entries, "en", func() (vocab.Entry, bool) {
+	v := newPackageView(entries, "en", fontChoice{}, func() (vocab.Entry, bool) {
 		calls++
 		if len(extra) == 0 {
 			return vocab.Entry{}, false

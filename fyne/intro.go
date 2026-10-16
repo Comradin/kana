@@ -66,6 +66,7 @@ func continueAfterDialog(gs *GameState, statsPanel *StatsPanel, inputBar *InputB
 // showIntroDialog presents newly unlocked rows as large tiles with their
 // romaji. Call it through showPendingDialogs. Must run on the Fyne thread.
 func showIntroDialog(gs *GameState, rowIDs []string, statsPanel *StatsPanel, inputBar *InputBar, w fyne.Window) {
+	kf := gs.KanaFont()
 	labels := make([]string, 0, len(rowIDs))
 	body := container.NewVBox()
 	for _, id := range rowIDs {
@@ -75,7 +76,7 @@ func showIntroDialog(gs *GameState, rowIDs []string, statsPanel *StatsPanel, inp
 		}
 		labels = append(labels, row.Label)
 		body.Add(widget.NewLabelWithStyle(row.Label, fyne.TextAlignLeading, fyne.TextStyle{Bold: true}))
-		body.Add(introCards(row))
+		body.Add(introCards(row, kf))
 	}
 
 	inputBar.SetEnabled(false, w)
@@ -98,7 +99,7 @@ func showKatakanaOffer(gs *GameState, statsPanel *StatsPanel, inputBar *InputBar
 		widget.NewLabel("You know the basic hiragana. Katakana use the same sounds;\nstart with ア イ ウ エ オ?"),
 	)
 	if row, ok := kanacore.RowByID("kata:vowels"); ok {
-		body.Add(introCards(row))
+		body.Add(introCards(row, gs.KanaFont()))
 	}
 
 	inputBar.SetEnabled(false, w)
@@ -117,17 +118,17 @@ func showKatakanaOffer(gs *GameState, statsPanel *StatsPanel, inputBar *InputBar
 	d.Show()
 }
 
-// introCards lays out a row's kana as large cards.
-func introCards(row kanacore.KanaRow) fyne.CanvasObject {
+// introCards lays out a row's kana as large cards in the kana font kf.
+func introCards(row kanacore.KanaRow, kf fontChoice) fyne.CanvasObject {
 	cards := container.NewHBox()
 	for _, e := range row.Entries {
-		cards.Add(newIntroCard(e))
+		cards.Add(newIntroCard(e, kf))
 	}
 	return cards
 }
 
 // newIntroCard renders one kana as a large paper tile with its romaji below.
-func newIntroCard(e kanacore.Entry) fyne.CanvasObject {
+func newIntroCard(e kanacore.Entry, kf fontChoice) fyne.CanvasObject {
 	width := introCardW
 	if utf8.RuneCountInString(e.Char) > 1 {
 		width = introCardWideW
@@ -139,6 +140,7 @@ func newIntroCard(e kanacore.Entry) fyne.CanvasObject {
 
 	glyph := canvas.NewText(e.Char, kanaTextColor)
 	glyph.TextSize = 64
+	setKanaFont(glyph, kf)
 
 	romaji := widget.NewLabelWithStyle(e.Romaji, fyne.TextAlignCenter, fyne.TextStyle{Bold: true})
 	return container.NewVBox(container.NewStack(face, container.NewCenter(glyph)), romaji)

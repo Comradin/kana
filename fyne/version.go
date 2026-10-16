@@ -59,6 +59,12 @@ var dataSources = []dataSource{
 	{"JMdict mapping", "stephenmk/yomitan-jlpt-vocab, CC BY-SA 4.0. Matches the JLPT lists to JMdict.", []sourceLink{
 		{"GitHub", "https://github.com/stephenmk/yomitan-jlpt-vocab"},
 	}},
+	{"Noto Sans JP", "© 2014-2021 Adobe, SIL Open Font License 1.1. Kana font.", []sourceLink{
+		{"noto-cjk", "https://github.com/notofonts/noto-cjk"},
+	}},
+	{"M PLUS Rounded 1c", "© 2016 The Rounded M+ Project Authors, SIL Open Font License 1.1. Kana font.", []sourceLink{
+		{"Google Fonts", "https://fonts.google.com/specimen/M+PLUS+Rounded+1c"},
+	}},
 }
 
 // newSourcesTab shows the version and credits every data source.

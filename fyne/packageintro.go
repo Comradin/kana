@@ -92,6 +92,7 @@ type packageView struct {
 	list    *fyne.Container
 	rows    []*packageRow
 	lang    string
+	font    fontChoice
 	replace func() (vocab.Entry, bool)
 }
 
@@ -103,8 +104,8 @@ type packageRow struct {
 	replaced bool // a replacement was already asked for
 }
 
-func newPackageView(entries []vocab.Entry, lang string, replace func() (vocab.Entry, bool)) *packageView {
-	v := &packageView{list: container.NewVBox(), lang: lang, replace: replace}
+func newPackageView(entries []vocab.Entry, lang string, kf fontChoice, replace func() (vocab.Entry, bool)) *packageView {
+	v := &packageView{list: container.NewVBox(), lang: lang, font: kf, replace: replace}
 	for _, e := range entries {
 		v.addRow(e)
 	}
@@ -115,7 +116,7 @@ func (v *packageView) addRow(e vocab.Entry) {
 	row := &packageRow{entry: e}
 	row.kana = canvas.NewText(e.Kana, kanaTextColor)
 	row.kana.TextSize = packageKanaSize
-	fitText(row.kana, packageKanaW, packageKanaMinSize)
+	fitKanaText(row.kana, v.font, packageKanaW, packageKanaMinSize)
 	row.strike = canvas.NewRectangle(kanaTextColor)
 	row.strike.Hide()
 	word := container.NewGridWrap(fyne.NewSize(packageKanaW, packageRowH), container.New(strikeLayout{}, row.kana, row.strike))
@@ -174,7 +175,7 @@ func (strikeLayout) Layout(objs []fyne.CanvasObject, size fyne.Size) {
 // thread.
 func showWordPackageDialog(gs *GameState, statsPanel *StatsPanel, inputBar *InputBar, w fyne.Window) {
 	intro := gs.PackageIntro()
-	view := newPackageView(intro.Entries, intro.Lang, gs.ReplacementWord)
+	view := newPackageView(intro.Entries, intro.Lang, gs.KanaFont(), gs.ReplacementWord)
 	scroll := container.NewVScroll(view.list)
 	scroll.SetMinSize(fyne.NewSize(packageViewW, min(float32(len(intro.Entries))*packageRowH, packageViewMaxH)))
 

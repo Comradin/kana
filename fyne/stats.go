@@ -426,6 +426,14 @@ func (p *StatsPanel) Update(snap StatsSnapshot) {
 	p.content.Refresh()
 }
 
+// SetKanaFont shows the kana grid in the kana font kf.
+func (p *StatsPanel) SetKanaFont(kf fontChoice) {
+	for _, c := range p.cells {
+		setKanaFont(c.text, kf)
+		c.text.Refresh()
+	}
+}
+
 func setVisible(o fyne.CanvasObject, on bool) {
 	if on {
 		o.Show()

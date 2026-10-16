@@ -49,7 +49,7 @@ func newTestState() *GameState {
 
 func TestCheckAnswerRemovesTile(t *testing.T) {
 	gs := newTestState()
-	tile := newKanaTile(kanacore.Kana{Char: "か", Romaji: "ka"})
+	tile := newKanaTile(kanacore.Kana{Char: "か", Romaji: "ka"}, fontChoice{})
 	gs.tiles = []*KanaTile{tile}
 	gs.checkAnswer("ka")
 	if len(gs.tiles) != 0 {
@@ -62,7 +62,7 @@ func TestCheckAnswerRemovesTile(t *testing.T) {
 
 func TestCheckAnswerIgnoredAfterGameOver(t *testing.T) {
 	gs := newTestState()
-	tile := newKanaTile(kanacore.Kana{Char: "か", Romaji: "ka"})
+	tile := newKanaTile(kanacore.Kana{Char: "か", Romaji: "ka"}, fontChoice{})
 	gs.tiles = []*KanaTile{tile}
 	gs.over = true
 	gs.checkAnswer("ka")
@@ -87,7 +87,7 @@ func TestIsOver(t *testing.T) {
 
 func TestCheckAnswerNoMatchLeavestTile(t *testing.T) {
 	gs := newTestState()
-	tile := newKanaTile(kanacore.Kana{Char: "か", Romaji: "ka"})
+	tile := newKanaTile(kanacore.Kana{Char: "か", Romaji: "ka"}, fontChoice{})
 	gs.tiles = []*KanaTile{tile}
 	gs.checkAnswer("ki")
 	if len(gs.tiles) != 1 {
@@ -123,7 +123,7 @@ func TestRecordMissResetsStreak(t *testing.T) {
 func TestScoreLimitEndsGame(t *testing.T) {
 	gs := newTestState()
 	gs.scoreLimit = 10
-	tile := newKanaTile(kanacore.Kana{Char: "か", Romaji: "ka"})
+	tile := newKanaTile(kanacore.Kana{Char: "か", Romaji: "ka"}, fontChoice{})
 	gs.tiles = []*KanaTile{tile}
 	gs.checkAnswer("ka")
 	if !gs.over {
@@ -149,7 +149,7 @@ func TestMissLimitEndsGame(t *testing.T) {
 }
 
 func tileAt(char, romaji string, y float32) *KanaTile {
-	tile := newKanaTile(kanacore.Kana{Char: char, Romaji: romaji})
+	tile := newKanaTile(kanacore.Kana{Char: char, Romaji: romaji}, fontChoice{})
 	tile.fallSeconds = 20
 	tile.Move(fyne.NewPos(10, y))
 	return tile
