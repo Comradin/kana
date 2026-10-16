@@ -134,10 +134,6 @@ func missFeedbackText(e vocab.Entry, lang string) string {
 // fits the line to its width (see StatsPanel.Update).
 const maxWordsLineRunes = 200
 
-// wordDataSource attributes the bundled word data; two lines so it fits the
-// status panel. Stage 4 moves it to the settings' Sources tab.
-var wordDataSource = []string{"Word data: JMdict (EDRDG, CC BY-SA 4.0),", "JLPT levels by J. Waller"}
-
 // Word sources as stored in the word_source setting.
 const (
 	jlptSource       = "jlpt"  // the bundled JLPT words

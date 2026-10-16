@@ -255,7 +255,7 @@ func TestPathSegW(t *testing.T) {
 	}
 }
 
-func TestPanelShowsWordsLineAndSource(t *testing.T) {
+func TestPanelShowsWordsLine(t *testing.T) {
 	test.NewApp()
 	p := newStatsPanel()
 	snap := panelSnap([]string{"vowels"}, both)
@@ -263,13 +263,6 @@ func TestPanelShowsWordsLineAndSource(t *testing.T) {
 	p.Update(snap)
 	if p.wordsText.Text != "Words: 42 introduced · 17 secure · JLPT N5" {
 		t.Fatalf("words line = %q", p.wordsText.Text)
-	}
-	var lines []string
-	for _, txt := range p.sourceTexts {
-		lines = append(lines, txt.Text)
-	}
-	if got := strings.Join(lines, " "); got != "Word data: JMdict (EDRDG, CC BY-SA 4.0), JLPT levels by J. Waller" {
-		t.Fatalf("attribution = %q", got)
 	}
 }
 
