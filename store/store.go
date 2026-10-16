@@ -28,6 +28,10 @@ const (
 	wordLevelKey       = "word_level"
 	meaningLangKey     = "meaning_lang"
 	bundledWordsKey    = "bundled_words"
+	packageSizeKey     = "package_size"
+	wordSourceKey      = "word_source"
+	kanaFontKey        = "kana_font"
+	newestPackageKey   = "newest_package"
 	databaseFilePerm   = 0o644
 	databaseDirPerm    = 0o755
 	defaultOpenTimout  = 5 * time.Second
@@ -37,6 +41,12 @@ const DefaultScoreLimit = 1000
 
 // DefaultWordLevel is the JLPT level words are played up to when unset (N5).
 const DefaultWordLevel = 5
+
+// DefaultPackageSize is the number of words in a word package when unset.
+const DefaultPackageSize = 5
+
+// DefaultKanaFont is the kana font when unset (Noto Sans JP).
+const DefaultKanaFont = "noto"
 
 // Store provides persisted access to user settings and kana statistics.
 type Store struct {
@@ -318,6 +328,126 @@ func (s *Store) SaveMeaningLang(lang string) error {
 	return s.setSetting(meaningLangKey, lang)
 }
 
+// validPackageSize reports whether n is a package size the app offers.
+func validPackageSize(n int) bool {
+	return n == 3 || n == 5 || n == 10
+}
+
+// PackageSize returns the number of words per word package: 3, 5 or 10.
+// Unset or invalid values give DefaultPackageSize.
+func (s *Store) PackageSize() (int, error) {
+	value, err := s.getSetting(packageSizeKey)
+	if errors.Is(err, sql.ErrNoRows) {
+		return DefaultPackageSize, nil
+	}
+	if err != nil {
+		return DefaultPackageSize, err
+	}
+	n, convErr := strconv.Atoi(strings.TrimSpace(value))
+	if convErr != nil || !validPackageSize(n) {
+		return DefaultPackageSize, nil
+	}
+	return n, nil
+}
+
+// SavePackageSize persists the package size (3, 5 or 10).
+func (s *Store) SavePackageSize(n int) error {
+	if !validPackageSize(n) {
+		return fmt.Errorf("store: package size %d is not 3, 5 or 10", n)
+	}
+	return s.setSetting(packageSizeKey, strconv.Itoa(n))
+}
+
+// WordSource returns where new words come from ("jlpt" or "list:<name>"),
+// or "" when unset: the app then picks a default and saves it.
+func (s *Store) WordSource() (string, error) {
+	value, err := s.getSetting(wordSourceKey)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	return value, err
+}
+
+// SaveWordSource persists where new words come from.
+func (s *Store) SaveWordSource(source string) error {
+	return s.setSetting(wordSourceKey, source)
+}
+
+// KanaFont returns the kana font setting ("noto", "mplus" or "system"), or
+// DefaultKanaFont when unset. The app checks the value.
+func (s *Store) KanaFont() (string, error) {
+	value, err := s.getSetting(kanaFontKey)
+	if errors.Is(err, sql.ErrNoRows) {
+		return DefaultKanaFont, nil
+	}
+	if err != nil {
+		return DefaultKanaFont, err
+	}
+	return value, nil
+}
+
+// SaveKanaFont persists the kana font setting.
+func (s *Store) SaveKanaFont(name string) error {
+	return s.setSetting(kanaFontKey, name)
+}
+
+// NewestPackage returns the readings of the newest word package, nil when
+// unset or empty.
+func (s *Store) NewestPackage() ([]string, error) {
+	value, err := s.getSetting(newestPackageKey)
+	if errors.Is(err, sql.ErrNoRows) || (err == nil && value == "") {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return strings.Split(value, "\n"), nil
+}
+
+// SaveNewestPackage persists the readings of the newest word package,
+// joined with "\n"; nil or empty stores an empty package.
+func (s *Store) SaveNewestPackage(readings []string) error {
+	return s.setSetting(newestPackageKey, strings.Join(readings, "\n"))
+}
+
+// IntroducedWords returns the readings that were shown in a word package
+// intro (or counted as introduced when the table was created).
+func (s *Store) IntroducedWords() (map[string]bool, error) {
+	rows, err := s.db.Query(`SELECT kana FROM introduced_words`)
+	if err != nil {
+		return nil, fmt.Errorf("store: query introduced words: %w", err)
+	}
+	defer rows.Close()
+	out := make(map[string]bool)
+	for rows.Next() {
+		var kana string
+		if err := rows.Scan(&kana); err != nil {
+			return nil, fmt.Errorf("store: scan introduced words: %w", err)
+		}
+		out[kana] = true
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("store: iterate introduced words: %w", err)
+	}
+	return out, nil
+}
+
+// SaveIntroduced records a reading as introduced at the given time. A
+// reading that is already introduced keeps its first time.
+func (s *Store) SaveIntroduced(kana string, at time.Time) error {
+	if kana == "" {
+		return errors.New("store: word reading is required")
+	}
+	_, err := s.db.Exec(`
+		INSERT INTO introduced_words (kana, introduced_at) VALUES (?, ?)
+		ON CONFLICT(kana) DO NOTHING
+	`, kana, at.Unix())
+	if err != nil {
+		return fmt.Errorf("store: save introduced word %s: %w", kana, err)
+	}
+	return nil
+}
+
 // SaveKanaStats upserts the aggregated statistics for the provided kana.
 func (s *Store) SaveKanaStats(char string, correctCount, missCount, streak int) error {
 	if char == "" {
@@ -527,7 +657,49 @@ func migrate(ctx context.Context, db *sql.DB) error {
 			return fmt.Errorf("store: migrate statement failed: %w", err)
 		}
 	}
-	return ensureMemory(ctx, db, time.Now())
+	now := time.Now()
+	if err := ensureMemory(ctx, db, now); err != nil {
+		return err
+	}
+	return ensureIntroduced(ctx, db, now)
+}
+
+// ensureIntroduced creates the introduced_words table if it is missing and,
+// in the same transaction, seeds it with every reading that has word stats
+// or a word memory state, so words learned before word packages keep
+// falling. If anything fails nothing is committed and the next open tries
+// again.
+func ensureIntroduced(ctx context.Context, db *sql.DB, now time.Time) error {
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("store: begin introduced migration: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var name string
+	err = tx.QueryRowContext(ctx, `SELECT name FROM sqlite_master WHERE type='table' AND name='introduced_words'`).Scan(&name)
+	if err == nil {
+		return tx.Commit()
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return fmt.Errorf("store: check introduced_words table: %w", err)
+	}
+
+	if _, err := tx.ExecContext(ctx, `CREATE TABLE introduced_words (
+		kana TEXT PRIMARY KEY,
+		introduced_at INTEGER NOT NULL
+	)`); err != nil {
+		return fmt.Errorf("store: create introduced_words table: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `
+		INSERT OR IGNORE INTO introduced_words (kana, introduced_at)
+		SELECT kana, ? FROM word_stats
+		UNION
+		SELECT substr(item, 6), ? FROM memory WHERE substr(item, 1, 5) = 'word:'
+	`, now.Unix(), now.Unix()); err != nil {
+		return fmt.Errorf("store: seed introduced words: %w", err)
+	}
+	return tx.Commit()
 }
 
 // ensureMemory creates the memory table if it is missing and, in the same
