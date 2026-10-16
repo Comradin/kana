@@ -51,8 +51,9 @@ var fontChoices = []fontChoice{
 }
 
 // fontPreview is the text each choice is previewed with: kana whose stroke
-// ends and curves show the difference between the fonts.
-const fontPreview = "ふゆ そ ツシー"
+// ends and curves show the difference between the fonts (き is open in
+// some fonts, as in handwriting, and closed in others).
+const fontPreview = "きふそ ツシー"
 
 // fontByID returns the choice for a kana_font setting; an unknown value
 // gives Noto Sans JP, the default.
