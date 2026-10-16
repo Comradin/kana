@@ -14,6 +14,8 @@
 
 **Verification record:** this plan was applied task by task in a throwaway worktree of `feat/word-packages` (at `ac2c6de`). After every task `gofmt -l .` was empty, `go vet ./...` clean and `go test -count=1 ./...` passed, also for each task's tree exported on its own; at the end `go test -race -count=1 ./fyne/` passed and `go build -o kana-desktop ./fyne/` linked. The code blocks below are taken from those trees. The "Expected" failures in each task are the real compiler output of that task's tests against the previous task's code.
 
+
+**Amendment (2026-10-16, after grilling):** a private-list package holds words of one lesson only, and unreadable words of an earlier lesson do not block later lessons. Implemented in `vocab.NextPackage` on top of Task 2 (commit "fix(vocab): keep word packages within one lesson"), with tests `TestNextPackageStaysWithinOneLesson` and `TestNextPackageSkipsAheadPastUnreadableWords`; `TestNextPackageListOrder` now draws all packages in sequence. Wherever later tasks build the intro title, use the package's single lesson ("lesson 2"), never a range.
 ---
 
 ## Notes on the spec

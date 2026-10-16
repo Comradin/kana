@@ -26,6 +26,7 @@ management (problems, reload, open folder), meaning language setting.
 | Learning source | Setting "New words from": one private list (shown by a prettified file name) or "JLPT". Default: the first private list by name if any, else JLPT. |
 | JLPT order | Level by level from the setting `word_level` (N5 first); within a level by frequency rank (JMdict priority tags), then fewer kana units, then reading. |
 | Private list order | By lesson (numeric if all lessons of the list are integers, else first appearance), then file order; words without lesson last, in file order. |
+| Lesson boundary | A package from a private list holds words of **one lesson only**; at the end of a lesson it is simply smaller. Words of an earlier lesson that are not readable yet do not hold progress back: the next package comes from the earliest lesson with readable, not yet introduced words, and held-back words come later as their own small package with their lesson. (Decided 2026-10-16.) |
 | Intro dialog | Each word large with romaji and meaning; per word a "Already known" checkbox. Checked words count as secure and the package is refilled from the source. Pauses the game like kana intros. |
 | Level offer | When every bundled word with JLPT ≥ `word_level` (i.e. that level and all easier ones) is introduced, offer "N5 finished — continue with N4?". Yes lowers `word_level`; Later: not asked again this session. If words remain but none is playable yet, the status line says to learn more kana instead. |
 | Word share | Unchanged: `min(0.1, playable_introduced / 100)`. |
@@ -82,7 +83,7 @@ management (problems, reload, open folder), meaning language setting.
     `re_pri`/`ke_pri` of the entry. `SOURCES` is rewritten with the inputs actually used.
 12. **Counts:** status "introduced" = introduced readings present in the index; Words tab
     "left in source" = not-introduced entries of the source (JLPT: bundled with JLPT ≥
-    `word_level`). Intro title for a package spanning lessons: "minna no nihongo · lessons 2–3".
+    `word_level`). The intro title names the single lesson of the package: "minna no nihongo · lesson 2" (or just the list name for words without a lesson).
 13. **Fonts:**
     - Four package-level `fyne.Resource` vars with distinct names, created once (Fyne caches
       custom fonts by resource and never evicts them).
