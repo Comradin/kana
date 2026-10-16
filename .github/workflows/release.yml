@@ -97,11 +97,16 @@ jobs:
           TARGET: ${{ matrix.target }}
         run: |
           asset="kana-$TAG-$TARGET-x64"
+          # The bundled fonts' licences go next to the app (OFL 1.1 asks for it).
           if [[ "$TARGET" == "windows" ]]; then
             asset="$asset.zip"
             (cd fyne && 7z a -tzip "../$asset" Kana.exe)
+            (cd fyne/fonts && 7z a -tzip "../../$asset" OFL-*.txt)
           else
             asset="$asset.tar.xz"
+            xz -d Kana.tar.xz
+            (cd fyne/fonts && tar -rf ../../Kana.tar OFL-*.txt)
+            xz Kana.tar
             mv Kana.tar.xz "$asset"
           fi
           sha256sum "$asset" >"$asset.sha256"

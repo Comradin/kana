@@ -406,7 +406,8 @@ Rows whose reading is not kana are skipped and reported.
 
 The kana font can be Noto Sans JP (default) or M PLUS Rounded 1c; both ship with the app in
 `fyne/fonts/` (regular and bold, about 16 MB) under the SIL Open Font License 1.1
-(`fyne/fonts/OFL-*.txt`). `scripts/fetch-fonts.sh` downloads the pinned files (Noto CJK release
+(`fyne/fonts/OFL-*.txt`, also included in the release packages). Noto Sans JP is
+© 2014-2021 Adobe (http://www.adobe.com/), with Reserved Font Name 'Source'. `scripts/fetch-fonts.sh` downloads the pinned files (Noto CJK release
 `Sans2.004`, google/fonts at a fixed commit) and checks their SHA-256 sums. A text is shown in
 the chosen font only if the font has every character of it; otherwise it uses the system font,
 so one text never mixes two fonts.

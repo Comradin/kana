@@ -12,6 +12,9 @@ import (
 // releasesURL is where packaged builds are published.
 const releasesURL = "https://github.com/Comradin/kana/releases"
 
+// oflURL is the SIL Open Font License text of the bundled fonts.
+const oflURL = "https://openfontlicense.org"
+
 // versionLabel returns the version to show: "v0.2.0" for a release
 // package, "dev" otherwise (go run, go build, or a package without a
 // real version).
@@ -59,11 +62,13 @@ var dataSources = []dataSource{
 	{"JMdict mapping", "stephenmk/yomitan-jlpt-vocab, CC BY-SA 4.0. Matches the JLPT lists to JMdict.", []sourceLink{
 		{"GitHub", "https://github.com/stephenmk/yomitan-jlpt-vocab"},
 	}},
-	{"Noto Sans JP", "© 2014-2021 Adobe, SIL Open Font License 1.1. Kana font.", []sourceLink{
+	{"Noto Sans JP", "© 2014-2021 Adobe (http://www.adobe.com/), with Reserved Font Name 'Source'. SIL Open Font License 1.1. Kana font.", []sourceLink{
 		{"noto-cjk", "https://github.com/notofonts/noto-cjk"},
+		{"OFL", oflURL},
 	}},
 	{"M PLUS Rounded 1c", "© 2016 The Rounded M+ Project Authors, SIL Open Font License 1.1. Kana font.", []sourceLink{
 		{"Google Fonts", "https://fonts.google.com/specimen/M+PLUS+Rounded+1c"},
+		{"OFL", oflURL},
 	}},
 }
 
