@@ -776,6 +776,7 @@ func TestWordSpawnAvoidsFallingWords(t *testing.T) {
 func TestWordHitShowsFeedbackAtTile(t *testing.T) {
 	gs := newTestState()
 	withWords(gs, bw("あい", 5, "love"))
+	gs.levelOfferDeclined = true // N5 is all introduced; the offer would pause the game
 	gs.tiles = []*KanaTile{wordTileAt(gs, "あい", 200), tileAt("か", "ka", 0)}
 	gs.checkAnswer("ka")
 	if len(gs.feedback) != 0 {

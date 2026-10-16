@@ -238,8 +238,13 @@ func TestFreshStartCatchesUpMasteredSteps(t *testing.T) {
 	if gs.selectedRows["h"] {
 		t.Error("catch-up must stop at the first unmastered step")
 	}
-	if gs.paused || gs.pendingIntro != nil {
-		t.Fatalf("returning user should get no intro (paused=%v pending=%v)", gs.paused, gs.pendingIntro)
+	if gs.pendingIntro != nil {
+		t.Fatalf("returning user should get no intro (pending=%v)", gs.pendingIntro)
+	}
+	// With these kana secure the first word package is due; only it may
+	// hold the pause.
+	if gs.paused != (len(gs.pendingPackage) > 0) {
+		t.Fatalf("paused=%v with pending package %v", gs.paused, gs.pendingPackage)
 	}
 }
 
