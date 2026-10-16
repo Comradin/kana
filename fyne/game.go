@@ -1245,12 +1245,27 @@ func (gs *GameState) DeclineKatakana() {
 	gs.maybeOfferPackage()
 }
 
-// PendingDialogs returns whether the offer is pending and a copy of the rows
-// waiting to be introduced.
-func (gs *GameState) PendingDialogs() (offer bool, intro []string) {
+// Pending lists the dialogs the game is waiting for.
+type Pending struct {
+	Intro         []string // kana row IDs to introduce
+	KatakanaOffer bool     // the one-time katakana offer
+	Package       []string // readings of the word package to introduce
+	LevelOffer    int      // the finished JLPT level whose successor is offered; 0 = none
+}
+
+// PendingDialogs returns copies of everything the game is waiting for.
+func (gs *GameState) PendingDialogs() Pending {
 	gs.mu.Lock()
 	defer gs.mu.Unlock()
-	return gs.pendingOffer, append([]string(nil), gs.pendingIntro...)
+	p := Pending{
+		Intro:         append([]string(nil), gs.pendingIntro...),
+		KatakanaOffer: gs.pendingOffer,
+		Package:       append([]string(nil), gs.pendingPackage...),
+	}
+	if gs.pendingLevelOffer {
+		p.LevelOffer = gs.wordLevel
+	}
+	return p
 }
 
 // IsOver reports whether the current game has ended.
