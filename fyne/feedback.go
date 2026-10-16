@@ -35,8 +35,8 @@ type feedbackLabel struct {
 // addFeedback shows msg for feedbackTicks ticks. A hit label sits at pos
 // (the tile's last position), a miss label at the bottom of the field in the
 // error colour; both are kept inside the field. A label wider than the field
-// shrinks down to feedbackMinTextSize and is then cut with "…". Must be
-// called under lock.
+// shrinks down to feedbackMinTextSize and is then cut with "…". It is shown
+// in the kana font if that has every character. Must be called under lock.
 func (gs *GameState) addFeedback(kind feedbackKind, msg string, pos fyne.Position) {
 	var c color.Color = feedbackHitColor
 	if kind == feedbackMiss {
@@ -45,7 +45,7 @@ func (gs *GameState) addFeedback(kind feedbackKind, msg string, pos fyne.Positio
 	txt := canvas.NewText(msg, c)
 	txt.TextSize = feedbackTextSize
 	txt.TextStyle = fyne.TextStyle{Bold: true}
-	fitText(txt, gs.canvasW, feedbackMinTextSize)
+	fitKanaText(txt, gs.kanaFont, gs.canvasW, feedbackMinTextSize)
 	size := txt.MinSize()
 	txt.Resize(size)
 	y := pos.Y

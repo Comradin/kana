@@ -536,7 +536,7 @@ func wordTileAt(gs *GameState, kana string, y float32) *KanaTile {
 	if !ok {
 		panic("no word " + kana)
 	}
-	tile := newWordTile(e, gs.canvasW)
+	tile := newWordTile(e, gs.canvasW, fontChoice{})
 	tile.fallSeconds = 20
 	tile.Move(fyne.NewPos(10, y))
 	return tile

@@ -12,7 +12,7 @@ import (
 func TestKanaTileMoveUpdatesAllObjects(t *testing.T) {
 	test.NewApp()
 	k := kanacore.Kana{Char: "か", Romaji: "ka"}
-	tile := newKanaTile(k)
+	tile := newKanaTile(k, fontChoice{})
 	pos := fyne.NewPos(100, 50)
 	tile.Move(pos)
 
@@ -28,7 +28,7 @@ func TestKanaTileMoveUpdatesAllObjects(t *testing.T) {
 func TestKanaTileObjectsReturnsThree(t *testing.T) {
 	test.NewApp()
 	k := kanacore.Kana{Char: "あ", Romaji: "a"}
-	tile := newKanaTile(k)
+	tile := newKanaTile(k, fontChoice{})
 	if len(tile.Objects()) != 3 {
 		t.Errorf("expected 3 canvas objects, got %d", len(tile.Objects()))
 	}
@@ -36,8 +36,8 @@ func TestKanaTileObjectsReturnsThree(t *testing.T) {
 
 func TestWideTileForYoon(t *testing.T) {
 	test.NewApp()
-	narrow := newKanaTile(kanacore.Kana{Char: "き", Romaji: "ki"})
-	wide := newKanaTile(kanacore.Kana{Char: "きゃ", Romaji: "kya"})
+	narrow := newKanaTile(kanacore.Kana{Char: "き", Romaji: "ki"}, fontChoice{})
+	wide := newKanaTile(kanacore.Kana{Char: "きゃ", Romaji: "kya"}, fontChoice{})
 	if wide.Width() <= narrow.Width() {
 		t.Fatalf("wide tile %.0f should be wider than narrow tile %.0f", wide.Width(), narrow.Width())
 	}
@@ -46,7 +46,7 @@ func TestWideTileForYoon(t *testing.T) {
 func TestTileTextCentredInsideFace(t *testing.T) {
 	test.NewApp()
 	for _, char := range []string{"か", "きゃ"} {
-		tile := newKanaTile(kanacore.Kana{Char: char})
+		tile := newKanaTile(kanacore.Kana{Char: char}, fontChoice{})
 		tile.Move(fyne.NewPos(40, 20))
 		textX := tile.text.Position().X
 		textW := tile.text.Size().Width
@@ -63,8 +63,8 @@ func TestTileTextCentredInsideFace(t *testing.T) {
 
 func TestWordTileLooksDifferent(t *testing.T) {
 	test.NewApp()
-	kana := newKanaTile(kanacore.Kana{Char: "か", Romaji: "ka"})
-	word := newWordTile(vocab.Entry{Kana: "か", Units: []string{"か"}}, 400)
+	kana := newKanaTile(kanacore.Kana{Char: "か", Romaji: "ka"}, fontChoice{})
+	word := newWordTile(vocab.Entry{Kana: "か", Units: []string{"か"}}, 400, fontChoice{})
 	if word.word == nil || word.word.Kana != "か" {
 		t.Fatalf("word = %+v", word.word)
 	}
@@ -81,8 +81,8 @@ func TestWordTileLooksDifferent(t *testing.T) {
 
 func TestWordTileWidthFollowsText(t *testing.T) {
 	test.NewApp()
-	short := newWordTile(vocab.Entry{Kana: "ねこ"}, 600)
-	long := newWordTile(vocab.Entry{Kana: "かんきょう"}, 600)
+	short := newWordTile(vocab.Entry{Kana: "ねこ"}, 600, fontChoice{})
+	long := newWordTile(vocab.Entry{Kana: "かんきょう"}, 600, fontChoice{})
 	if long.Width() <= short.Width() {
 		t.Fatalf("long %.0f should be wider than short %.0f", long.Width(), short.Width())
 	}
@@ -99,7 +99,7 @@ func TestWordTileWidthFollowsText(t *testing.T) {
 
 func TestWordTileShrinksToFitField(t *testing.T) {
 	test.NewApp()
-	tile := newWordTile(vocab.Entry{Kana: "コンピューター"}, 150)
+	tile := newWordTile(vocab.Entry{Kana: "コンピューター"}, 150, fontChoice{})
 	if tile.Width() > 150 {
 		t.Fatalf("width %.1f exceeds the 150 px field", tile.Width())
 	}

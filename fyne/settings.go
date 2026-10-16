@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/theme"
@@ -30,6 +31,7 @@ type settingsState struct {
 	wordLevel   int
 	packageSize int
 	summary     string // the Words tab's summary line
+	kanaFont    string // the kana font's id
 }
 
 // settingsState copies the current settings for the dialog.
@@ -48,6 +50,7 @@ func (gs *GameState) settingsState() settingsState {
 		wordLevel:   gs.wordLevel,
 		packageSize: gs.packageSize,
 		summary:     gs.wordsSummary(),
+		kanaFont:    gs.kanaFont.id,
 	}
 }
 
@@ -70,6 +73,7 @@ type settingsForm struct {
 	difficulty *widget.RadioGroup
 	points     *widget.Select
 	limitEntry *widget.Entry
+	kanaFont   *widget.RadioGroup
 	limit      int // the score limit the dialog started with
 }
 
@@ -175,7 +179,8 @@ func (f *settingsForm) newWordsTab(st settingsState) fyne.CanvasObject {
 	)
 }
 
-// newGameTab holds the difficulty, points per hit and the score limit.
+// newGameTab holds the difficulty, points per hit, the score limit and the
+// kana font, each font previewed in itself.
 func (f *settingsForm) newGameTab(st settingsState) fyne.CanvasObject {
 	f.limitEntry = widget.NewEntry()
 	f.limitEntry.SetText(strconv.Itoa(st.limit))
@@ -203,6 +208,21 @@ func (f *settingsForm) newGameTab(st settingsState) fyne.CanvasObject {
 	f.points = widget.NewSelect(pointsLabels, nil)
 	f.points.SetSelected(pointsLabel(st.points))
 
+	fontLabels := make([]string, len(fontChoices))
+	previews := container.NewGridWithColumns(2)
+	for i, c := range fontChoices {
+		fontLabels[i] = c.label
+		preview := canvas.NewText(fontPreview, kanaTextColor)
+		preview.TextSize = 20
+		setKanaFont(preview, c)
+		previews.Add(widget.NewLabel(c.label))
+		previews.Add(preview)
+	}
+	f.kanaFont = widget.NewRadioGroup(fontLabels, nil)
+	f.kanaFont.Horizontal = true
+	f.kanaFont.Required = true
+	f.kanaFont.SetSelected(fontByID(st.kanaFont).label)
+
 	return container.NewVBox(
 		widget.NewLabelWithStyle("Difficulty", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 		f.difficulty,
@@ -210,7 +230,21 @@ func (f *settingsForm) newGameTab(st settingsState) fyne.CanvasObject {
 		widget.NewSeparator(),
 		widget.NewLabel("Score limit (0 = endless)"),
 		f.limitEntry,
+		widget.NewSeparator(),
+		widget.NewLabelWithStyle("Kana font", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		f.kanaFont,
+		previews,
 	)
+}
+
+// kanaFontID is the id of the kana font the Game tab has selected.
+func (f *settingsForm) kanaFontID() string {
+	for _, c := range fontChoices {
+		if c.label == f.kanaFont.Selected {
+			return c.id
+		}
+	}
+	return fontChoices[0].id
 }
 
 // wordSource is the word source the Words tab has selected.
@@ -245,6 +279,7 @@ func (f *settingsForm) apply(gs *GameState) {
 		limit = n
 	}
 	gs.applyWordSettings(f.words())
+	gs.SetKanaFont(f.kanaFontID())
 	gs.applySettings(checkedRowIDs(f.rowChecks), checkedScripts(f.scriptChecks), f.autoCheck.Checked, limit,
 		levelFromLabel(f.difficulty.Selected), pointsFromLabel(f.points.Selected))
 }
@@ -262,6 +297,7 @@ func showSettingsDialog(gs *GameState, statsPanel *StatsPanel, gameCanvas *GameC
 		gs.SetSettingsOpen(false)
 		if save {
 			form.apply(gs)
+			statsPanel.SetKanaFont(gs.KanaFont())
 			gs.mu.Lock()
 			snap := gs.snapshot()
 			gs.mu.Unlock()
