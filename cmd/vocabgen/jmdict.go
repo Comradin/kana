@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -25,11 +26,91 @@ type xmlGloss struct {
 	Text string `xml:",chardata"`
 }
 
+// xmlKanji is a kanji element; only its priority tags are used.
+type xmlKanji struct {
+	Pri []string `xml:"ke_pri"`
+}
+
+// xmlReading is a reading element with its priority tags.
+type xmlReading struct {
+	Reb string   `xml:"reb"`
+	Pri []string `xml:"re_pri"`
+}
+
 type xmlEntry struct {
-	Seq    string `xml:"ent_seq"`
-	Senses []struct {
+	Seq      string       `xml:"ent_seq"`
+	Kanji    []xmlKanji   `xml:"k_ele"`
+	Readings []xmlReading `xml:"r_ele"`
+	Senses   []struct {
 		Glosses []xmlGloss `xml:"gloss"`
 	} `xml:"sense"`
+}
+
+// Frequency ranks: nfXX gives XX (1–48), a "1" tag 49, a "2" tag 60.
+const (
+	rankFirst  = 49 // news1, ichi1, spec1, gai1
+	rankSecond = 60 // news2, ichi2, spec2, gai2
+	rankNone   = 99 // no priority tag
+)
+
+// tagRank is the rank one priority tag gives.
+func tagRank(t string) int {
+	switch t {
+	case "news1", "ichi1", "spec1", "gai1":
+		return rankFirst
+	case "news2", "ichi2", "spec2", "gai2":
+		return rankSecond
+	}
+	if s, ok := strings.CutPrefix(t, "nf"); ok {
+		if n, err := strconv.Atoi(s); err == nil && n >= 1 && n <= 48 {
+			return n
+		}
+	}
+	return rankNone
+}
+
+// rankOf is the best (lowest) rank the priority tags give; rankNone
+// without a usable tag.
+func rankOf(tags []string) int {
+	best := rankNone
+	for _, t := range tags {
+		best = min(best, tagRank(t))
+	}
+	return best
+}
+
+// jmEntry is what the generator keeps of one JMdict entry.
+type jmEntry struct {
+	glosses map[string][]string // language → meaning items
+	ranks   map[string]int      // reading → rank of its own priority tags, if it has any
+	best    int                 // best rank over every reading and kanji element
+}
+
+// rank is the frequency rank of reading: from the priority tags of the
+// matching reading element, or, if that has none, the best tag of the
+// whole entry.
+func (e jmEntry) rank(reading string) int {
+	if r, ok := e.ranks[reading]; ok {
+		return r
+	}
+	return e.best
+}
+
+// newJMEntry collects the ranks of an entry; glosses are added by the caller.
+func newJMEntry(x xmlEntry) jmEntry {
+	e := jmEntry{glosses: map[string][]string{}, ranks: map[string]int{}}
+	var all []string
+	for _, r := range x.Readings {
+		if len(r.Pri) > 0 {
+			e.ranks[r.Reb] = rankOf(r.Pri)
+		}
+		all = append(all, r.Pri...)
+	}
+	for _, k := range x.Kanji {
+		all = append(all, k.Pri...)
+	}
+	e.best = rankOf(all)
+	return e
 }
 
 var (
@@ -155,10 +236,10 @@ func stripLabel(s string) string {
 }
 
 // readJMdict streams the JMdict XML (plain or .gz) and returns, for every
-// entry whose sequence number is wanted, the glosses per language: those of
+// entry whose sequence number is wanted, the glosses per language (those of
 // the first sense that has usable glosses in that language, split on ";",
-// at most three items.
-func readJMdict(path string, wanted map[string]bool) (map[string]map[string][]string, error) {
+// at most three items) and the frequency ranks of its readings.
+func readJMdict(path string, wanted map[string]bool) (map[string]jmEntry, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
@@ -175,7 +256,7 @@ func readJMdict(path string, wanted map[string]bool) (map[string]map[string][]st
 	}
 	dec := xml.NewDecoder(r)
 	dec.Strict = false // JMdict uses DTD entities (&n; …); their text is not needed
-	out := map[string]map[string][]string{}
+	out := map[string]jmEntry{}
 	for {
 		tok, err := dec.Token()
 		if err == io.EOF {
@@ -195,7 +276,8 @@ func readJMdict(path string, wanted map[string]bool) (map[string]map[string][]st
 		if !wanted[e.Seq] {
 			continue
 		}
-		glosses := map[string][]string{}
+		entry := newJMEntry(e)
+		glosses := entry.glosses
 		for _, sense := range e.Senses {
 			// A language is taken only from the first sense that has
 			// usable glosses in it.
@@ -224,6 +306,6 @@ func readJMdict(path string, wanted map[string]bool) (map[string]map[string][]st
 				}
 			}
 		}
-		out[e.Seq] = glosses
+		out[e.Seq] = entry
 	}
 }

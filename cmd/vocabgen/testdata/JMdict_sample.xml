@@ -5,8 +5,8 @@
 <JMdict>
 <entry>
 <ent_seq>1</ent_seq>
-<k_ele><keb>先生</keb></k_ele>
-<r_ele><reb>せんせい</reb></r_ele>
+<k_ele><keb>先生</keb><ke_pri>news1</ke_pri><ke_pri>nf01</ke_pri></k_ele>
+<r_ele><reb>せんせい</reb><re_pri>ichi1</re_pri><re_pri>news1</re_pri></r_ele>
 <sense><pos>&n;</pos><gloss>teacher</gloss><gloss>instructor</gloss><gloss>master</gloss><gloss>doctor</gloss></sense>
 <sense><gloss>second sense</gloss></sense>
 <sense><gloss xml:lang="ger">Lehrer</gloss><gloss xml:lang="ger">Meister</gloss></sense>
@@ -15,18 +15,18 @@
 </entry>
 <entry>
 <ent_seq>2</ent_seq>
-<r_ele><reb>はし</reb></r_ele>
+<r_ele><reb>はし</reb><re_pri>nf05</re_pri></r_ele>
 <sense><gloss>bridge</gloss></sense>
 <sense><gloss xml:lang="ger">Brücke</gloss></sense>
 </entry>
 <entry>
 <ent_seq>3</ent_seq>
-<r_ele><reb>はし</reb></r_ele>
+<r_ele><reb>はし</reb><re_pri>ichi1</re_pri></r_ele>
 <sense><gloss>chopsticks</gloss></sense>
 </entry>
 <entry>
 <ent_seq>4</ent_seq>
-<r_ele><reb>アイデア</reb></r_ele>
+<r_ele><reb>アイデア</reb><re_pri>gai2</re_pri></r_ele>
 <r_ele><reb>アイディア</reb></r_ele>
 <sense><gloss>idea</gloss><gloss>(new) concept</gloss></sense>
 </entry>

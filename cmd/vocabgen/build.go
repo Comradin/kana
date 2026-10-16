@@ -27,6 +27,7 @@ type Stats struct {
 type outWord struct {
 	K string              `json:"k"`
 	J int                 `json:"j"`
+	R int                 `json:"r"` // frequency rank, lower = more common
 	M map[string][]string `json:"m"`
 }
 
@@ -45,7 +46,7 @@ func run(jmdictPath, jlptDir string, w io.Writer) (Stats, error) {
 			wanted[r.Seq] = true
 		}
 	}
-	glosses, err := readJMdict(jmdictPath, wanted)
+	entries, err := readJMdict(jmdictPath, wanted)
 	if err != nil {
 		return st, err
 	}
@@ -61,19 +62,23 @@ func run(jmdictPath, jlptDir string, w io.Writer) (Stats, error) {
 			dropped[r.Kana] = true
 			continue
 		}
-		g, ok := glosses[r.Seq]
-		if !ok {
+		var g map[string][]string
+		rank := rankNone
+		if e, ok := entries[r.Seq]; ok {
+			g, rank = e.glosses, e.rank(r.Kana)
+		} else {
 			missing[r.Seq] = true
 			g = map[string][]string{"en": wallerGlosses(r.Waller)}
 		}
 		ow, ok := byKana[r.Kana]
 		if !ok {
-			ow = &outWord{K: r.Kana, J: r.Level, M: map[string][]string{}}
+			ow = &outWord{K: r.Kana, J: r.Level, R: rank, M: map[string][]string{}}
 			byKana[r.Kana] = ow
 		}
 		if r.Level > ow.J {
 			ow.J = r.Level
 		}
+		ow.R = min(ow.R, rank) // merged homophones take the best rank
 		for lang, glosses := range g {
 			for _, gl := range glosses {
 				// Already split for JMdict; Waller's fallback may need it.

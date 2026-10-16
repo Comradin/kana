@@ -17,6 +17,7 @@ type Word struct {
 	Kana     string   // reading, e.g. "せんせい"
 	Meanings Meanings // language → alternatives
 	JLPT     int      // 5…1, 0 = none
+	Rank     int      // bundled words: frequency rank, lower = more common; 0 = unknown
 	Source   string   // "jmdict" or a list name
 	Lesson   string   // optional, private lists only
 }
