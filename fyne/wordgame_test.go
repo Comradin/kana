@@ -382,6 +382,41 @@ func TestWordSourceResolvedAndSavedOnFirstStart(t *testing.T) {
 	}
 }
 
+func TestWordSourceNotSavedWhenTheListsFailToLoad(t *testing.T) {
+	test.NewApp()
+	dir := isolateWordsDir(t)
+	if err := os.MkdirAll(filepath.Dir(dir), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(dir, nil, 0o644); err != nil { // a file where the folder should be
+		t.Fatal(err)
+	}
+	st := openTestStore(t)
+	_ = st.SaveSelectedRows([]string{"vowels"})
+	if gs := NewGameState(st); gs.wordSource != jlptSource {
+		t.Fatalf("unreadable list folder: source = %q, want jlpt for this session", gs.wordSource)
+	}
+	if s, _ := st.WordSource(); s != "" {
+		t.Fatalf("saved source = %q; an automatic choice without the lists must not be saved", s)
+	}
+
+	if err := os.Remove(dir); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "mine.csv"), []byte("kana,meaning\nあお,blue\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if gs := NewGameState(st); gs.wordSource != "list:mine" {
+		t.Fatalf("readable again: source = %q, want the list", gs.wordSource)
+	}
+	if s, _ := st.WordSource(); s != "list:mine" {
+		t.Fatalf("saved source = %q", s)
+	}
+}
+
 func TestWordsStatusLine(t *testing.T) {
 	gs := newTestState()
 	gs.words = vocab.NewIndex(

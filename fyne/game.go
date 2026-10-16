@@ -67,6 +67,7 @@ type GameState struct {
 	words                *vocab.Index            // every word reading; nil = no words
 	wordsErr             string                  // bundled list failed to load
 	listNames            []string                // the private lists found, sorted by name
+	listsLoadFailed      bool                    // the list folder could not be read: listNames may be incomplete
 	wordsDir             string                  // the private list folder; "" if unknown
 	playable             []vocab.Entry           // cached playableWords result
 	playableOK           bool                    // playable is up to date
@@ -74,6 +75,8 @@ type GameState struct {
 	// Word packages: only introduced words fall.
 	introduced           map[string]bool // readings shown in a package intro
 	introducedDirty      map[string]bool // introduced readings whose save failed; mergeSessionStats retries
+	knownDirty           map[string]bool // "already known" readings whose stats save failed; mergeSessionStats retries
+	newestPackageDirty   bool            // the newest package's save failed; mergeSessionStats retries
 	introducedLoadFailed bool            // introduced words unreadable: no words, no packages, no writes
 	newestPackage        []string        // readings of the newest package, without "already known" ones
 	packageSize          int             // words per package: 3, 5 or 10
@@ -151,6 +154,7 @@ func NewGameState(st *store.Store) *GameState {
 		wordLevel:        store.DefaultWordLevel,
 		introduced:       map[string]bool{},
 		introducedDirty:  map[string]bool{},
+		knownDirty:       map[string]bool{},
 		packageSize:      store.DefaultPackageSize,
 		wordSource:       jlptSource,
 		kanaFont:         fontByID(store.DefaultKanaFont),
@@ -242,9 +246,10 @@ func NewGameState(st *store.Store) *GameState {
 	gs.loadWords()
 	// The automatic source is resolved once and saved, so a list added
 	// later does not switch the source silently. A source that could not
-	// be read is never overwritten.
+	// be read is never overwritten, and a choice made without the lists
+	// (folder unreadable) holds for this run only.
 	gs.wordSource = resolveWordSource(storedSource, gs.listNames)
-	if sourceLoaded && gs.wordSource != storedSource {
+	if sourceLoaded && !gs.listsLoadFailed && gs.wordSource != storedSource {
 		_ = st.SaveWordSource(gs.wordSource)
 	}
 	gs.offerPackageAtStart()
@@ -429,6 +434,7 @@ func (gs *GameState) Reset() {
 			gs.wordOverallStats = ws
 		}
 	}
+	gs.boostKnownDirty()
 	gs.invalidatePlayable()
 	// A package due now is offered before the new game starts; the offer
 	// pauses it (settle cannot, it only ever unpauses).
@@ -761,6 +767,10 @@ func (gs *GameState) lowerTempo() {
 // alike. Must be called under lock.
 func (gs *GameState) mergeSessionStats() {
 	gs.saveIntroducedDirty()
+	gs.saveKnownDirty()
+	if gs.newestPackageDirty {
+		gs.saveNewestPackage()
+	}
 	gs.saveMemory()
 	gs.mergeWordStats()
 	gs.mergeKanaStats()

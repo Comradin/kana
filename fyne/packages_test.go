@@ -493,3 +493,95 @@ func TestNoLevelOfferAtN1OrForAList(t *testing.T) {
 		t.Fatal("a list source has no level offer")
 	}
 }
+
+func TestReplacementWordStaysInTheLesson(t *testing.T) {
+	gs := packageReady(0)
+	lw := func(kana, lesson string) vocab.Word {
+		return vocab.Word{Kana: kana, Source: "minna", Lesson: lesson, Meanings: vocab.Meanings{}}
+	}
+	gs.words = vocab.NewIndex(nil, []vocab.List{{Name: "minna", Words: []vocab.Word{
+		lw("あい", "1"), lw("あう", "1"), lw("あえ", "1"), lw("あお", "2"), lw("いえ", "2"),
+	}}})
+	gs.listNames = []string{"minna"}
+	gs.wordSource = listSourcePrefix + "minna"
+	gs.pendingPackage = []string{"あい", "あう"}
+	e, ok := gs.ReplacementWord()
+	if !ok || e.Kana != "あえ" {
+		t.Fatalf("replacement %q (%v), want あえ, the last word of lesson 1", e.Kana, ok)
+	}
+	if e, ok := gs.ReplacementWord(); ok {
+		t.Fatalf("lesson 1 is used up, but got %q from lesson 2", e.Kana)
+	}
+	if !equalIDs(gs.pendingPackage, []string{"あい", "あう", "あえ"}) {
+		t.Fatalf("pending = %v, want nothing added after lesson 1", gs.pendingPackage)
+	}
+	if got := gs.PackageIntro().Title; got != "New words · minna · lesson 1" {
+		t.Fatalf("title = %q", got)
+	}
+}
+
+func TestReplacementWordStaysInTheTitleLevels(t *testing.T) {
+	gs := packageReady(0)
+	gs.words = vocab.NewIndex([]vocab.Word{bw("あい", 5, "love"), bw("あう", 5, "meet"), bw("あえ", 4, "x"), bw("あお", 4, "blue")}, nil)
+	gs.wordLevel = 4
+	gs.pendingPackage = []string{"あい", "あう"}
+	if e, ok := gs.ReplacementWord(); ok {
+		t.Fatalf("an N5 package must not get the N4 word %q", e.Kana)
+	}
+	gs.introduced["あい"] = true
+	gs.pendingPackage = []string{"あう", "あえ"} // N5–N4
+	if e, ok := gs.ReplacementWord(); !ok || e.Kana != "あお" {
+		t.Fatalf("replacement %q (%v), want あお within N5–N4", e.Kana, ok)
+	}
+}
+
+func TestFailedKnownAndNewestSavesAreRetriedByTheMerge(t *testing.T) {
+	test.NewApp()
+	path := filepath.Join(t.TempDir(), "test.db")
+	st, err := store.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	_ = st.SaveSelectedRows([]string{"vowels"})
+	gs := NewGameState(st)
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	for _, q := range []string{"ALTER TABLE word_stats RENAME TO hidden_stats", "ALTER TABLE settings RENAME TO hidden_settings"} {
+		if _, err := db.Exec(q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	gs.mu.Lock()
+	gs.words = vocab.NewIndex(vowelWords(5), nil)
+	gs.pendingPackage = []string{"あい", "あう"}
+	gs.mu.Unlock()
+	gs.FinishPackage([]string{"あう"})
+	gs.mu.Lock()
+	known, newest := gs.knownDirty["あう"], gs.newestPackageDirty
+	gs.mergeSessionStats() // still failing: both stay dirty
+	known, newest = known && gs.knownDirty["あう"], newest && gs.newestPackageDirty
+	gs.mu.Unlock()
+	if !known || !newest {
+		t.Fatalf("failed saves must stay dirty: known %v, newest package %v", known, newest)
+	}
+	for _, q := range []string{"ALTER TABLE hidden_stats RENAME TO word_stats", "ALTER TABLE hidden_settings RENAME TO settings"} {
+		if _, err := db.Exec(q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	gs.Reset() // merges first, then reloads the word stats from the store
+	gs.mu.Lock()
+	correct, left := gs.wordCorrect("あう"), len(gs.knownDirty)
+	newest = gs.newestPackageDirty
+	gs.mu.Unlock()
+	if words, _ := st.WordStatistics(); words["あう"].CorrectCount != 3 || correct != 3 || left != 0 {
+		t.Fatalf("after the merge: stored あう %+v, wordCorrect %d, still dirty %d", words["あう"], correct, left)
+	}
+	if np, _ := st.NewestPackage(); !equalIDs(np, []string{"あい"}) || newest {
+		t.Fatalf("after the merge: stored newest_package %v, still dirty %v", np, newest)
+	}
+}

@@ -207,3 +207,17 @@ func TestNextPackageSkipsAheadPastUnreadableWords(t *testing.T) {
 		t.Fatalf("held-back lesson 2 word comes as its own package, got %v", got)
 	}
 }
+
+func TestNextPackageWhereKeepsOnlyMatchingEntries(t *testing.T) {
+	ix := NewIndex(nil, []List{lessonList(
+		[2]string{"き", "1"}, [2]string{"ねこ", "2"}, [2]string{"みず", "2"},
+	)})
+	src := Source{List: "minna"}
+	inLesson1 := func(e Entry) bool { return ix.Lesson(e, "minna") == "1" }
+	if got := NextPackageWhere(ix, src, map[string]bool{"き": true}, 1, knowAll, inLesson1); got != nil {
+		t.Fatalf("lesson 1 is used up: %v, want none rather than a lesson 2 word", kanaOf(got))
+	}
+	if got := kanaOf(NextPackageWhere(ix, src, nil, 5, knowAll, nil)); !reflect.DeepEqual(got, kanaOf(NextPackage(ix, src, nil, 5, knowAll))) {
+		t.Fatalf("a nil keep must equal NextPackage, got %v", got)
+	}
+}
