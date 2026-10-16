@@ -89,7 +89,7 @@ func TestNextPackageListOrder(t *testing.T) {
 			"NewIndex":  NewIndex([]Word{ranked("いぬ", 5, 1)}, []List{c.list}),
 			"WithLists": NewIndex([]Word{ranked("いぬ", 5, 1)}, nil).WithLists([]List{c.list}),
 		} {
-			got := kanaOf(NextPackage(ix, Source{List: "minna"}, nil, 10, knowAll))
+			got := allPackages(ix, Source{List: "minna"}, 10, knowAll)
 			if !reflect.DeepEqual(got, c.want) {
 				t.Errorf("%s (%s): %v, want %v", c.name, name, got, c.want)
 			}
@@ -142,5 +142,68 @@ func TestSourceHas(t *testing.T) {
 		if got := c.src.Has(e); got != c.want {
 			t.Errorf("%+v.Has(%s) = %v, want %v", c.src, c.kana, got, c.want)
 		}
+	}
+}
+
+// allPackages draws packages until the source is exhausted and returns the
+// readings in the order they were introduced.
+func allPackages(ix *Index, src Source, n int, known func(string) bool) []string {
+	introduced := map[string]bool{}
+	var out []string
+	for {
+		pkg := NextPackage(ix, src, introduced, n, known)
+		if len(pkg) == 0 {
+			return out
+		}
+		for _, e := range pkg {
+			introduced[e.Kana] = true
+			out = append(out, e.Kana)
+		}
+	}
+}
+
+func lessonList(rows ...[2]string) List {
+	l := List{Name: "minna"}
+	for _, r := range rows {
+		l.Words = append(l.Words, word(r[0], 0, "minna", r[1], "de", r[0]))
+	}
+	return l
+}
+
+func TestNextPackageStaysWithinOneLesson(t *testing.T) {
+	ix := NewIndex(nil, []List{lessonList(
+		[2]string{"き", "1"}, [2]string{"め", "1"}, [2]string{"ねこ", "2"},
+		[2]string{"みず", "2"}, [2]string{"あめ", ""},
+	)})
+	src := Source{List: "minna"}
+	got := kanaOf(NextPackage(ix, src, nil, 5, knowAll))
+	if !reflect.DeepEqual(got, []string{"き", "め"}) {
+		t.Fatalf("first package = %v, want only lesson 1", got)
+	}
+	got = kanaOf(NextPackage(ix, src, map[string]bool{"き": true, "め": true}, 5, knowAll))
+	if !reflect.DeepEqual(got, []string{"ねこ", "みず"}) {
+		t.Fatalf("second package = %v, want only lesson 2", got)
+	}
+	got = kanaOf(NextPackage(ix, src, map[string]bool{"き": true, "め": true, "ねこ": true, "みず": true}, 5, knowAll))
+	if !reflect.DeepEqual(got, []string{"あめ"}) {
+		t.Fatalf("words without lesson form their own package, got %v", got)
+	}
+}
+
+func TestNextPackageSkipsAheadPastUnreadableWords(t *testing.T) {
+	ix := NewIndex(nil, []List{lessonList(
+		[2]string{"テレビ", "2"}, [2]string{"ねこ", "2"}, [2]string{"き", "3"},
+	)})
+	src := Source{List: "minna"}
+	noKatakana := func(u string) bool { return u != "テ" && u != "レ" && u != "ビ" }
+	introduced := map[string]bool{"ねこ": true}
+	got := kanaOf(NextPackage(ix, src, introduced, 5, noKatakana))
+	if !reflect.DeepEqual(got, []string{"き"}) {
+		t.Fatalf("unreadable テレビ must not block lesson 3, got %v", got)
+	}
+	introduced["き"] = true
+	got = kanaOf(NextPackage(ix, src, introduced, 5, knowAll))
+	if !reflect.DeepEqual(got, []string{"テレビ"}) {
+		t.Fatalf("held-back lesson 2 word comes as its own package, got %v", got)
 	}
 }

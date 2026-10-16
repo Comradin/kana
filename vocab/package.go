@@ -24,7 +24,7 @@ func (s Source) Has(e Entry) bool {
 // NextPackage returns up to n entries from src that are not introduced and
 // whose units are all known, in learning order. Entries that are not
 // playable yet are skipped, not waited for: they come once their kana are
-// known.
+// known. A list package holds words of a single lesson.
 //
 // JLPT order: level from N5 down to src.Level, then frequency rank, then
 // fewer units, then the reading. List order: by lesson (numeric if every
@@ -36,10 +36,22 @@ func NextPackage(ix *Index, src Source, introduced map[string]bool, n int, known
 		return nil
 	}
 	var out []Entry
+	var lesson string
 	for _, i := range ix.order(src.List) {
 		e := ix.entries[i]
 		if !src.Has(e) || introduced[e.Kana] || !allKnown(e.Units, known) {
 			continue
+		}
+		// A list package holds words of one lesson only. The order is by
+		// lesson, so the first readable word fixes the lesson; earlier
+		// lessons' unreadable words do not hold the package back.
+		if src.List != "" {
+			l := ix.Lesson(e, src.List)
+			if len(out) == 0 {
+				lesson = l
+			} else if l != lesson {
+				break
+			}
 		}
 		out = append(out, e)
 		if len(out) == n {
