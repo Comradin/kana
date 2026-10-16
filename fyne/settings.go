@@ -213,7 +213,7 @@ func (f *settingsForm) newGameTab(st settingsState) fyne.CanvasObject {
 	for i, c := range fontChoices {
 		fontLabels[i] = c.label
 		preview := canvas.NewText(fontPreview, kanaTextColor)
-		preview.TextSize = 20
+		preview.TextSize = 32 // the tile size
 		setKanaFont(preview, c)
 		previews.Add(widget.NewLabel(c.label))
 		previews.Add(preview)

@@ -50,8 +50,9 @@ var fontChoices = []fontChoice{
 	{id: "system", label: "System"},
 }
 
-// fontPreview is the text each choice is previewed with.
-const fontPreview = "あ ア き キ ー"
+// fontPreview is the text each choice is previewed with: kana whose stroke
+// ends and curves show the difference between the fonts.
+const fontPreview = "ふゆ そ ツシー"
 
 // fontByID returns the choice for a kana_font setting; an unknown value
 // gives Noto Sans JP, the default.
