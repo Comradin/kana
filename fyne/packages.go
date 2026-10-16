@@ -148,17 +148,52 @@ func (gs *GameState) saveIntroducedDirty() {
 // correct count becomes at least secureCorrect, written at once and kept
 // out of the session stats so the session tiles stay honest, and it gets
 // the memory state of three correct answers. No points, no tempo change.
+// A failed save is kept in knownDirty, which mergeSessionStats retries.
 // Must be called under lock.
 func (gs *GameState) markKnown(kana string, now time.Time) {
-	ws := gs.wordOverallStats[kana]
-	ws.Kana = kana
-	ws.CorrectCount = max(ws.CorrectCount, secureCorrect)
-	if gs.store != nil {
-		_ = gs.store.SaveWordStats(kana, ws.CorrectCount, ws.MissCount)
-	}
-	gs.wordOverallStats[kana] = ws
+	gs.knownDirty[kana] = true
+	gs.boostKnownDirty()
+	gs.saveKnownDirty()
 	gs.wordMemory[kana] = memory.Seed(secureCorrect, now)
 	gs.wordMemoryDirty[kana] = true
+}
+
+// boostKnownDirty raises the overall correct count of every reading in
+// knownDirty to at least secureCorrect, so the boost holds in memory while
+// its save is pending, also after the stats are reloaded. Must be called
+// under lock.
+func (gs *GameState) boostKnownDirty() {
+	for kana := range gs.knownDirty {
+		ws := gs.wordOverallStats[kana]
+		ws.Kana = kana
+		ws.CorrectCount = max(ws.CorrectCount, secureCorrect)
+		gs.wordOverallStats[kana] = ws
+	}
+}
+
+// saveKnownDirty saves the stats of "already known" readings whose save
+// failed. Must be called under lock.
+func (gs *GameState) saveKnownDirty() {
+	gs.boostKnownDirty()
+	for kana := range gs.knownDirty {
+		ws := gs.wordOverallStats[kana]
+		if gs.store != nil {
+			if err := gs.store.SaveWordStats(kana, ws.CorrectCount, ws.MissCount); err != nil {
+				continue
+			}
+		}
+		delete(gs.knownDirty, kana)
+	}
+}
+
+// saveNewestPackage saves the newest package; a failed save sets
+// newestPackageDirty, which mergeSessionStats retries. Must be called under
+// lock.
+func (gs *GameState) saveNewestPackage() {
+	if gs.store == nil {
+		return
+	}
+	gs.newestPackageDirty = gs.store.SaveNewestPackage(gs.newestPackage) != nil
 }
 
 // FinishPackage closes the word package intro: every pending reading
@@ -183,9 +218,7 @@ func (gs *GameState) FinishPackage(known []string) {
 		}
 	}
 	gs.newestPackage = newest
-	if gs.store != nil {
-		_ = gs.store.SaveNewestPackage(newest)
-	}
+	gs.saveNewestPackage()
 	gs.pendingPackage = nil
 	gs.invalidatePlayable()
 	gs.settle()
@@ -194,7 +227,8 @@ func (gs *GameState) FinishPackage(known []string) {
 
 // ReplacementWord adds the next word of the source to the pending package,
 // for a word the learner ticked as already known, and returns it; false
-// when the source has none left.
+// when the source has none left. The replacement keeps to what the dialog
+// title names: a list package's lesson, a JLPT package's levels.
 func (gs *GameState) ReplacementWord() (vocab.Entry, bool) {
 	gs.mu.Lock()
 	defer gs.mu.Unlock()
@@ -205,19 +239,41 @@ func (gs *GameState) ReplacementWord() (vocab.Entry, bool) {
 	if !found {
 		return vocab.Entry{}, false
 	}
+	var pending []vocab.Entry
 	skip := make(map[string]bool, len(gs.introduced)+len(gs.pendingPackage))
 	for kana := range gs.introduced {
 		skip[kana] = true
 	}
 	for _, kana := range gs.pendingPackage {
 		skip[kana] = true
+		if e, ok := gs.words.Lookup(kana); ok {
+			pending = append(pending, e)
+		}
 	}
-	next := vocab.NextPackage(gs.words, src, skip, 1, gs.unitKnown)
+	if len(pending) == 0 {
+		return vocab.Entry{}, false
+	}
+	next := vocab.NextPackageWhere(gs.words, src, skip, 1, gs.unitKnown, samePackage(gs.words, src, pending))
 	if len(next) == 0 {
 		return vocab.Entry{}, false
 	}
 	gs.pendingPackage = append(gs.pendingPackage, next[0].Kana)
 	return next[0], true
+}
+
+// samePackage accepts the entries that fit a package of pending: for a list
+// the lesson of its words (a list package holds one lesson), for JLPT the
+// levels its words span.
+func samePackage(ix *vocab.Index, src vocab.Source, pending []vocab.Entry) func(vocab.Entry) bool {
+	if src.List != "" {
+		lesson := ix.Lesson(pending[0], src.List)
+		return func(e vocab.Entry) bool { return ix.Lesson(e, src.List) == lesson }
+	}
+	lo, hi := pending[0].JLPT, pending[0].JLPT
+	for _, e := range pending[1:] {
+		lo, hi = min(lo, e.JLPT), max(hi, e.JLPT)
+	}
+	return func(e vocab.Entry) bool { return e.JLPT >= lo && e.JLPT <= hi }
 }
 
 // AcceptLevelOffer lowers the JLPT level by one (N5 → N4) and offers the
@@ -260,8 +316,8 @@ func (gs *GameState) applyWordSettings(ws wordSettings) {
 		changed = true
 		if gs.store != nil {
 			_ = gs.store.SaveWordSource(ws.source)
-			_ = gs.store.SaveNewestPackage(nil)
 		}
+		gs.saveNewestPackage()
 	}
 	if ws.level >= 1 && ws.level <= 5 && ws.level != gs.wordLevel {
 		gs.wordLevel = ws.level

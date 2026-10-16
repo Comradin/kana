@@ -79,6 +79,9 @@ func (gs *GameState) mergeWordStats() {
 		}
 		base := baseline[kana]
 		base.Kana = kana
+		if gs.knownDirty[kana] {
+			base.CorrectCount = max(base.CorrectCount, secureCorrect)
+		}
 		base.CorrectCount += session.CorrectCount
 		base.MissCount += session.MissCount
 		if gs.store != nil {
@@ -88,6 +91,7 @@ func (gs *GameState) mergeWordStats() {
 		}
 		gs.wordOverallStats[kana] = base
 		delete(gs.wordSessionStats, kana)
+		delete(gs.knownDirty, kana)
 	}
 
 	gs.wordSessionDirty = false
@@ -100,8 +104,9 @@ const secureCorrect = 3
 // loadWords builds the word index: the private lists merged into the
 // bundled index, which is built once per process. A bundled load error is
 // kept for the status panel; kana play is unaffected. An unreadable list
-// folder gives no private lists (stage 4 shows list problems). Called from
-// NewGameState before the game starts, so no lock is needed.
+// folder gives no private lists (stage 4 shows list problems) and sets
+// listsLoadFailed. Called from NewGameState before the game starts, so no
+// lock is needed.
 func (gs *GameState) loadWords() {
 	base := vocab.NewIndex(nil, nil)
 	if _, err := bundledWords(); err != nil {
@@ -110,9 +115,12 @@ func (gs *GameState) loadWords() {
 		base = bundledIndex()
 	}
 	var lists []vocab.List
+	gs.listsLoadFailed = true
 	if dir, err := wordsDir(); err == nil {
 		gs.wordsDir = dir
-		lists, _ = vocab.LoadDir(dir)
+		var loadErr error
+		lists, loadErr = vocab.LoadDir(dir)
+		gs.listsLoadFailed = loadErr != nil
 	}
 	gs.listNames = nil
 	for _, l := range lists {

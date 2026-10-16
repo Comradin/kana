@@ -32,6 +32,12 @@ func (s Source) Has(e Entry) bool {
 // several lessons counts for its first), then file order; entries without
 // a lesson last, in file order.
 func NextPackage(ix *Index, src Source, introduced map[string]bool, n int, known func(string) bool) []Entry {
+	return NextPackageWhere(ix, src, introduced, n, known, nil)
+}
+
+// NextPackageWhere is NextPackage limited to the entries keep accepts (nil
+// accepts all), e.g. to refill a package within its lesson or levels.
+func NextPackageWhere(ix *Index, src Source, introduced map[string]bool, n int, known func(string) bool, keep func(Entry) bool) []Entry {
 	if ix == nil || n <= 0 {
 		return nil
 	}
@@ -39,7 +45,7 @@ func NextPackage(ix *Index, src Source, introduced map[string]bool, n int, known
 	var lesson string
 	for _, i := range ix.order(src.List) {
 		e := ix.entries[i]
-		if !src.Has(e) || introduced[e.Kana] || !allKnown(e.Units, known) {
+		if !src.Has(e) || introduced[e.Kana] || !allKnown(e.Units, known) || (keep != nil && !keep(e)) {
 			continue
 		}
 		// A list package holds words of one lesson only. The order is by
