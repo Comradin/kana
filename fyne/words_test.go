@@ -80,21 +80,51 @@ func TestFormatWordsLine(t *testing.T) {
 		ws   WordsStatus
 		want string
 	}{
-		{"bundled", WordsStatus{Bundled: true, Playable: 42, Secure: 17, Level: 5}, "Words: 42 playable · 17 secure · up to N5"},
-		{"bundled error", WordsStatus{Bundled: true, Err: "broken data", Playable: 3, Level: 5}, "Words unavailable: broken data"},
-		{"own lists", WordsStatus{HasLists: true, Playable: 23, Secure: 5, Level: 5}, "Words: 23 playable · 5 secure · own lists"},
-		{"own lists, bundled error", WordsStatus{HasLists: true, Err: "broken data", Playable: 23, Secure: 5}, "Words: 23 playable · 5 secure · own lists"},
-		{"no lists", WordsStatus{Dir: "~/.local/share/kana/words"}, "Words: add a list to ~/.local/share/kana/words"},
-		{"no lists, no folder", WordsStatus{}, "Words: add a word list"},
+		{"JLPT counts", WordsStatus{Introduced: 25, Secure: 18, Source: "JLPT N5", Level: 5}, "Words: 25 introduced · 18 secure · JLPT N5"},
+		{"list counts", WordsStatus{Introduced: 3, Secure: 1, Source: "minna no nihongo"}, "Words: 3 introduced · 1 secure · minna no nihongo"},
+		{"load failed", WordsStatus{LoadFailed: true, Err: "broken data", Introduced: 3}, "Words unavailable: could not load progress"},
+		{"bundled error", WordsStatus{Err: "broken data", Introduced: 3, Level: 5}, "Words unavailable: broken data"},
+		{"missing list", WordsStatus{Missing: true, Dir: "~/.local/share/kana/words", Source: "minna"}, "Words: add a list to ~/.local/share/kana/words or choose JLPT"},
+		{"missing list, no folder", WordsStatus{Missing: true, Source: "minna"}, "Words: add a word list or choose JLPT"},
+		{"needs kana", WordsStatus{Next: wordsNeedKana, Introduced: 5, Source: "JLPT N5", Level: 5}, "Words: learn more kana for new words"},
+		{"list finished", WordsStatus{Next: wordsFinished, Introduced: 40, Source: "minna no nihongo"}, "Words: minna no nihongo finished"},
+		{"level finished", WordsStatus{Next: wordsFinished, Source: "JLPT N5", Level: 5}, "Words: JLPT N5 finished"},
+		{"JLPT finished", WordsStatus{Next: wordsFinished, Source: "JLPT N1", Level: 1}, "Words: JLPT finished"},
 	}
 	for _, c := range cases {
 		if got := formatWordsLine(c.ws); got != c.want {
 			t.Errorf("%s: line = %q, want %q", c.name, got, c.want)
 		}
 	}
-	long := formatWordsLine(WordsStatus{Bundled: true, Err: strings.Repeat("x", 500)})
+	long := formatWordsLine(WordsStatus{Err: strings.Repeat("x", 500)})
 	if r := []rune(long); len(r) != maxWordsLineRunes || !strings.HasSuffix(long, "…") {
 		t.Errorf("long error = %q (%d runes), want the %d-rune safety cap", long, len(r), maxWordsLineRunes)
+	}
+}
+
+func TestResolveWordSource(t *testing.T) {
+	cases := []struct {
+		stored string
+		lists  []string
+		want   string
+	}{
+		{"", nil, "jlpt"},
+		{"", []string{"a-list", "b-list"}, "list:a-list"},
+		{"jlpt", []string{"a-list"}, "jlpt"},
+		{"list:gone", nil, "list:gone"}, // a missing list stays selected
+		{"list:", []string{"a"}, "list:a"},
+		{"bogus", nil, "jlpt"},
+	}
+	for _, c := range cases {
+		if got := resolveWordSource(c.stored, c.lists); got != c.want {
+			t.Errorf("resolveWordSource(%q, %v) = %q, want %q", c.stored, c.lists, got, c.want)
+		}
+	}
+}
+
+func TestPrettyListName(t *testing.T) {
+	if got := prettyListName("minna-no_nihongo"); got != "minna no nihongo" {
+		t.Fatalf("prettyListName = %q", got)
 	}
 }
 

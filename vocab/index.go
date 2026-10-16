@@ -173,9 +173,6 @@ type Filter struct {
 	List     string // "" = bundled up to MaxLevel plus every private list;
 	// BundledSource = bundled only, up to MaxLevel; else only this private list
 	Lesson string // with a private List: only this lesson ("" = all)
-	// NoBundled drops entries that come only from the bundled list. An entry
-	// that is also in a private list stays, without the level gate.
-	NoBundled bool
 }
 
 // Playable returns the entries whose units all satisfy known and which pass
@@ -192,7 +189,7 @@ func Playable(entries []Entry, known func(unit string) bool, f Filter) []Entry {
 }
 
 func (f Filter) passes(e Entry) bool {
-	bundledOK := !f.NoBundled && e.Bundled && e.JLPT >= f.MaxLevel
+	bundledOK := e.Bundled && e.JLPT >= f.MaxLevel
 	switch f.List {
 	case "":
 		return bundledOK || len(e.Lists) > 0

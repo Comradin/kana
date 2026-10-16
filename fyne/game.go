@@ -60,15 +60,22 @@ type GameState struct {
 	wordMemory           map[string]memory.State // spaced-repetition state per reading
 	wordMemoryDirty      map[string]bool         // readings whose state is not saved yet
 	wordMemoryLoadFailed bool                    // stored word states unreadable: never overwrite them
-	wordLevel            int                     // words are played up to this JLPT level, 5 = N5
+	wordLevel            int                     // JLPT packages come from N5 down to this level
 	meaningLang          string                  // language meanings are shown in
 	words                *vocab.Index            // every word reading; nil = no words
 	wordsErr             string                  // bundled list failed to load
-	useBundled           bool                    // bundled words are played (setting bundled_words)
-	hasLists             bool                    // at least one private list was found
+	listNames            []string                // the private lists found, sorted by name
 	wordsDir             string                  // the private list folder; "" if unknown
 	playable             []vocab.Entry           // cached playableWords result
 	playableOK           bool                    // playable is up to date
+
+	// Word packages: only introduced words fall.
+	introduced           map[string]bool // readings shown in a package intro
+	introducedDirty      map[string]bool // introduced readings whose save failed; mergeSessionStats retries
+	introducedLoadFailed bool            // introduced words unreadable: no words, no packages, no writes
+	newestPackage        []string        // readings of the newest package, without "already known" ones
+	packageSize          int             // words per package: 3, 5 or 10
+	wordSource           string          // where new words come from: jlptSource or listSourcePrefix + name
 
 	selectedRows  map[string]bool
 	autoProgress  bool
@@ -134,6 +141,10 @@ func NewGameState(st *store.Store) *GameState {
 		wordMemory:       map[string]memory.State{},
 		wordMemoryDirty:  map[string]bool{},
 		wordLevel:        store.DefaultWordLevel,
+		introduced:       map[string]bool{},
+		introducedDirty:  map[string]bool{},
+		packageSize:      store.DefaultPackageSize,
+		wordSource:       jlptSource,
 	}
 
 	for _, id := range kanacore.DefaultRowIDs() {
@@ -141,6 +152,7 @@ func NewGameState(st *store.Store) *GameState {
 	}
 
 	storedLang := ""
+	storedSource, sourceLoaded := "", false
 	if st != nil {
 		if names, err := st.ActiveScripts(); err == nil && len(names) > 0 {
 			gs.activeScripts = scriptSet(parseScripts(names))
@@ -171,8 +183,19 @@ func NewGameState(st *store.Store) *GameState {
 		if level, err := st.WordLevel(); err == nil {
 			gs.wordLevel = level
 		}
-		if on, err := st.BundledWords(); err == nil {
-			gs.useBundled = on
+		if in, err := st.IntroducedWords(); err == nil {
+			gs.introduced = in
+		} else {
+			gs.introducedLoadFailed = true
+		}
+		if pkg, err := st.NewestPackage(); err == nil {
+			gs.newestPackage = pkg
+		}
+		if n, err := st.PackageSize(); err == nil {
+			gs.packageSize = n
+		}
+		if src, err := st.WordSource(); err == nil {
+			storedSource, sourceLoaded = src, true
 		}
 		if l, err := st.MeaningLang(); err == nil {
 			storedLang = l
@@ -205,6 +228,13 @@ func NewGameState(st *store.Store) *GameState {
 
 	gs.meaningLang = resolveMeaningLang(storedLang, systemLanguage())
 	gs.loadWords()
+	// The automatic source is resolved once and saved, so a list added
+	// later does not switch the source silently. A source that could not
+	// be read is never overwritten.
+	gs.wordSource = resolveWordSource(storedSource, gs.listNames)
+	if sourceLoaded && gs.wordSource != storedSource {
+		_ = st.SaveWordSource(gs.wordSource)
+	}
 	return gs
 }
 

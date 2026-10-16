@@ -211,9 +211,14 @@ func bw(kana string, level int, en string) vocab.Word {
 	return vocab.Word{Kana: kana, JLPT: level, Source: vocab.BundledSource, Meanings: vocab.Meanings{"en": {en}}}
 }
 
-// withWords replaces the word index with the given bundled words.
+// withWords replaces the word index with the given bundled words, all of
+// them introduced.
 func withWords(gs *GameState, words ...vocab.Word) {
 	gs.words = vocab.NewIndex(words, nil)
+	gs.introduced = map[string]bool{}
+	for _, w := range words {
+		gs.introduced[w.Kana] = true
+	}
 	gs.invalidatePlayable()
 }
 
@@ -254,26 +259,165 @@ func TestUnitKnown(t *testing.T) {
 	}
 }
 
-func TestPlayableWordsFollowLevelAndKnownKana(t *testing.T) {
+func TestPlayableWordsAreIntroducedAndKnown(t *testing.T) {
 	gs := newTestState()
-	withWords(gs, bw("あい", 5, "love"), bw("あお", 4, "blue"), bw("いえ", 5, "house"))
-	secure(gs, "あ", "い", "お")
-	if got := playableKana(gs); !equalIDs(got, []string{"あい"}) {
-		t.Fatalf("playable at N5 = %v, want [あい] (あお is N4, いえ needs え)", got)
-	}
-	gs.wordLevel = 4
-	gs.invalidatePlayable()
+	withWords(gs, bw("あい", 5, "love"), bw("あお", 4, "blue"), bw("いえ", 5, "house"), bw("うえ", 5, "above"))
+	delete(gs.introduced, "うえ")
+	secure(gs, "あ", "い", "う", "お")
+	gs.overallStats["え"] = store.KanaStats{Char: "え", CorrectCount: 2}
 	if got := playableKana(gs); !equalIDs(got, []string{"あい", "あお"}) {
-		t.Fatalf("playable at N4 = %v", got)
+		t.Fatalf("playable = %v, want [あい あお]: いえ needs え, うえ is not introduced, the level does not gate", got)
 	}
 }
 
-func TestPrivateListWordsIgnoreLevel(t *testing.T) {
+func TestIntroducedWordsKeepFallingAfterLevelOrSourceChange(t *testing.T) {
+	gs := newTestState()
+	withWords(gs, bw("あい", 5, "love"), bw("あお", 3, "blue"))
+	secure(gs, "あ", "い", "お")
+	gs.wordLevel = 2
+	gs.wordSource = listSourcePrefix + "mine"
+	gs.invalidatePlayable()
+	if got := playableKana(gs); !equalIDs(got, []string{"あい", "あお"}) {
+		t.Fatalf("playable after the source and level changed = %v", got)
+	}
+}
+
+func TestPrivateListWordsNeedIntroduction(t *testing.T) {
 	gs := newTestState()
 	gs.words = vocab.NewIndex(nil, []vocab.List{{Name: "mine", Words: []vocab.Word{{Kana: "あお", Source: "mine", Meanings: vocab.Meanings{}}}}})
 	secure(gs, "あ", "お")
+	if got := playableKana(gs); len(got) != 0 {
+		t.Fatalf("playable before the intro = %v", got)
+	}
+	gs.introduced["あお"] = true
+	gs.invalidatePlayable()
 	if got := playableKana(gs); !equalIDs(got, []string{"あお"}) {
 		t.Fatalf("playable = %v, want [あお]", got)
+	}
+}
+
+func TestIntroducedLoadFailureMeansNoWords(t *testing.T) {
+	gs := newTestState()
+	withWords(gs, bw("あい", 5, "love"))
+	secure(gs, "あ", "い")
+	gs.introducedLoadFailed = true
+	gs.invalidatePlayable()
+	if got := playableKana(gs); len(got) != 0 {
+		t.Fatalf("playable = %v, want none while introduced words are unknown", got)
+	}
+	if got := formatWordsLine(gs.wordsStatus()); got != "Words unavailable: could not load progress" {
+		t.Fatalf("line = %q", got)
+	}
+}
+
+func TestNewGameStateLoadsWordPackageState(t *testing.T) {
+	test.NewApp()
+	st := openTestStore(t)
+	_ = st.SaveSelectedRows([]string{"vowels"})
+	_ = st.SaveIntroduced("あい", time.Now())
+	_ = st.SaveNewestPackage([]string{"あい"})
+	_ = st.SavePackageSize(10)
+	gs := NewGameState(st)
+	if !gs.introduced["あい"] || len(gs.introduced) != 1 || gs.introducedLoadFailed {
+		t.Fatalf("introduced = %v, failed %v", gs.introduced, gs.introducedLoadFailed)
+	}
+	if !equalIDs(gs.newestPackage, []string{"あい"}) || gs.packageSize != 10 {
+		t.Fatalf("newestPackage = %v, packageSize = %d", gs.newestPackage, gs.packageSize)
+	}
+}
+
+func TestIntroducedLoadFailureIsDetected(t *testing.T) {
+	test.NewApp()
+	path := filepath.Join(t.TempDir(), "test.db")
+	st, err := store.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	_ = st.SaveSelectedRows([]string{"vowels"})
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if _, err := db.Exec("DROP TABLE introduced_words"); err != nil {
+		t.Fatal(err)
+	}
+	if gs := NewGameState(st); !gs.introducedLoadFailed {
+		t.Fatal("an unreadable introduced_words table must set introducedLoadFailed")
+	}
+}
+
+func TestWordSourceResolvedAndSavedOnFirstStart(t *testing.T) {
+	test.NewApp()
+	dir := isolateWordsDir(t)
+	st := openTestStore(t)
+	_ = st.SaveSelectedRows([]string{"vowels"})
+	if gs := NewGameState(st); gs.wordSource != jlptSource {
+		t.Fatalf("no lists: source = %q, want jlpt", gs.wordSource)
+	}
+	if s, _ := st.WordSource(); s != jlptSource {
+		t.Fatalf("saved source = %q, want jlpt", s)
+	}
+
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"b-list.csv", "a-list.csv"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("kana,meaning\nあお,blue\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if gs := NewGameState(st); gs.wordSource != jlptSource {
+		t.Fatalf("a list added later switched the source to %q", gs.wordSource)
+	}
+
+	fresh := openTestStore(t)
+	_ = fresh.SaveSelectedRows([]string{"vowels"})
+	if gs := NewGameState(fresh); gs.wordSource != "list:a-list" {
+		t.Fatalf("first start with lists: source = %q, want the first list by name", gs.wordSource)
+	}
+	if s, _ := fresh.WordSource(); s != "list:a-list" {
+		t.Fatalf("saved source = %q", s)
+	}
+}
+
+func TestWordsStatusLine(t *testing.T) {
+	gs := newTestState()
+	gs.words = vocab.NewIndex(
+		[]vocab.Word{bw("あい", 5, "love"), bw("あお", 5, "blue"), bw("かお", 5, "face"), bw("いえ", 4, "house")},
+		[]vocab.List{{Name: "minna-no-nihongo", Words: []vocab.Word{{Kana: "あい", Source: "minna-no-nihongo", Meanings: vocab.Meanings{}}}}},
+	)
+	gs.listNames = []string{"minna-no-nihongo"}
+	secure(gs, "あ", "い", "お")
+	gs.introduced = map[string]bool{"あい": true, "gone": true}
+	gs.wordOverallStats["あい"] = store.WordStats{Kana: "あい", CorrectCount: 3}
+	line := func() string { return formatWordsLine(gs.wordsStatus()) }
+
+	if got := line(); got != "Words: 1 introduced · 1 secure · JLPT N5" {
+		t.Fatalf("counts = %q (a reading missing from the index does not count)", got)
+	}
+	gs.introduced["あお"] = true
+	if got := line(); got != "Words: learn more kana for new words" {
+		t.Fatalf("only かお left, not playable: %q", got)
+	}
+	gs.introduced["かお"] = true
+	if got := line(); got != "Words: JLPT N5 finished" {
+		t.Fatalf("N5 introduced: %q", got)
+	}
+	gs.wordLevel = 1
+	gs.introduced["いえ"] = true
+	if got := line(); got != "Words: JLPT finished" {
+		t.Fatalf("every level introduced: %q", got)
+	}
+	gs.wordSource = listSourcePrefix + "minna-no-nihongo"
+	if got := line(); got != "Words: minna no nihongo finished" {
+		t.Fatalf("list introduced: %q", got)
+	}
+	gs.wordSource = listSourcePrefix + "gone"
+	gs.wordsDir = "/data/kana/words"
+	if got := line(); got != "Words: add a list to /data/kana/words or choose JLPT" {
+		t.Fatalf("missing list: %q", got)
 	}
 }
 
@@ -747,8 +891,8 @@ func TestSnapshotWordsStatus(t *testing.T) {
 	gs.wordOverallStats["あい"] = store.WordStats{Kana: "あい", CorrectCount: 2}
 	gs.wordSessionStats["あい"] = store.WordStats{Kana: "あい", CorrectCount: 1}
 	snap := gs.snapshot()
-	if snap.Words != (WordsStatus{Bundled: true, Playable: 2, Secure: 1, Level: 5}) {
-		t.Fatalf("Words = %+v, want 2 playable, 1 secure, N5", snap.Words)
+	if snap.Words != (WordsStatus{Introduced: 3, Secure: 1, Source: "JLPT N5", Level: 5, Next: wordsFinished}) {
+		t.Fatalf("Words = %+v, want 3 introduced, 1 secure, JLPT N5 finished", snap.Words)
 	}
 	if snap.WordCorrect != 1 {
 		t.Fatalf("WordCorrect = %d, want the session's 1", snap.WordCorrect)
@@ -762,7 +906,6 @@ func TestSnapshotShowsBundledError(t *testing.T) {
 	t.Cleanup(func() { bundledWords = orig })
 	gs := NewGameState(nil)
 	gs.mu.Lock()
-	gs.useBundled = true
 	snap := gs.snapshot()
 	gs.mu.Unlock()
 	if got := formatWordsLine(snap.Words); got != "Words unavailable: broken data" {
@@ -832,71 +975,4 @@ func isolateWordsDir(t *testing.T) string {
 	data := t.TempDir()
 	t.Setenv("XDG_DATA_HOME", data)
 	return filepath.Join(data, "kana", "words")
-}
-
-func TestBundledWordsSettingIsLoaded(t *testing.T) {
-	test.NewApp()
-	isolateWordsDir(t)
-	st := openTestStore(t)
-	_ = st.SaveSelectedRows([]string{"vowels"})
-	if NewGameState(st).useBundled {
-		t.Fatal("bundled words must be off by default")
-	}
-	_ = st.SaveBundledWords(true)
-	if !NewGameState(st).useBundled {
-		t.Fatal("stored bundled_words=1 not loaded")
-	}
-}
-
-func TestBundledOffPlaysOnlyPrivateWords(t *testing.T) {
-	gs := newTestState()
-	gs.useBundled = false
-	gs.words = vocab.NewIndex(
-		[]vocab.Word{bw("あい", 5, "love"), bw("あお", 4, "blue")},
-		[]vocab.List{{Name: "mine", Words: []vocab.Word{
-			{Kana: "あお", Source: "mine", Meanings: vocab.Meanings{}},
-			{Kana: "いえ", Source: "mine", Meanings: vocab.Meanings{}},
-		}}},
-	)
-	secure(gs, "あ", "い", "う", "え", "お")
-	// あい is bundled only; あお is N4 but also private, so the level gate
-	// does not apply to it.
-	if got := playableKana(gs); !equalIDs(got, []string{"あお", "いえ"}) {
-		t.Fatalf("playable with bundled off = %v, want [あお いえ]", got)
-	}
-	gs.useBundled = true
-	gs.invalidatePlayable()
-	if got := playableKana(gs); !equalIDs(got, []string{"あい", "あお", "いえ"}) {
-		t.Fatalf("playable with bundled on = %v", got)
-	}
-}
-
-func TestWordsLineWithoutBundledWords(t *testing.T) {
-	test.NewApp()
-	dir := isolateWordsDir(t)
-	home, _ := os.UserHomeDir()
-
-	gs := NewGameState(nil)
-	gs.mu.Lock()
-	ws := gs.wordsStatus()
-	gs.mu.Unlock()
-	if want := "Words: add a list to " + displayDir(dir, home); formatWordsLine(ws) != want {
-		t.Fatalf("no lists: line = %q, want %q", formatWordsLine(ws), want)
-	}
-
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, "mine.csv"), []byte("kana,meaning\nあお,blue\nねこ,cat\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	gs = NewGameState(nil)
-	gs.mu.Lock()
-	secure(gs, "あ", "お")
-	gs.wordOverallStats["あお"] = store.WordStats{Kana: "あお", CorrectCount: 3}
-	ws = gs.wordsStatus()
-	gs.mu.Unlock()
-	if got := formatWordsLine(ws); got != "Words: 1 playable · 1 secure · own lists" {
-		t.Fatalf("own lists: line = %q", got)
-	}
 }
