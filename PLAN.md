@@ -20,7 +20,10 @@ This document outlines planned improvements and features for the Kana learning g
 - [x] Bundled word list derived from JMdict (EDRDG, CC BY-SA 4.0, attribution required), JLPT words with Waller's levels (`vocab/data/`); used by the game
 - [x] Import private word lists (CSV/TSV/JSON: kana, meaning, lesson, jlpt) from a user directory, never from the repository (`vocab.LoadDir`); used by the game
 - [x] Throttle words after play-testing: at most 10 % word spawns, bundled words off by default (`bundled_words`), spaces in answers ignored, German/English header aliases in CSV/TSV lists
-- [ ] Word packages with an intro dialog, which re-enable the bundled words (stage 4)
+- [x] Word packages with an intro dialog, which re-enable the bundled words (stage 4a): source (private list or JLPT), package size, level offer, "Already known"
+- [x] Settings in tabs (Kana, Words, Game, Sources); the data attribution moves to the Sources tab (stage 4a)
+- [x] Kana font choice: Noto Sans JP, M PLUS Rounded 1c or System, both fonts bundled (stage 4a)
+- [ ] Reading practice, words-only mode with list/lesson, list management and the meaning language setting (stage 4b)
 
 ## Learning Progress System
 

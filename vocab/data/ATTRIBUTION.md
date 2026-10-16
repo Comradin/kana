@@ -19,8 +19,7 @@ JMdict it is licensed under the
   [stephenmk/yomitan-jlpt-vocab](https://github.com/stephenmk/yomitan-jlpt-vocab),
   CC BY-SA 4.0.
 
-The app credits these sources in-app as well: in the vocabulary status panel (from stage 3
-of the vocabulary trainer) and on a Sources tab (from stage 4).
+The app credits these sources in-app as well, on the settings' Sources tab.
 
 The versions used for the committed file are recorded in [`SOURCES`](SOURCES): the
 `Last-Modified` date of `JMdict.gz` and the commit of the sequence mapping.
@@ -28,7 +27,10 @@ The versions used for the committed file are recorded in [`SOURCES`](SOURCES): t
 ## What the file contains
 
 Every JLPT word whose reading can be typed, keyed by its kana reading, with its easiest
-JLPT level and up to five meanings per language. For each JMdict entry, a language's meanings
+JLPT level, a frequency rank and up to five meanings per language. The rank comes from
+JMdict's priority tags of the matching reading (or, without tags there, the best tag of the
+entry): `nf01`–`nf48` give 1–48, `news1`/`ichi1`/`spec1`/`gai1` 49, the `…2` tags 60, none 99;
+homophones keep the best rank. The game introduces common words first. For each JMdict entry, a language's meanings
 come from the first sense that has meanings in that language (at most three), and homophones
 are merged. Numbering, labels and source-language notes are removed from non-English meanings;
 meanings of derived phrases and ones that cannot be cleaned (unbalanced parentheses, kana) are

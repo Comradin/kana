@@ -18,15 +18,18 @@ Kana is a Fyne v2 desktop app (`kana-desktop`).
   on the chosen difficulty level, a per-character factor and the session tempo (see
   Difficulty below), independent of window height
 - **Romaji Input**: Type the romanized equivalent and press Enter to score
-- **Words**: once you can read them, Japanese words fall among the kana tiles (green border).
-  A word appears when every kana in it is secure (answered correctly three times) in an
-  active script: every word from your own lists (see [Private word lists](#private-word-lists)).
-  The bundled JLPT words are off for now, until they arrive in small packages with an
-  introduction; with the `bundled_words` setting on they are played up to your level (N5 by
-  default). Type the whole reading (`sensei`, `kitte`, `koohii`, `ko-hi-`; spaces are
-  ignored, so `shitsurei desu ga` works); a hit shows the meaning, a missed word shows its
-  romaji and meaning. One spawn in a hundred is a word per playable word, at most 10 %;
-  longer words fall more slowly (up to twice the time).
+- **Words**: Japanese words fall among the kana tiles (green border), introduced in small
+  packages like kana rows. As soon as a word of your source can be read (every kana in it is
+  secure, answered correctly three times, in an active script), a package of 3, 5 or 10 words
+  is shown first: each word with its romaji and meaning, and an "Already known" box that
+  counts the word as learned and brings in another one. Only introduced words fall. The next
+  package comes when 80 % of the newest one is secure. New words come from one of your own
+  lists (by lesson, then file order; see [Private word lists](#private-word-lists)) or from the
+  bundled JLPT words (N5 first, the most common words first); once a JLPT level is fully
+  introduced, the game offers the next one. Type the whole reading (`sensei`, `kitte`,
+  `koohii`, `ko-hi-`; spaces are ignored, so `shitsurei desu ga` works); a hit shows the
+  meaning, a missed word shows its romaji and meaning. One spawn in a hundred is a word per
+  playable word, at most 10 %; longer words fall more slowly (up to twice the time).
 - **Learning path**: start with あいうえお, unlock two rows at a time; each automatically unlocked row is introduced before it is asked, and the game pauses while new rows are introduced
 - **Two scripts**: hiragana and katakana progress independently; switch scripts in the settings. After the basic hiragana you are offered katakana once.
 - **Score Limit Mode**: Set a target score or 0 for endless practice
@@ -77,12 +80,17 @@ Kana is a Fyne v2 desktop app (`kana-desktop`).
 - **Row Selection**: Choose which hiragana and katakana rows to practice, grouped by Basic, Dakuon, Handakuon, Yōon, Yōon + Dakuten and (katakana only) Extended katakana
 - **Auto-Progression**: per script, unlocks the next learning-path step (one or two rows) once every active row of that script is mastered: at least 80% of its kana (rounded down, at least one) answered correctly three times
 - **Configurable Score Limit**: Set a target or play endlessly
+- **Word packages**: where new words come from (a private list or JLPT), the JLPT level and
+  the package size (3, 5 or 10)
+- **Kana font**: Noto Sans JP (default), M PLUS Rounded 1c or the system font, for tiles,
+  intros, the kana grid and the word labels; both fonts ship with the app
 
 ### Desktop App (Fyne)
 - Warm paper tile aesthetic — stamp-style kana tiles on a parchment background
 - Split layout: game canvas on the left, stats panel on the right; window starts at 1000 × 760
-- Stats panel: a session line, one learning-path line per active script, a side-by-side hiragana/katakana kana grid (new/learning/mastered, with a red border on a character missed this session), a words line (playable, secure, level or "own lists", or where to add a list) and the word data attribution
-- In-game settings via gear icon (no pre-game setup form)
+- Stats panel: a session line, one learning-path line per active script, a side-by-side hiragana/katakana kana grid (new/learning/mastered, with a red border on a character missed this session), a words line (introduced and secure words and their source, or what to do for new words)
+- In-game settings via gear icon (no pre-game setup form), in the tabs Kana, Words, Game and
+  Sources (version and the credits for the word data and fonts)
 - Game-over dialog with missed character and word review and Play Again
 
 ## Download
@@ -147,7 +155,7 @@ go run ./fyne/
 ## How to Play
 
 1. Launch the app (`./kana-desktop`)
-2. Jump straight into the game; open the gear icon to adjust rows, difficulty level, points per hit, auto-progression, and score limit
+2. Jump straight into the game; open the gear icon to adjust rows, auto-progression, where new words come from, difficulty level, points per hit, score limit and the kana font
 3. As characters fall, type their romaji equivalent and press Enter
 4. Each correct kana scores 10 points (a word 10 per kana unit), scaled by the points setting (Auto by level, or a fixed ×1/×2/×3/×5)
 5. The game ends when you reach your score target, miss as many tiles as the level allows (5–10), or quit
@@ -255,9 +263,12 @@ Word data for the vocabulary trainer, independent of the game and the store:
 
 - `vocab.go`: `Word`, `Meanings` (per language, with fallback for display), `List`
 - `csvlist.go`, `jsonlist.go`, `dir.go`: private word lists (CSV/TSV/JSON, with header aliases) and `LoadDir`
-- `index.go`: `NewIndex` (one entry per reading across all sources) and `Playable` (words made
-  only of known kana, filtered by JLPT level, list and lesson, optionally without bundled-only words)
-- `bundled.go`: `Bundled`, the embedded JLPT word list (`data/words.json.gz`)
+- `index.go`: `NewIndex` (one entry per reading across all sources, with each list entry's first
+  row) and `Playable` (words made only of known kana, filtered by JLPT level, list and lesson)
+- `package.go`: `Source` and `NextPackage` (the next words to introduce from a list or JLPT, in
+  learning order)
+- `bundled.go`: `Bundled`, the embedded JLPT word list (`data/words.json.gz`, with a frequency
+  rank per word)
 
 ### Word Data Generator (`cmd/vocabgen/`)
 
@@ -289,17 +300,22 @@ Built on [Fyne v2](https://fyne.io) with goroutine-based game loop:
 - `words.go`: word helpers — meaning language, missed-word and feedback texts, the words line
 - `wordgame.go`: word progress (stats, memory, merge), the playable-word rule and cache, word spawning
 - `feedback.go`: the labels shown after a word hit or miss
-- `intro.go`: Pending dialogs (katakana offer and row intros) through one entry point, `showPendingDialogs`
-- `stats.go`: `StatsPanel` widget — a session line, the words line (playable and secure words, or why words are unavailable), one learning-path line per active script, a side-by-side hiragana/katakana kana grid of each character's learning state, and the word data attribution lines
+- `packages.go`: word packages — when the next one is due, finishing it ("already known" words
+  count as secure), replacement words, the JLPT level offer
+- `packageintro.go`: the word package intro and the level offer dialogs
+- `fonts.go`: the bundled kana fonts (`fonts/`), the font choice and the glyph coverage check
+- `intro.go`: Pending dialogs (row intros, katakana offer, word packages, level offer) through one entry point, `showPendingDialogs`
+- `stats.go`: `StatsPanel` widget — a session line, the words line (introduced and secure words, or a hint), one learning-path line per active script and a side-by-side hiragana/katakana kana grid of each character's learning state
 - `progress.go`: computes each script's learning-path status (`PathStatus`) and total correct counts per character
 - `statswidgets.go`: the fixed-column grid layout and the kana cell widget used by the stats panel
 - `input.go`: `InputBar` — score, level, tempo, miss count, text entry
-- `settings.go`: In-game settings dialog with scripts and row selection (one tab per script, per-group "all" toggle), difficulty level and points per hit
+- `settings.go`: In-game settings dialog with the tabs Kana (scripts and row selection, one tab per script, per-group "all" toggle, auto-progression), Words (source, JLPT level, package size), Game (difficulty level, points per hit, score limit, kana font) and Sources
+- `version.go`: the version label and the Sources tab
 - `theme.go`: `KanaTheme` — warm paper colour palette
 
 ### Persistence (`store/`)
 
-- `store/store.go`: SQLite persistence, including active scripts, the katakana offer flag, the chosen difficulty level, the points setting and per-character spaced-repetition memory states (seeded once from past correct counts), per-word statistics and the word settings (`word_level`, `bundled_words`, `meaning_lang`)
+- `store/store.go`: SQLite persistence, including active scripts, the katakana offer flag, the chosen difficulty level, the points setting and per-character spaced-repetition memory states (seeded once from past correct counts), per-word statistics, the introduced words and the word settings (`word_level`, `word_source`, `package_size`, `newest_package`, `meaning_lang`) and the kana font (`kana_font`)
 
 ### Game Timing
 - Tick loop: 100ms
@@ -325,9 +341,13 @@ It holds:
   spawn next
 - Per-word statistics (`word_stats`: correct and miss count per reading) and per-word
   spaced-repetition memory (`word:` items in the `memory` table)
-- The JLPT level words are played up to (`word_level`, default N5), whether bundled words are
-  played (`bundled_words`, default off; no UI yet) and the meaning language
+- The words shown in a package intro (`introduced_words`; when the table is created, every
+  word with stats or memory counts as introduced) and the newest package (`newest_package`)
+- Where new words come from (`word_source`: `jlpt` or `list:<name>`; chosen once on the first
+  start: your first list, else JLPT), the JLPT level packages come down to (`word_level`,
+  default N5), the package size (`package_size`, default 5) and the meaning language
   (`meaning_lang`; unset means the system language if the word list has it, else English)
+- The kana font (`kana_font`: `noto`, `mplus` or `system`)
 
 The database is created automatically on first run. If a `kana.db` from an older version is
 found in the working directory, it is moved to the new location once on startup.
@@ -347,15 +367,17 @@ The vocabulary trainer ships with a list of about 7,000 JLPT words
 The data file is licensed under CC BY-SA 4.0; the code stays MIT. Details, versions and how to
 regenerate it: [`vocab/data/ATTRIBUTION.md`](vocab/data/ATTRIBUTION.md).
 
-The game names these sources in the status panel.
+The game credits these sources on the settings' Sources tab.
 
 ### Private word lists
 
 Your own lists (for example from a textbook) go in the `words` folder next to `kana.db`:
 `$XDG_DATA_HOME/kana/words/`, or `~/.local/share/kana/words/`. They are read from there only
-and never belong in the repository. Their words fall in the game at any JLPT level; the
-folder is read when the app starts. While bundled words are off, these lists are the only
-source of words, and without one the status panel says where to add it.
+and never belong in the repository. The folder is read when the app starts. Choose a list as
+the source of new words in the settings (Words tab); its words are introduced lesson by lesson
+(numeric lessons in number order, others in the order they first appear), then in file order,
+with words without a lesson last. If the chosen list is missing, the status panel says where
+to add it.
 
 - **CSV/TSV** (`*.csv`, `*.tsv`): a header row; the separator (tab, semicolon or comma) is
   taken from it. Columns: `kana` (required), `meaning` (any language), `meaning_de`,
@@ -380,10 +402,21 @@ source of words, and without one the status panel says where to add it.
 
 Rows whose reading is not kana are skipped and reported.
 
+## Fonts
+
+The kana font can be Noto Sans JP (default) or M PLUS Rounded 1c; both ship with the app in
+`fyne/fonts/` (regular and bold, about 16 MB) under the SIL Open Font License 1.1
+(`fyne/fonts/OFL-*.txt`). `scripts/fetch-fonts.sh` downloads the pinned files (Noto CJK release
+`Sans2.004`, google/fonts at a fixed commit) and checks their SHA-256 sums. A text is shown in
+the chosen font only if the font has every character of it; otherwise it uses the system font,
+so one text never mixes two fonts.
+
 ## Dependencies
 
 - [Fyne v2](https://fyne.io) — Desktop GUI framework
 - [modernc.org/sqlite](https://pkg.go.dev/modernc.org/sqlite) — Pure Go SQLite driver
+- [go-text/typesetting](https://github.com/go-text/typesetting) — font parsing for the kana
+  font's coverage check (also used by Fyne)
 
 ## Development
 
