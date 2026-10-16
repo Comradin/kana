@@ -20,6 +20,8 @@ const (
 	gameOverEvent gameEventType = iota
 	rowsUnlockedEvent
 	katakanaOfferEvent
+	wordPackageEvent // a word package waits for its intro
+	levelOfferEvent  // the next JLPT level waits to be offered
 )
 
 type gameEvent struct {
@@ -91,6 +93,10 @@ type GameState struct {
 
 	pendingOffer    bool // the katakana offer dialog is waiting
 	katakanaOffered bool // the offer was already made once
+
+	pendingPackage     []string // readings waiting in the word package intro
+	pendingLevelOffer  bool     // the JLPT level offer is waiting
+	levelOfferDeclined bool     // "Later" on the level offer; for the app run, survives Reset
 
 	userPaused   bool // the learner paused with the button or Esc
 	settingsOpen bool // the settings dialog is open
@@ -235,6 +241,7 @@ func NewGameState(st *store.Store) *GameState {
 	if sourceLoaded && gs.wordSource != storedSource {
 		_ = st.SaveWordSource(gs.wordSource)
 	}
+	gs.offerPackageAtStart()
 	return gs
 }
 
@@ -393,6 +400,8 @@ func (gs *GameState) Reset() {
 	// matching settle()'s invariant (settle itself only ever unpauses, so it
 	// cannot express this one case where Reset must pause).
 	gs.pendingOffer = false
+	gs.pendingPackage = nil
+	gs.pendingLevelOffer = false
 	gs.userPaused = false
 	gs.settingsOpen = false
 	gs.paused = len(gs.pendingIntro) > 0
@@ -415,6 +424,9 @@ func (gs *GameState) Reset() {
 		}
 	}
 	gs.invalidatePlayable()
+	// A package due now is offered before the new game starts; the offer
+	// pauses it (settle cannot, it only ever unpauses).
+	gs.maybeOfferPackage()
 
 	gs.buildSnapshot()
 	gs.mu.Unlock()
@@ -616,6 +628,7 @@ func (gs *GameState) checkAnswer(input string) {
 		if !announced {
 			gs.maybeOfferKatakana()
 		}
+		gs.maybeOfferPackage()
 		gs.buildSnapshot()
 	}
 	canvas := gs.canvas
@@ -741,6 +754,7 @@ func (gs *GameState) lowerTempo() {
 // stays dirty for a later retry, but Reset discards it, for kana and words
 // alike. Must be called under lock.
 func (gs *GameState) mergeSessionStats() {
+	gs.saveIntroducedDirty()
 	gs.saveMemory()
 	gs.mergeWordStats()
 	gs.mergeKanaStats()
@@ -934,6 +948,7 @@ func (gs *GameState) applySettings(rows []string, scripts []kanacore.Script, aut
 	gs.dropInactiveTiles()
 	gs.buildSnapshot()
 	gs.settle()
+	gs.maybeOfferPackage()
 }
 
 // dropInactiveTiles removes kana tiles whose row is deselected or whose
@@ -1118,7 +1133,8 @@ func (gs *GameState) announceRows(ids []string) {
 // is pending, the learner has paused or the settings dialog is open. It is the
 // only place that unpauses. Must be called under lock.
 func (gs *GameState) settle() {
-	if gs.paused && len(gs.pendingIntro) == 0 && !gs.pendingOffer && !gs.userPaused && !gs.settingsOpen {
+	if gs.paused && len(gs.pendingIntro) == 0 && !gs.pendingOffer && len(gs.pendingPackage) == 0 && !gs.pendingLevelOffer &&
+		!gs.userPaused && !gs.settingsOpen {
 		gs.paused = false
 	}
 }
@@ -1217,6 +1233,7 @@ func (gs *GameState) EnableKatakana() {
 	gs.pendingOffer = false
 	gs.enableKatakanaLocked()
 	gs.settle()
+	gs.maybeOfferPackage()
 }
 
 // DeclineKatakana dismisses the offer.
@@ -1225,6 +1242,7 @@ func (gs *GameState) DeclineKatakana() {
 	defer gs.mu.Unlock()
 	gs.pendingOffer = false
 	gs.settle()
+	gs.maybeOfferPackage()
 }
 
 // PendingDialogs returns whether the offer is pending and a copy of the rows
@@ -1249,11 +1267,13 @@ func (gs *GameState) Resume() {
 	gs.mu.Unlock()
 }
 
-// FinishIntro clears the pending intro and resumes the game.
+// FinishIntro clears the pending intro and resumes the game unless a word
+// package is due.
 func (gs *GameState) FinishIntro() {
 	gs.mu.Lock()
 	gs.pendingIntro = nil
 	gs.settle()
+	gs.maybeOfferPackage()
 	gs.mu.Unlock()
 }
 
