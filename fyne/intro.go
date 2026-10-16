@@ -18,17 +18,19 @@ const (
 	introCardH     float32 = 120
 )
 
-// dialogShowing guards against stacking the offer and intro dialogs.
+// dialogShowing guards against stacking the offer, intro and package
+// dialogs.
 // Fyne-thread-only: read and written exclusively from code that runs via
 // fyne.Do or a Fyne callback, so it needs no lock.
 var dialogShowing bool
 
-// showPendingDialogs shows whatever the game is waiting for: the katakana
-// offer first, then an intro. With nothing pending it resumes the game and
-// re-enables input, so "paused" never outlives its dialog. It also refreshes
-// the stats panel, so a change that became visible only by accepting or
-// declining a dialog (e.g. a newly active script's path line) shows up
-// without waiting for the next Enter. Must run on the Fyne thread.
+// showPendingDialogs shows whatever the game is waiting for, one dialog at a
+// time: a kana intro, the katakana offer, a word package, the level offer.
+// With nothing pending it resumes the game and re-enables input, so
+// "paused" never outlives its dialog. It also refreshes the stats panel, so
+// a change that became visible only by accepting or declining a dialog
+// (e.g. a newly active script's path line) shows up without waiting for the
+// next Enter. Must run on the Fyne thread.
 func showPendingDialogs(gs *GameState, statsPanel *StatsPanel, inputBar *InputBar, w fyne.Window) {
 	if dialogShowing {
 		return
@@ -38,12 +40,16 @@ func showPendingDialogs(gs *GameState, statsPanel *StatsPanel, inputBar *InputBa
 	gs.mu.Unlock()
 	statsPanel.Update(snap)
 
-	offer, intro := gs.PendingDialogs()
+	p := gs.PendingDialogs()
 	switch {
-	case offer:
+	case len(p.Intro) > 0:
+		showIntroDialog(gs, p.Intro, statsPanel, inputBar, w)
+	case p.KatakanaOffer:
 		showKatakanaOffer(gs, statsPanel, inputBar, w)
-	case len(intro) > 0:
-		showIntroDialog(gs, intro, statsPanel, inputBar, w)
+	case len(p.Package) > 0:
+		showWordPackageDialog(gs, statsPanel, inputBar, w)
+	case p.LevelOffer > 0:
+		showLevelOffer(gs, p.LevelOffer, statsPanel, inputBar, w)
 	default:
 		gs.Resume()
 		if !gs.IsOver() {

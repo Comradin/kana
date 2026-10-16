@@ -113,12 +113,13 @@ func watchEvents(ch chan gameEvent, gs *GameState, statsPanel *StatsPanel, gameC
 		}
 
 		switch event.kind {
-		case rowsUnlockedEvent, katakanaOfferEvent:
+		case rowsUnlockedEvent, katakanaOfferEvent, wordPackageEvent, levelOfferEvent:
 			if over {
 				// Game over wins; an intro stays pending for Play Again.
-				// A pending offer cannot occur at game over: Reset drops it
-				// (see GameState.Reset), so dropping the event here is safe
-				// for both kinds.
+				// The offers and word packages cannot be pending at game
+				// over (the game is paused while they are, and Reset clears
+				// them and checks for a package again), so dropping the
+				// event here is safe for every kind.
 				continue
 			}
 			fyne.Do(func() { showPendingDialogs(gs, statsPanel, inputBar, w) })
