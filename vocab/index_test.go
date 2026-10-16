@@ -165,4 +165,59 @@ func TestWithListsDoesNotShareMeanings(t *testing.T) {
 	if _, ok := ea.Lists["b"]; ok {
 		t.Fatal("list b leaked into a's entry")
 	}
+	if _, ok := ea.ListPos["b"]; ok {
+		t.Fatal("list b's position leaked into a's entry")
+	}
+	if e, _ := base.Lookup("いぬ"); len(e.ListPos) != 0 {
+		t.Fatalf("base list positions changed: %v", e.ListPos)
+	}
+}
+
+func TestEntryListPosIsTheFirstRow(t *testing.T) {
+	lists := []List{
+		{Name: "minna", Words: []Word{
+			word("せんせい", 0, "minna", "1", "de", "Lehrer"),
+			word("ねこ", 0, "minna", "1", "de", "Katze"),
+			word("せんせい", 0, "minna", "2", "de", "Meister"),
+		}},
+		{Name: "extra", Words: []Word{
+			word("ねこ", 0, "extra", "", "en", "cat"),
+		}},
+	}
+	bundled := []Word{word("ねこ", 5, BundledSource, "", "en", "cat")}
+	for name, ix := range map[string]*Index{
+		"NewIndex":  NewIndex(bundled, lists),
+		"WithLists": NewIndex(bundled, nil).WithLists(lists),
+	} {
+		s, _ := ix.Lookup("せんせい")
+		n, _ := ix.Lookup("ねこ")
+		if !reflect.DeepEqual(s.ListPos, map[string]int{"minna": 0}) {
+			t.Errorf("%s: せんせい ListPos = %v, want minna 0 (its first row)", name, s.ListPos)
+		}
+		if !reflect.DeepEqual(n.ListPos, map[string]int{"minna": 1, "extra": 0}) {
+			t.Errorf("%s: ねこ ListPos = %v", name, n.ListPos)
+		}
+	}
+}
+
+func TestEntryRankFromBundledWordsOnly(t *testing.T) {
+	a := word("はし", 5, BundledSource, "", "en", "bridge")
+	a.Rank = 49
+	b := word("はし", 4, BundledSource, "", "en", "chopsticks")
+	b.Rank = 5
+	c := word("ねこ", 5, BundledSource, "", "en", "cat") // no rank
+	d := word("ねこ", 5, BundledSource, "", "en", "kitty")
+	d.Rank = 60
+	own := word("はし", 0, "mine", "", "en", "edge")
+	own.Rank = 1 // a private word's rank is ignored
+	ix := NewIndex([]Word{a, b, c, d}, []List{{Name: "mine", Words: []Word{own, word("いぬ", 0, "mine", "", "en", "dog")}}})
+	if e, _ := ix.Lookup("はし"); e.Rank != 5 {
+		t.Errorf("はし rank = %d, want the best bundled rank 5", e.Rank)
+	}
+	if e, _ := ix.Lookup("ねこ"); e.Rank != 60 {
+		t.Errorf("ねこ rank = %d, want 60 (a known rank beats an unknown one)", e.Rank)
+	}
+	if e, _ := ix.Lookup("いぬ"); e.Rank != 0 {
+		t.Errorf("private-only いぬ rank = %d, want 0", e.Rank)
+	}
 }

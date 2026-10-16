@@ -199,3 +199,69 @@ func sortedCopy(xs []string) []string {
 	sort.Strings(out)
 	return out
 }
+
+func TestRankOf(t *testing.T) {
+	tests := []struct {
+		tags []string
+		want int
+	}{
+		{nil, 99},
+		{[]string{"nf01"}, 1},
+		{[]string{"nf48"}, 48},
+		{[]string{"news1"}, 49},
+		{[]string{"ichi1"}, 49},
+		{[]string{"spec1"}, 49},
+		{[]string{"gai1"}, 49},
+		{[]string{"news2"}, 60},
+		{[]string{"ichi2"}, 60},
+		{[]string{"spec2"}, 60},
+		{[]string{"gai2"}, 60},
+		{[]string{"news2", "ichi1", "nf17"}, 17},
+		{[]string{"news2", "spec1"}, 49},
+		{[]string{"nf00", "nf49", "nfx", "other"}, 99},
+	}
+	for _, tt := range tests {
+		if got := rankOf(tt.tags); got != tt.want {
+			t.Errorf("rankOf(%v) = %d, want %d", tt.tags, got, tt.want)
+		}
+	}
+}
+
+func TestEntryRank(t *testing.T) {
+	e := newJMEntry(xmlEntry{
+		Kanji: []xmlKanji{{Pri: []string{"nf02"}}},
+		Readings: []xmlReading{
+			{Reb: "あ", Pri: []string{"news2"}},
+			{Reb: "い"},
+		},
+	})
+	if got := e.rank("あ"); got != 60 {
+		t.Errorf("rank(あ) = %d, want 60 from its own tags, not the kanji's nf02", got)
+	}
+	if got := e.rank("い"); got != 2 {
+		t.Errorf("rank(い) = %d, want 2, the best tag of the entry", got)
+	}
+	if got := e.rank("う"); got != 2 {
+		t.Errorf("rank(う) = %d, want 2 for a reading the entry does not list", got)
+	}
+	if got := newJMEntry(xmlEntry{Readings: []xmlReading{{Reb: "あ"}}}).rank("あ"); got != 99 {
+		t.Errorf("rank without any tag = %d, want 99", got)
+	}
+}
+
+func TestGenerateRanks(t *testing.T) {
+	words, _, _ := generate(t)
+	want := map[string]int{
+		"せんせい":  49, // its reading's ichi1/news1, not the kanji's nf01
+		"はし":    5,  // homophones merged: nf05 beats ichi1
+		"アイデア":  60, // gai2
+		"アイディア": 60, // no tags of its own: the entry's best
+		"ふく":    99, // entry without tags
+		"ねこ":    99, // Waller fallback, no JMdict entry
+	}
+	for _, w := range words {
+		if w.R != want[w.K] {
+			t.Errorf("%s: rank %d, want %d", w.K, w.R, want[w.K])
+		}
+	}
+}

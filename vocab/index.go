@@ -14,8 +14,10 @@ type Entry struct {
 	Units    []string // kanacore.KanaUnits, computed once
 	Meanings Meanings
 	JLPT     int                 // easiest bundled level, 0 if not bundled
+	Rank     int                 // best bundled frequency rank, lower = more common; 0 = unknown
 	Bundled  bool                // the bundled list contains it
 	Lists    map[string][]string // private list name → lessons
+	ListPos  map[string]int      // private list name → index of its first row in that list
 }
 
 // Index holds one entry per reading.
@@ -34,7 +36,7 @@ type Index struct {
 func NewIndex(bundled []Word, lists []List) *Index {
 	ix := &Index{byKana: map[string]int{}}
 	for _, w := range bundled {
-		ix.add(w, "")
+		ix.add(w, "", 0)
 	}
 	ix.addLists(lists)
 	ix.sort()
@@ -59,14 +61,15 @@ func (ix *Index) WithLists(lists []List) *Index {
 
 func (ix *Index) addLists(lists []List) {
 	for _, l := range lists {
-		for _, w := range l.Words {
-			ix.add(w, l.Name)
+		for i, w := range l.Words {
+			ix.add(w, l.Name, i)
 		}
 	}
 }
 
-// add merges one word into its entry; list is "" for the bundled list.
-func (ix *Index) add(w Word, list string) {
+// add merges one word into its entry; list is "" for the bundled list, and
+// pos is the word's row index in its list.
+func (ix *Index) add(w Word, list string, pos int) {
 	i, ok := ix.byKana[w.Kana]
 	if !ok {
 		units, valid := kanacore.KanaUnits(w.Kana)
@@ -74,7 +77,7 @@ func (ix *Index) add(w Word, list string) {
 			return
 		}
 		ix.byKana[w.Kana] = len(ix.entries)
-		ix.entries = append(ix.entries, Entry{Kana: w.Kana, Units: units, Meanings: Meanings{}, Lists: map[string][]string{}})
+		ix.entries = append(ix.entries, Entry{Kana: w.Kana, Units: units, Meanings: Meanings{}, Lists: map[string][]string{}, ListPos: map[string]int{}})
 		i = len(ix.entries) - 1
 	} else if i < ix.shared && !ix.owned[i] {
 		ix.entries[i] = ix.entries[i].clone()
@@ -89,8 +92,14 @@ func (ix *Index) add(w Word, list string) {
 		if !e.Bundled || w.JLPT > e.JLPT {
 			e.JLPT = w.JLPT
 		}
+		if !e.Bundled || rankKey(w.Rank) < rankKey(e.Rank) {
+			e.Rank = w.Rank
+		}
 		e.Bundled = true
 		return
+	}
+	if _, ok := e.ListPos[list]; !ok {
+		e.ListPos[list] = pos
 	}
 	lessons := e.Lists[list]
 	if w.Lesson != "" && !contains(lessons, w.Lesson) {
@@ -108,8 +117,18 @@ func (ix *Index) sort() {
 	ix.owned = nil
 }
 
-// clone copies the entry's Meanings and Lists, so merging into the copy
-// leaves the original untouched. Units is never modified and stays shared.
+// rankKey orders frequency ranks: an unknown rank (0) sorts as 99, after
+// every word with a priority tag.
+func rankKey(r int) int {
+	if r <= 0 {
+		return 99
+	}
+	return r
+}
+
+// clone copies the entry's Meanings, Lists and ListPos, so merging into the
+// copy leaves the original untouched. Units is never modified and stays
+// shared.
 func (e Entry) clone() Entry {
 	m := make(Meanings, len(e.Meanings))
 	for lang, items := range e.Meanings {
@@ -119,7 +138,7 @@ func (e Entry) clone() Entry {
 	for name, lessons := range e.Lists {
 		l[name] = slices.Clone(lessons)
 	}
-	e.Meanings, e.Lists = m, l
+	e.Meanings, e.Lists, e.ListPos = m, l, maps.Clone(e.ListPos)
 	return e
 }
 

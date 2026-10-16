@@ -14,6 +14,7 @@ var bundledData []byte
 type bundledWord struct {
 	K string              `json:"k"`
 	J int                 `json:"j"`
+	R int                 `json:"r"`
 	M map[string][]string `json:"m"`
 }
 
@@ -39,7 +40,7 @@ func decodeBundled(data []byte) ([]Word, error) {
 		if m == nil {
 			m = Meanings{}
 		}
-		words[i] = Word{Kana: r.K, JLPT: r.J, Meanings: m, Source: BundledSource}
+		words[i] = Word{Kana: r.K, JLPT: r.J, Rank: r.R, Meanings: m, Source: BundledSource}
 	}
 	return words, nil
 }
