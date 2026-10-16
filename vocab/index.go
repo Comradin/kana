@@ -4,6 +4,7 @@ import (
 	"maps"
 	"slices"
 	"sort"
+	"sync"
 
 	"kana/kanacore"
 )
@@ -29,12 +30,17 @@ type Index struct {
 	// base index unless owned marks them as copied.
 	shared int
 	owned  map[int]bool
+
+	lessons map[string][]string // private list name → its lessons in first-appearance order
+
+	mu     sync.Mutex
+	orders map[string][]int // learning order per source (list name, "" = JLPT), see order
 }
 
 // NewIndex merges bundled words and private lists into one entry per
 // reading. Words whose reading cannot be split into units are dropped.
 func NewIndex(bundled []Word, lists []List) *Index {
-	ix := &Index{byKana: map[string]int{}}
+	ix := &Index{byKana: map[string]int{}, lessons: map[string][]string{}}
 	for _, w := range bundled {
 		ix.add(w, "", 0)
 	}
@@ -52,6 +58,7 @@ func (ix *Index) WithLists(lists []List) *Index {
 		entries: slices.Clone(ix.entries),
 		byKana:  maps.Clone(ix.byKana),
 		shared:  len(ix.entries),
+		lessons: maps.Clone(ix.lessons),
 	}
 	out.addLists(lists)
 	out.shared = 0
@@ -62,19 +69,22 @@ func (ix *Index) WithLists(lists []List) *Index {
 func (ix *Index) addLists(lists []List) {
 	for _, l := range lists {
 		for i, w := range l.Words {
-			ix.add(w, l.Name, i)
+			if ix.add(w, l.Name, i) && w.Lesson != "" && !contains(ix.lessons[l.Name], w.Lesson) {
+				ix.lessons[l.Name] = append(ix.lessons[l.Name], w.Lesson)
+			}
 		}
 	}
 }
 
 // add merges one word into its entry; list is "" for the bundled list, and
-// pos is the word's row index in its list.
-func (ix *Index) add(w Word, list string, pos int) {
+// pos is the word's row index in its list. It reports whether the word was
+// added: a reading that cannot be split into units is dropped.
+func (ix *Index) add(w Word, list string, pos int) bool {
 	i, ok := ix.byKana[w.Kana]
 	if !ok {
 		units, valid := kanacore.KanaUnits(w.Kana)
 		if !valid {
-			return
+			return false
 		}
 		ix.byKana[w.Kana] = len(ix.entries)
 		ix.entries = append(ix.entries, Entry{Kana: w.Kana, Units: units, Meanings: Meanings{}, Lists: map[string][]string{}, ListPos: map[string]int{}})
@@ -96,7 +106,7 @@ func (ix *Index) add(w Word, list string, pos int) {
 			e.Rank = w.Rank
 		}
 		e.Bundled = true
-		return
+		return true
 	}
 	if _, ok := e.ListPos[list]; !ok {
 		e.ListPos[list] = pos
@@ -106,6 +116,7 @@ func (ix *Index) add(w Word, list string, pos int) {
 		lessons = append(lessons, w.Lesson)
 	}
 	e.Lists[list] = lessons
+	return true
 }
 
 // sort orders the entries by reading and rebuilds byKana.
