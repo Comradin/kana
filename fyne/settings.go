@@ -2,49 +2,106 @@ package main
 
 import (
 	"fmt"
+	"maps"
+	"slices"
 	"strconv"
 	"strings"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"kana/kanacore"
 )
 
-func showSettingsDialog(gs *GameState, statsPanel *StatsPanel, gameCanvas *GameCanvas, inputBar *InputBar, win fyne.Window) {
-	gs.mu.Lock()
-	selected := make(map[string]bool, len(gs.selectedRows))
-	for id, ok := range gs.selectedRows {
-		selected[id] = ok
-	}
-	active := make(map[kanacore.Script]bool, len(gs.activeScripts))
-	for s, on := range gs.activeScripts {
-		active[s] = on
-	}
-	currentAuto := gs.autoProgress
-	currentLimit := gs.scoreLimit
-	currentLevel := gs.level.Level
-	currentPoints := gs.pointsSetting
-	gs.mu.Unlock()
+// settingsState is what the settings dialog starts from, copied under the
+// lock.
+type settingsState struct {
+	selected map[string]bool
+	active   map[kanacore.Script]bool
+	auto     bool
+	limit    int
+	level    Level
+	points   int
 
-	scriptChecks := make(map[kanacore.Script]*widget.Check)
+	wordSource  string   // the stored word source
+	lists       []string // the private lists found
+	wordLevel   int
+	packageSize int
+	summary     string // the Words tab's summary line
+}
+
+// settingsState copies the current settings for the dialog.
+func (gs *GameState) settingsState() settingsState {
+	gs.mu.Lock()
+	defer gs.mu.Unlock()
+	return settingsState{
+		selected:    maps.Clone(gs.selectedRows),
+		active:      maps.Clone(gs.activeScripts),
+		auto:        gs.autoProgress,
+		limit:       gs.scoreLimit,
+		level:       gs.level.Level,
+		points:      gs.pointsSetting,
+		wordSource:  gs.wordSource,
+		lists:       append([]string(nil), gs.listNames...),
+		wordLevel:   gs.wordLevel,
+		packageSize: gs.packageSize,
+		summary:     gs.wordsSummary(),
+	}
+}
+
+// settingsForm is the settings dialog's content: the tabs Kana, Words, Game
+// and Sources, whose widgets carry the settings.
+type settingsForm struct {
+	tabs                                   *container.AppTabs
+	kanaTab, wordsTab, gameTab, sourcesTab *container.TabItem
+
+	scriptChecks map[kanacore.Script]*widget.Check
+	rowChecks    map[string]*widget.Check
+	autoCheck    *widget.Check
+
+	sourceSelect *widget.Select
+	sourceValues []string // the word source of each sourceSelect option
+	wordLevel    *widget.RadioGroup
+	packageSize  *widget.RadioGroup
+	summary      *widget.Label
+
+	difficulty *widget.RadioGroup
+	points     *widget.Select
+	limitEntry *widget.Entry
+	limit      int // the score limit the dialog started with
+}
+
+func newSettingsForm(st settingsState) *settingsForm {
+	f := &settingsForm{limit: st.limit}
+	f.kanaTab = container.NewTabItem("Kana", f.newKanaTab(st))
+	f.wordsTab = container.NewTabItem("Words", f.newWordsTab(st))
+	f.gameTab = container.NewTabItem("Game", f.newGameTab(st))
+	f.sourcesTab = container.NewTabItem("Sources", newSourcesTab())
+	f.tabs = container.NewAppTabs(f.kanaTab, f.wordsTab, f.gameTab, f.sourcesTab)
+	return f
+}
+
+// newKanaTab holds the scripts, one row tab per script and auto-progression.
+func (f *settingsForm) newKanaTab(st settingsState) fyne.CanvasObject {
+	f.scriptChecks = make(map[kanacore.Script]*widget.Check)
 	scriptRow := container.NewHBox(widget.NewLabelWithStyle("Scripts", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}))
 	for _, info := range kanacore.Scripts() {
 		c := widget.NewCheck(info.Label, nil)
-		c.SetChecked(active[info.Script])
-		scriptChecks[info.Script] = c
+		c.SetChecked(st.active[info.Script])
+		f.scriptChecks[info.Script] = c
 		scriptRow.Add(c)
 	}
 
-	rowChecks := make(map[string]*widget.Check)
-	tabs := container.NewAppTabs()
+	f.rowChecks = make(map[string]*widget.Check)
+	rowTabs := container.NewAppTabs()
 	for _, info := range kanacore.Scripts() {
 		sections := container.NewVBox()
 		for _, g := range kanacore.GroupsFor(info.Script) {
-			all, checks, grid := newGroupChecks(kanacore.RowsInGroup(info.Script, g.Group), selected)
+			all, checks, grid := newGroupChecks(kanacore.RowsInGroup(info.Script, g.Group), st.selected)
 			for id, c := range checks {
-				rowChecks[id] = c
+				f.rowChecks[id] = c
 			}
 			sections.Add(container.NewHBox(
 				widget.NewLabelWithStyle(g.Label, fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
@@ -54,17 +111,76 @@ func showSettingsDialog(gs *GameState, statsPanel *StatsPanel, gameCanvas *GameC
 		}
 		scroll := container.NewVScroll(sections)
 		scroll.SetMinSize(fyne.NewSize(460, 220))
-		tabs.Append(container.NewTabItem(info.Label, scroll))
+		rowTabs.Append(container.NewTabItem(info.Label, scroll))
 	}
 
-	autoCheck := widget.NewCheck("Enable auto-progression", nil)
-	autoCheck.SetChecked(currentAuto)
+	f.autoCheck = widget.NewCheck("Enable auto-progression", nil)
+	f.autoCheck.SetChecked(st.auto)
+	return container.NewVBox(scriptRow, rowTabs, widget.NewSeparator(), f.autoCheck)
+}
 
-	limitEntry := widget.NewEntry()
-	limitEntry.SetText(strconv.Itoa(currentLimit))
-	limitEntry.Validator = func(s string) error {
-		s = strings.TrimSpace(s)
-		n, err := strconv.Atoi(s)
+// newWordsTab holds where new words come from, the JLPT level (for JLPT
+// only), the package size and a summary of the current source.
+func (f *settingsForm) newWordsTab(st settingsState) fyne.CanvasObject {
+	var labels []string
+	for _, name := range st.lists {
+		labels = append(labels, prettyListName(name))
+		f.sourceValues = append(f.sourceValues, listSourcePrefix+name)
+	}
+	if name, ok := strings.CutPrefix(st.wordSource, listSourcePrefix); ok && !slices.Contains(st.lists, name) {
+		// A missing list stays selected until the learner picks another.
+		labels = append(labels, prettyListName(name))
+		f.sourceValues = append(f.sourceValues, st.wordSource)
+	}
+	labels = append(labels, "JLPT")
+	f.sourceValues = append(f.sourceValues, jlptSource)
+
+	f.wordLevel = widget.NewRadioGroup([]string{"N5", "N4", "N3", "N2", "N1"}, nil)
+	f.wordLevel.Horizontal = true
+	f.wordLevel.Required = true
+	f.wordLevel.SetSelected(fmt.Sprintf("N%d", st.wordLevel))
+
+	f.sourceSelect = widget.NewSelect(labels, func(string) {
+		if f.wordSource() == jlptSource {
+			f.wordLevel.Enable()
+		} else {
+			f.wordLevel.Disable()
+		}
+	})
+	if i := slices.Index(f.sourceValues, st.wordSource); i >= 0 {
+		f.sourceSelect.SetSelectedIndex(i)
+	} else {
+		f.sourceSelect.SetSelectedIndex(len(labels) - 1)
+	}
+
+	sizes := make([]string, len(packageSizes))
+	for i, n := range packageSizes {
+		sizes[i] = strconv.Itoa(n)
+	}
+	f.packageSize = widget.NewRadioGroup(sizes, nil)
+	f.packageSize.Horizontal = true
+	f.packageSize.Required = true
+	f.packageSize.SetSelected(strconv.Itoa(st.packageSize))
+
+	f.summary = widget.NewLabel(st.summary)
+	return container.NewVBox(
+		widget.NewLabelWithStyle("New words from", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		f.sourceSelect,
+		widget.NewLabel("JLPT level"),
+		f.wordLevel,
+		widget.NewLabel("Words per package"),
+		f.packageSize,
+		widget.NewSeparator(),
+		f.summary,
+	)
+}
+
+// newGameTab holds the difficulty, points per hit and the score limit.
+func (f *settingsForm) newGameTab(st settingsState) fyne.CanvasObject {
+	f.limitEntry = widget.NewEntry()
+	f.limitEntry.SetText(strconv.Itoa(st.limit))
+	f.limitEntry.Validator = func(s string) error {
+		n, err := strconv.Atoi(strings.TrimSpace(s))
 		if err != nil || n < 0 {
 			return fmt.Errorf("enter a whole number ≥ 0")
 		}
@@ -75,70 +191,98 @@ func showSettingsDialog(gs *GameState, statsPanel *StatsPanel, gameCanvas *GameC
 	for _, l := range Levels() {
 		levelLabels = append(levelLabels, l.Label)
 	}
-	levelRadio := widget.NewRadioGroup(levelLabels, nil)
-	levelRadio.Horizontal = true
-	levelRadio.Required = true
-	levelRadio.SetSelected(LevelByName(string(currentLevel)).Label)
+	f.difficulty = widget.NewRadioGroup(levelLabels, nil)
+	f.difficulty.Horizontal = true
+	f.difficulty.Required = true
+	f.difficulty.SetSelected(LevelByName(string(st.level)).Label)
 
 	pointsLabels := make([]string, 0, len(pointsChoices))
 	for _, p := range pointsChoices {
 		pointsLabels = append(pointsLabels, pointsLabel(p))
 	}
-	pointsSelect := widget.NewSelect(pointsLabels, nil)
-	pointsSelect.SetSelected(pointsLabel(currentPoints))
+	f.points = widget.NewSelect(pointsLabels, nil)
+	f.points.SetSelected(pointsLabel(st.points))
 
-	form := container.NewVBox(
-		scriptRow,
-		tabs,
-		widget.NewSeparator(),
+	return container.NewVBox(
 		widget.NewLabelWithStyle("Difficulty", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-		levelRadio,
-		container.NewHBox(widget.NewLabel("Points per hit"), pointsSelect),
-		widget.NewSeparator(),
-		autoCheck,
+		f.difficulty,
+		container.NewHBox(widget.NewLabel("Points per hit"), f.points),
 		widget.NewSeparator(),
 		widget.NewLabel("Score limit (0 = endless)"),
-		limitEntry,
-		widget.NewSeparator(),
-		versionRow(),
+		f.limitEntry,
 	)
+}
 
+// wordSource is the word source the Words tab has selected.
+func (f *settingsForm) wordSource() string {
+	if i := f.sourceSelect.SelectedIndex(); i >= 0 {
+		return f.sourceValues[i]
+	}
+	return jlptSource
+}
+
+// words returns the Words tab's values.
+func (f *settingsForm) words() wordSettings {
+	level, _ := strconv.Atoi(strings.TrimPrefix(f.wordLevel.Selected, "N"))
+	size, _ := strconv.Atoi(f.packageSize.Selected)
+	return wordSettings{source: f.wordSource(), level: level, packageSize: size}
+}
+
+// validate checks every tab; on an error it switches to the tab that has it.
+func (f *settingsForm) validate() error {
+	if err := f.limitEntry.Validate(); err != nil {
+		f.tabs.Select(f.gameTab)
+		return err
+	}
+	return nil
+}
+
+// apply saves every tab: the Words tab first, then the rest, which ends by
+// checking whether a word package is due.
+func (f *settingsForm) apply(gs *GameState) {
+	limit := f.limit
+	if n, err := strconv.Atoi(strings.TrimSpace(f.limitEntry.Text)); err == nil && n >= 0 {
+		limit = n
+	}
+	gs.applyWordSettings(f.words())
+	gs.applySettings(checkedRowIDs(f.rowChecks), checkedScripts(f.scriptChecks), f.autoCheck.Checked, limit,
+		levelFromLabel(f.difficulty.Selected), pointsFromLabel(f.points.Selected))
+}
+
+func showSettingsDialog(gs *GameState, statsPanel *StatsPanel, gameCanvas *GameCanvas, inputBar *InputBar, win fyne.Window) {
+	form := newSettingsForm(gs.settingsState())
 	gs.SetSettingsOpen(true)
 	gameCanvas.Refresh()
-	dialog.ShowCustomConfirm("Settings", "Save", "Cancel", form, func(save bool) {
-		// Release the settings pause first on every path; showPendingDialogs
-		// then resumes the game or shows whatever is still pending.
-		gs.SetSettingsOpen(false)
-		if !save {
-			gameCanvas.Refresh()
-			showPendingDialogs(gs, statsPanel, inputBar, win)
-			return
-		}
 
-		if err := limitEntry.Validate(); err != nil {
-			gameCanvas.Refresh()
-			showPendingDialogs(gs, statsPanel, inputBar, win)
+	d := dialog.NewCustomWithoutButtons("Settings", form.tabs, win)
+	// closed releases the settings pause on every path; showPendingDialogs
+	// then resumes the game or shows whatever is pending.
+	closed := func(save bool) {
+		d.Hide()
+		gs.SetSettingsOpen(false)
+		if save {
+			form.apply(gs)
+			gs.mu.Lock()
+			snap := gs.snapshot()
+			gs.mu.Unlock()
+			statsPanel.Update(snap)
+			inputBar.Update(snap)
+		}
+		gameCanvas.Refresh()
+		showPendingDialogs(gs, statsPanel, inputBar, win)
+	}
+	cancel := widget.NewButtonWithIcon("Cancel", theme.CancelIcon(), func() { closed(false) })
+	save := widget.NewButtonWithIcon("Save", theme.ConfirmIcon(), func() {
+		// An invalid value keeps the dialog open on its tab.
+		if err := form.validate(); err != nil {
 			dialog.ShowError(err, win)
 			return
 		}
-
-		newRows := checkedRowIDs(rowChecks)
-		newAuto := autoCheck.Checked
-		newLimit := currentLimit
-		if n, err := strconv.Atoi(strings.TrimSpace(limitEntry.Text)); err == nil && n >= 0 {
-			newLimit = n
-		}
-
-		gs.applySettings(newRows, checkedScripts(scriptChecks), newAuto, newLimit, levelFromLabel(levelRadio.Selected), pointsFromLabel(pointsSelect.Selected))
-
-		gs.mu.Lock()
-		snap := gs.snapshot()
-		gs.mu.Unlock()
-		statsPanel.Update(snap)
-		inputBar.Update(snap)
-		gameCanvas.Refresh()
-		showPendingDialogs(gs, statsPanel, inputBar, win)
-	}, win)
+		closed(true)
+	})
+	save.Importance = widget.HighImportance
+	d.SetButtons([]fyne.CanvasObject{cancel, save})
+	d.Show()
 }
 
 // newGroupChecks builds the per-row checks and the "all" check for one kana

@@ -121,8 +121,7 @@ type StatsPanel struct {
 
 	correctText, missedText, accuracyText *canvas.Text
 
-	wordsText   *canvas.Text   // "Words: … introduced · … secure · JLPT N5", or a hint
-	sourceTexts []*canvas.Text // word data attribution
+	wordsText *canvas.Text // "Words: … introduced · … secure · JLPT N5", or a hint
 
 	pathLines map[kanacore.Script]*fyne.Container
 	pathSegs  map[kanacore.Script][]*canvas.Rectangle
@@ -292,14 +291,7 @@ func newStatsPanel() *StatsPanel {
 	// the grid is 288px wide, so the padded content is 292px, exactly
 	// matching the panel's 300-2*theme.Padding() width.
 	padded := container.New(layout.NewCustomPaddedLayout(0, 0, 0, 4), grids)
-	source := container.NewVBox()
-	for _, line := range wordDataSource {
-		txt := smallText(line, 10)
-		txt.Color = panelSubColor
-		p.sourceTexts = append(p.sourceTexts, txt)
-		source.Add(txt)
-	}
-	p.content = container.NewBorder(top, container.NewVBox(legend, source), nil, nil, container.NewVScroll(padded))
+	p.content = container.NewBorder(top, legend, nil, nil, container.NewVScroll(padded))
 	p.ExtendBaseWidget(p)
 	return p
 }

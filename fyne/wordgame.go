@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"sort"
 	"strings"
@@ -248,6 +249,36 @@ func (gs *GameState) sourceLeft(src vocab.Source) int {
 	return n
 }
 
+// introducedCounts counts the introduced readings in the word index and
+// those of them that are secure. Must be called under lock.
+func (gs *GameState) introducedCounts() (introduced, secure int) {
+	for kana := range gs.introduced {
+		if _, ok := gs.words.Lookup(kana); !ok {
+			continue
+		}
+		introduced++
+		if gs.wordCorrect(kana) >= secureCorrect {
+			secure++
+		}
+	}
+	return introduced, secure
+}
+
+// wordsSummary is the settings' Words tab line: "Introduced: 25 · secure:
+// 18 · left in source: 101", or that the chosen list is missing. Must be
+// called under lock.
+func (gs *GameState) wordsSummary() string {
+	src, found := gs.source()
+	if !found {
+		return fmt.Sprintf("List %s not found", prettyListName(src.List))
+	}
+	if gs.words == nil {
+		return "No words available"
+	}
+	introduced, secure := gs.introducedCounts()
+	return fmt.Sprintf("Introduced: %d · secure: %d · left in source: %d", introduced, secure, gs.sourceLeft(src))
+}
+
 // wordsStatus summarises the words for the status panel. Must be called
 // under lock.
 func (gs *GameState) wordsStatus() WordsStatus {
@@ -263,15 +294,7 @@ func (gs *GameState) wordsStatus() WordsStatus {
 	if gs.words == nil {
 		return ws
 	}
-	for kana := range gs.introduced {
-		if _, ok := gs.words.Lookup(kana); !ok {
-			continue
-		}
-		ws.Introduced++
-		if gs.wordCorrect(kana) >= secureCorrect {
-			ws.Secure++
-		}
-	}
+	ws.Introduced, ws.Secure = gs.introducedCounts()
 	if found && !ws.LoadFailed && len(vocab.NextPackage(gs.words, src, gs.introduced, 1, gs.unitKnown)) == 0 {
 		ws.Next = wordsFinished
 		if gs.sourceLeft(src) > 0 {
