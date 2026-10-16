@@ -223,25 +223,6 @@ func TestWordLevelAndMeaningLang(t *testing.T) {
 	}
 }
 
-func TestBundledWordsRoundTrip(t *testing.T) {
-	st := openTemp(t)
-	if on, err := st.BundledWords(); err != nil || on {
-		t.Fatalf("unset BundledWords = %v, %v; want false", on, err)
-	}
-	if err := st.SaveBundledWords(true); err != nil {
-		t.Fatal(err)
-	}
-	if on, _ := st.BundledWords(); !on {
-		t.Fatal("BundledWords = false after saving true")
-	}
-	if err := st.SaveBundledWords(false); err != nil {
-		t.Fatal(err)
-	}
-	if on, _ := st.BundledWords(); on {
-		t.Fatal("BundledWords = true after saving false")
-	}
-}
-
 func TestIntroducedWordsRoundTrip(t *testing.T) {
 	st := openTemp(t)
 	got, err := st.IntroducedWords()

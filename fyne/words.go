@@ -138,32 +138,83 @@ const maxWordsLineRunes = 200
 // status panel. Stage 4 moves it to the settings' Sources tab.
 var wordDataSource = []string{"Word data: JMdict (EDRDG, CC BY-SA 4.0),", "JLPT levels by J. Waller"}
 
-// WordsStatus is the status panel's words line.
-type WordsStatus struct {
-	Err      string // the bundled list failed to load
-	Playable int    // words playable now
-	Secure   int    // playable words with 3 or more correct answers
-	Level    int    // words are played up to this JLPT level
-	Bundled  bool   // bundled words are played
-	HasLists bool   // at least one private list was found
-	Dir      string // the private list folder for display; "" if unknown
+// Word sources as stored in the word_source setting.
+const (
+	jlptSource       = "jlpt"  // the bundled JLPT words
+	listSourcePrefix = "list:" // followed by a private list's name
+)
+
+// resolveWordSource returns the stored word source, or, when none (or no
+// valid one) is stored, the first private list by name, else JLPT.
+func resolveWordSource(stored string, lists []string) string {
+	if stored == jlptSource || (strings.HasPrefix(stored, listSourcePrefix) && stored != listSourcePrefix) {
+		return stored
+	}
+	if len(lists) > 0 {
+		return listSourcePrefix + lists[0]
+	}
+	return jlptSource
 }
 
-// formatWordsLine is the status panel's words line. With bundled words off,
-// a bundled load error does not matter and is not shown.
-func formatWordsLine(ws WordsStatus) string {
-	switch {
-	case ws.Bundled && ws.Err != "":
-		return truncateRunes("Words unavailable: "+ws.Err, maxWordsLineRunes)
-	case ws.Bundled:
-		return fmt.Sprintf("Words: %d playable · %d secure · up to N%d", ws.Playable, ws.Secure, ws.Level)
-	case ws.HasLists:
-		return fmt.Sprintf("Words: %d playable · %d secure · own lists", ws.Playable, ws.Secure)
-	case ws.Dir != "":
-		return truncateRunes("Words: add a list to "+ws.Dir, maxWordsLineRunes)
-	default:
-		return "Words: add a word list"
+// prettyListName shows a list name with spaces: "minna-no-nihongo" →
+// "minna no nihongo".
+func prettyListName(name string) string {
+	return strings.NewReplacer("-", " ", "_", " ").Replace(name)
+}
+
+// sourceLabel names a source for display: "JLPT N5" or a pretty list name.
+func sourceLabel(src vocab.Source) string {
+	if src.List != "" {
+		return prettyListName(src.List)
 	}
+	return fmt.Sprintf("JLPT N%d", src.Level)
+}
+
+// wordsNext says whether new words can be introduced from the source.
+type wordsNext int
+
+const (
+	wordsMore     wordsNext = iota // the source has a word that can be introduced now
+	wordsNeedKana                  // words are left, but none is playable yet
+	wordsFinished                  // every word of the source is introduced
+)
+
+// WordsStatus is the status panel's words line.
+type WordsStatus struct {
+	LoadFailed bool      // the introduced words could not be loaded
+	Err        string    // the bundled list failed to load (JLPT source only)
+	Missing    bool      // the chosen list was not found
+	Dir        string    // the private list folder for display; "" if unknown
+	Source     string    // "JLPT N5" or a pretty list name
+	Level      int       // the JLPT level of a JLPT source; 0 for a list
+	Introduced int       // introduced readings in the word index
+	Secure     int       // introduced readings with 3 or more correct answers
+	Next       wordsNext // whether new words can come from the source
+}
+
+// formatWordsLine is the status panel's words line: counts, or a hint when
+// nothing can be introduced.
+func formatWordsLine(ws WordsStatus) string {
+	var s string
+	switch {
+	case ws.LoadFailed:
+		s = "Words unavailable: could not load progress"
+	case ws.Err != "":
+		s = "Words unavailable: " + ws.Err
+	case ws.Missing && ws.Dir != "":
+		s = "Words: add a list to " + ws.Dir + " or choose JLPT"
+	case ws.Missing:
+		s = "Words: add a word list or choose JLPT"
+	case ws.Next == wordsNeedKana:
+		s = "Words: learn more kana for new words"
+	case ws.Next == wordsFinished && ws.Level == 1:
+		s = "Words: JLPT finished"
+	case ws.Next == wordsFinished:
+		s = "Words: " + ws.Source + " finished"
+	default:
+		s = fmt.Sprintf("Words: %d introduced · %d secure · %s", ws.Introduced, ws.Secure, ws.Source)
+	}
+	return truncateRunes(s, maxWordsLineRunes)
 }
 
 // displayDir shortens a folder inside home to "~/…" for display.

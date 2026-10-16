@@ -2,6 +2,8 @@ package main
 
 import (
 	"os"
+	"sort"
+	"strings"
 
 	"kana/kanacore"
 	"kana/memory"
@@ -111,7 +113,10 @@ func (gs *GameState) loadWords() {
 		gs.wordsDir = dir
 		lists, _ = vocab.LoadDir(dir)
 	}
-	gs.hasLists = len(lists) > 0
+	gs.listNames = nil
+	for _, l := range lists {
+		gs.listNames = append(gs.listNames, l.Name)
+	}
 	gs.words = base.WithLists(lists)
 	gs.invalidatePlayable()
 }
@@ -135,25 +140,43 @@ func (gs *GameState) unitKnown(unit string) bool {
 	return gs.overallStats[unit].CorrectCount+gs.sessionStats[unit].CorrectCount >= secureCorrect
 }
 
-// playableWords returns the entries playable in mixed mode: bundled words up
-// to wordLevel (only with useBundled) plus every private word, all of whose
-// units are known. The
-// result is cached until invalidatePlayable; do not modify it. Must be
-// called under lock.
+// unitsKnown reports whether every unit of a word is known. Must be called
+// under lock.
+func (gs *GameState) unitsKnown(units []string) bool {
+	for _, u := range units {
+		if !gs.unitKnown(u) {
+			return false
+		}
+	}
+	return true
+}
+
+// playableWords returns the entries that may fall: introduced words all of
+// whose units are known, from every source and level, sorted by reading.
+// None while the introduced words could not be loaded. The result is
+// cached until invalidatePlayable; do not modify it. Must be called under
+// lock.
 func (gs *GameState) playableWords() []vocab.Entry {
-	if gs.words == nil {
+	if gs.words == nil || gs.introducedLoadFailed {
 		return nil
 	}
 	if !gs.playableOK {
-		gs.playable = vocab.Playable(gs.words.Entries(), gs.unitKnown, vocab.Filter{MaxLevel: gs.wordLevel, NoBundled: !gs.useBundled})
+		var out []vocab.Entry
+		for kana := range gs.introduced {
+			if e, ok := gs.words.Lookup(kana); ok && gs.unitsKnown(e.Units) {
+				out = append(out, e)
+			}
+		}
+		sort.Slice(out, func(i, j int) bool { return out[i].Kana < out[j].Kana })
+		gs.playable = out
 		gs.playableOK = true
 	}
 	return gs.playable
 }
 
 // invalidatePlayable marks the playable cache stale. Call it whenever a kana
-// may have become secure, the active scripts, the level or the index
-// changed. Must be called under lock.
+// may have become secure, or the active scripts, the introduced words or
+// the index changed. Must be called under lock.
 func (gs *GameState) invalidatePlayable() {
 	gs.playableOK = false
 }
@@ -196,18 +219,63 @@ func (gs *GameState) pickWord(always bool) (vocab.Entry, bool) {
 	return gs.words.Lookup(kana)
 }
 
+// source returns where new words come from and whether that source exists:
+// a chosen list that was not found does not. Must be called under lock.
+func (gs *GameState) source() (vocab.Source, bool) {
+	if name, ok := strings.CutPrefix(gs.wordSource, listSourcePrefix); ok {
+		for _, l := range gs.listNames {
+			if l == name {
+				return vocab.Source{List: name}, true
+			}
+		}
+		return vocab.Source{List: name}, false
+	}
+	return vocab.Source{Level: gs.wordLevel}, true
+}
+
+// sourceLeft counts the source's entries that are not introduced yet (for
+// JLPT: bundled entries with JLPT >= Level). Must be called under lock.
+func (gs *GameState) sourceLeft(src vocab.Source) int {
+	if gs.words == nil {
+		return 0
+	}
+	n := 0
+	for _, e := range gs.words.Entries() {
+		if src.Has(e) && !gs.introduced[e.Kana] {
+			n++
+		}
+	}
+	return n
+}
+
 // wordsStatus summarises the words for the status panel. Must be called
 // under lock.
 func (gs *GameState) wordsStatus() WordsStatus {
-	ws := WordsStatus{Err: gs.wordsErr, Level: gs.wordLevel, Bundled: gs.useBundled, HasLists: gs.hasLists}
+	src, found := gs.source()
+	ws := WordsStatus{LoadFailed: gs.introducedLoadFailed, Source: sourceLabel(src), Missing: !found}
+	if src.List == "" {
+		ws.Err, ws.Level = gs.wordsErr, src.Level
+	}
 	if gs.wordsDir != "" {
 		home, _ := os.UserHomeDir()
 		ws.Dir = displayDir(gs.wordsDir, home)
 	}
-	for _, e := range gs.playableWords() {
-		ws.Playable++
-		if gs.wordCorrect(e.Kana) >= secureCorrect {
+	if gs.words == nil {
+		return ws
+	}
+	for kana := range gs.introduced {
+		if _, ok := gs.words.Lookup(kana); !ok {
+			continue
+		}
+		ws.Introduced++
+		if gs.wordCorrect(kana) >= secureCorrect {
 			ws.Secure++
+		}
+	}
+	if found && !ws.LoadFailed && len(vocab.NextPackage(gs.words, src, gs.introduced, 1, gs.unitKnown)) == 0 {
+		ws.Next = wordsFinished
+		if gs.sourceLeft(src) > 0 {
+			ws.Next = wordsNeedKana
 		}
 	}
 	return ws

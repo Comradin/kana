@@ -121,7 +121,7 @@ type StatsPanel struct {
 
 	correctText, missedText, accuracyText *canvas.Text
 
-	wordsText   *canvas.Text   // "Words: … playable · … secure · up to N5" (or "own lists")
+	wordsText   *canvas.Text   // "Words: … introduced · … secure · JLPT N5", or a hint
 	sourceTexts []*canvas.Text // word data attribution
 
 	pathLines map[kanacore.Script]*fyne.Container
