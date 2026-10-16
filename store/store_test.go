@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"math"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 
@@ -238,5 +239,128 @@ func TestBundledWordsRoundTrip(t *testing.T) {
 	}
 	if on, _ := st.BundledWords(); on {
 		t.Fatal("BundledWords = true after saving false")
+	}
+}
+
+func TestIntroducedWordsRoundTrip(t *testing.T) {
+	st := openTemp(t)
+	got, err := st.IntroducedWords()
+	if err != nil || len(got) != 0 {
+		t.Fatalf("fresh IntroducedWords = %v, %v", got, err)
+	}
+	at := time.Date(2026, 10, 15, 9, 0, 0, 0, time.UTC)
+	if err := st.SaveIntroduced("ねこ", at); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SaveIntroduced("ねこ", at.Add(time.Hour)); err != nil {
+		t.Fatalf("saving an introduced word again: %v", err)
+	}
+	if err := st.SaveIntroduced("", at); err == nil {
+		t.Fatal("an empty reading must be rejected")
+	}
+	got, err = st.IntroducedWords()
+	if err != nil || !reflect.DeepEqual(got, map[string]bool{"ねこ": true}) {
+		t.Fatalf("IntroducedWords = %v, %v", got, err)
+	}
+	var stamp int64
+	if err := st.db.QueryRow(`SELECT introduced_at FROM introduced_words WHERE kana = 'ねこ'`).Scan(&stamp); err != nil || stamp != at.Unix() {
+		t.Fatalf("introduced_at = %d, %v; want the first time %d", stamp, err, at.Unix())
+	}
+}
+
+func TestIntroducedSeededOnceFromWordProgress(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "old.db")
+	st, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A stage 3 database: word progress, but no introduced_words table yet.
+	_ = st.SaveWordStats("ねこ", 2, 1)
+	_ = st.SaveWordStats("いぬ", 0, 1)
+	_ = st.SaveMemoryState("word:あめ", memory.State{Stability: 1, LastSeen: time.Now()})
+	_ = st.SaveMemoryState("word:ねこ", memory.State{Stability: 1, LastSeen: time.Now()})
+	_ = st.SaveMemoryState("kana:か", memory.State{Stability: 1, LastSeen: time.Now()})
+	if _, err := st.db.Exec(`DROP TABLE introduced_words`); err != nil {
+		t.Fatal(err)
+	}
+	_ = st.Close()
+
+	st, err = Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := st.IntroducedWords()
+	if want := map[string]bool{"ねこ": true, "いぬ": true, "あめ": true}; err != nil || !reflect.DeepEqual(got, want) {
+		t.Fatalf("seeded = %v, %v; want %v", got, err, want)
+	}
+	_ = st.SaveWordStats("みず", 1, 0)
+	_ = st.Close()
+
+	st, err = Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	if got, _ := st.IntroducedWords(); got["みず"] {
+		t.Fatal("re-open must not seed again: word stats alone do not introduce a word any more")
+	}
+}
+
+func TestWordPackageSettings(t *testing.T) {
+	st := openTemp(t)
+	if n, err := st.PackageSize(); err != nil || n != DefaultPackageSize || DefaultPackageSize != 5 {
+		t.Fatalf("unset PackageSize = %d, %v; want 5", n, err)
+	}
+	if s, err := st.WordSource(); err != nil || s != "" {
+		t.Fatalf("unset WordSource = %q, %v; want \"\" (auto)", s, err)
+	}
+	if f, err := st.KanaFont(); err != nil || f != "noto" {
+		t.Fatalf("unset KanaFont = %q, %v; want noto", f, err)
+	}
+	if p, err := st.NewestPackage(); err != nil || p != nil {
+		t.Fatalf("unset NewestPackage = %v, %v; want nil", p, err)
+	}
+
+	for _, n := range []int{3, 10} {
+		if err := st.SavePackageSize(n); err != nil {
+			t.Fatal(err)
+		}
+		if got, _ := st.PackageSize(); got != n {
+			t.Fatalf("PackageSize = %d, want %d", got, n)
+		}
+	}
+	if err := st.SavePackageSize(4); err == nil {
+		t.Fatal("package size 4 must be rejected")
+	}
+	if err := st.setSetting(packageSizeKey, "7"); err != nil {
+		t.Fatal(err)
+	}
+	if n, _ := st.PackageSize(); n != DefaultPackageSize {
+		t.Fatalf("invalid stored size = %d, want the default", n)
+	}
+
+	if err := st.SaveWordSource("list:minna-no-nihongo"); err != nil {
+		t.Fatal(err)
+	}
+	if s, _ := st.WordSource(); s != "list:minna-no-nihongo" {
+		t.Fatalf("WordSource = %q", s)
+	}
+	if err := st.SaveKanaFont("mplus"); err != nil {
+		t.Fatal(err)
+	}
+	if f, _ := st.KanaFont(); f != "mplus" {
+		t.Fatalf("KanaFont = %q", f)
+	}
+	if err := st.SaveNewestPackage([]string{"ねこ", "いぬ"}); err != nil {
+		t.Fatal(err)
+	}
+	if p, _ := st.NewestPackage(); !reflect.DeepEqual(p, []string{"ねこ", "いぬ"}) {
+		t.Fatalf("NewestPackage = %v", p)
+	}
+	if err := st.SaveNewestPackage(nil); err != nil {
+		t.Fatal(err)
+	}
+	if p, _ := st.NewestPackage(); p != nil {
+		t.Fatalf("NewestPackage after saving nil = %v, want nil", p)
 	}
 }
