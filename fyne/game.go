@@ -3,6 +3,7 @@ package main
 import (
 	"maps"
 	"math/rand"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -33,15 +34,17 @@ type gameEvent struct {
 type GameState struct {
 	mu sync.Mutex
 
-	tiles       []*KanaTile
-	score       int
-	scoreLimit  int
-	missed      int
-	over        bool
-	overReason  string
-	missedKanas []kanacore.Kana
-	missedWords []string         // readings of missed words, in order
-	feedback    []*feedbackLabel // word hit/miss labels, oldest first
+	tiles        []*KanaTile
+	score        int
+	scoreLimit   int
+	missed       int
+	over         bool
+	overReason   string
+	missedKanas  []kanacore.Kana
+	missedWords  []string  // readings of missed words, in order
+	lastFallen   *KanaTile // the tile that fell through last, for a late Enter
+	lastFallenAt time.Time
+	feedback     []*feedbackLabel // word hit/miss labels, oldest first
 
 	sessionStats  map[string]store.KanaStats
 	overallStats  map[string]store.KanaStats
@@ -409,6 +412,7 @@ func (gs *GameState) Reset() {
 	gs.eventChClosed = false
 
 	gs.tiles = nil
+	gs.lastFallen = nil
 	gs.score = 0
 	gs.missed = 0
 	gs.answerStreak = 0
@@ -473,6 +477,10 @@ func (gs *GameState) Stop() {
 }
 
 const ticksPerSecond = 10
+
+// lateAnswerWindow is how long after a tile fell through a wrong input that
+// answers it is taken as a late Enter for it, not as a mistake.
+const lateAnswerWindow = 1500 * time.Millisecond
 
 // fallStep is how far a tile moves per tick so that it crosses a canvas of
 // height h in fallSeconds, whatever the window size. A missing fall time
@@ -545,6 +553,7 @@ func (gs *GameState) tick() {
 
 		if tile.pos.Y > gs.canvasH {
 			missedNow = true
+			gs.lastFallen, gs.lastFallenAt = tile, gs.now()
 			if tile.word != nil {
 				gs.recordWordMiss(tile.word.Kana)
 				gs.missedWords = append(gs.missedWords, tile.word.Kana)
@@ -620,7 +629,8 @@ func (gs *GameState) spawnKana() {
 
 // checkAnswer removes the lowest tile that input answers: a kana tile by its
 // canonical or alternative romaji, a word tile by any valid reading of the
-// whole word. Acquires the lock itself; releases before triggering
+// whole word. An input that answers no tile may count as a mistake (see
+// wrongInput). Acquires the lock itself; releases before triggering
 // canvas.Refresh() so the UI updates immediately on correct answers.
 func (gs *GameState) checkAnswer(input string) {
 	gs.mu.Lock()
@@ -659,11 +669,35 @@ func (gs *GameState) checkAnswer(input string) {
 		gs.maybeOfferPackage()
 		gs.buildSnapshot()
 	}
+	if !matched {
+		gs.wrongInput(input)
+	}
 	canvas := gs.canvas
 	gs.mu.Unlock()
 
 	if matched && canvas != nil {
 		canvas.Refresh()
+	}
+}
+
+// wrongInput counts an input that answers no tile as a mistake on the only
+// tile on the field. With several tiles it is unclear which one was meant,
+// and an input answering a tile that just fell through is a late Enter;
+// both are ignored, as is blank input. The tile stays, the miss limit and
+// the tempo are untouched, and no feedback is shown. Must be called under
+// lock.
+func (gs *GameState) wrongInput(input string) {
+	if strings.TrimSpace(input) == "" || len(gs.tiles) != 1 {
+		return
+	}
+	if gs.lastFallen != nil && gs.now().Sub(gs.lastFallenAt) < lateAnswerWindow && gs.answers(gs.lastFallen, input) {
+		return
+	}
+	tile := gs.tiles[0]
+	if tile.word != nil {
+		gs.applyWordMistake(tile.word.Kana)
+	} else {
+		gs.applyKanaMistake(tile.kana.Char)
 	}
 }
 

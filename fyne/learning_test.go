@@ -2,6 +2,7 @@ package main
 
 import (
 	"testing"
+	"time"
 
 	"fyne.io/fyne/v2/test"
 	"kana/store"
@@ -191,5 +192,99 @@ func TestFlagShownAfterRestart(t *testing.T) {
 	again.mu.Unlock()
 	if !snap.Flagged["か"] {
 		t.Fatal("the red frame must survive a restart")
+	}
+}
+
+func TestWrongInputWithOneKanaTile(t *testing.T) {
+	test.NewApp()
+	gs := newTestState()
+	setKanaLevel(gs, "か", 4)
+	tile := tileAt("か", "ka", 100)
+	gs.tiles = []*KanaTile{tile}
+	gs.tempoStep, gs.answerStreak = 3, 2
+	gs.checkAnswer("ki")
+	if len(gs.tiles) != 1 || gs.tiles[0] != tile {
+		t.Fatal("the tile stays on the field")
+	}
+	if p := gs.kanaProgress["か"]; p != (store.Progress{Level: 2, Flagged: true}) {
+		t.Fatalf("progress = %+v, want level 2 flagged", p)
+	}
+	if gs.sessionStats["か"].MissCount != 1 || gs.currentStreak["か"] != 0 {
+		t.Fatal("a wrong input is a session miss and resets the character's streak")
+	}
+	if gs.missed != 0 || gs.tempoStep != 3 || gs.answerStreak != 2 || len(gs.missedKanas) != 0 {
+		t.Fatal("a wrong input does not count towards the miss limit or the tempo")
+	}
+}
+
+func TestWrongInputWithOneWordTile(t *testing.T) {
+	test.NewApp()
+	gs := newTestState()
+	withWords(gs, bw("あい", 5, "love"))
+	learnKana(gs, "あ", "い")
+	setWordLevel(gs, "あい", 3)
+	gs.tiles = []*KanaTile{wordTileAt(gs, "あい", 100)}
+	gs.checkAnswer("ao")
+	if p := gs.wordProgress["あい"]; p != (store.Progress{Level: 1, Flagged: true}) {
+		t.Fatalf("word progress = %+v", p)
+	}
+	if gs.kanaProgress["あ"].Level != 5 || gs.kanaProgress["い"].Level != 5 {
+		t.Fatal("a word mistake does not touch its kana")
+	}
+}
+
+func TestWrongInputIgnored(t *testing.T) {
+	test.NewApp()
+	cases := map[string]func(gs *GameState) string{
+		"two tiles": func(gs *GameState) string {
+			gs.tiles = []*KanaTile{tileAt("か", "ka", 100), tileAt("き", "ki", 50)}
+			return "ku"
+		},
+		"blank input": func(gs *GameState) string {
+			gs.tiles = []*KanaTile{tileAt("か", "ka", 100)}
+			return "  "
+		},
+		"paused": func(gs *GameState) string {
+			gs.tiles = []*KanaTile{tileAt("か", "ka", 100)}
+			gs.paused = true
+			return "ki"
+		},
+		"over": func(gs *GameState) string {
+			gs.tiles = []*KanaTile{tileAt("か", "ka", 100)}
+			gs.over = true
+			return "ki"
+		},
+	}
+	for name, setup := range cases {
+		gs := newTestState()
+		gs.checkAnswer(setup(gs))
+		if len(gs.kanaProgress) != 0 || len(gs.sessionStats) != 0 {
+			t.Errorf("%s: progress %v, stats %v; want no mistake", name, gs.kanaProgress, gs.sessionStats)
+		}
+	}
+}
+
+func TestLateEnterForAFallenTileIsIgnored(t *testing.T) {
+	test.NewApp()
+	gs := newTestState()
+	now := time.Date(2026, 10, 19, 12, 0, 0, 0, time.UTC)
+	gs.now = func() time.Time { return now }
+	fallen := tileAt("か", "ka", gs.canvasH-1)
+	fallen.fallSeconds = 0.1 // falls through on the next tick
+	other := tileAt("き", "ki", 10)
+	gs.tiles = []*KanaTile{other, fallen}
+	gs.tick()
+	if len(gs.tiles) != 1 {
+		t.Fatalf("want か fallen through, tiles = %d", len(gs.tiles))
+	}
+	now = now.Add(time.Second)
+	gs.checkAnswer("ka") // meant for か, too late
+	if p := gs.kanaProgress["き"]; p.Level != 0 || p.Flagged {
+		t.Fatalf("late Enter punished き: %+v", p)
+	}
+	now = now.Add(time.Second) // 2 s after the fall
+	gs.checkAnswer("ka")
+	if !gs.kanaProgress["き"].Flagged {
+		t.Fatal("after 1.5 s a wrong input counts again")
 	}
 }
