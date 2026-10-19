@@ -168,9 +168,7 @@ func TestCheckAutoProgressionNoUnlockWhenNotAllMastered(t *testing.T) {
 	gs.autoProgress = true
 	gs.selectedRows = map[string]bool{"vowels": true}
 
-	for _, char := range []string{"あ", "い", "う"} {
-		gs.overallStats[char] = store.KanaStats{Char: char, CorrectCount: 3}
-	}
+	learnKana(gs, "あ", "い", "う")
 
 	unlocked := gs.checkAutoProgression()
 	if len(unlocked) != 0 {
@@ -225,6 +223,7 @@ func TestFreshStartCatchesUpMasteredSteps(t *testing.T) {
 		row, _ := kanacore.RowByID(id)
 		for _, char := range row.Characters() {
 			_ = st.SaveKanaStats(char, 3, 0, 3)
+			_ = st.SaveProgress("kana:"+char, store.Progress{Level: 5})
 		}
 	}
 
@@ -252,6 +251,7 @@ func TestReturningUserWithUnmasteredVowelsGetsNoIntro(t *testing.T) {
 	test.NewApp()
 	st := openTestStore(t)
 	_ = st.SaveKanaStats("あ", 1, 0, 1)
+	_ = st.SaveProgress("kana:あ", store.Progress{Level: 1})
 
 	gs := NewGameState(st)
 	if len(gs.selectedRows) != 1 || !gs.selectedRows["vowels"] {

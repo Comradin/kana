@@ -46,7 +46,7 @@ func TestPanelCellStatesAndMissed(t *testing.T) {
 	p := newStatsPanel()
 	snap := panelSnap([]string{"k", "n"}, both)
 	snap.TotalCorrect["き"] = 2
-	snap.TotalCorrect["く"] = 3
+	snap.TotalCorrect["く"] = 5
 	snap.MissedKanas = []kanacore.Kana{{Char: "ぬ", Romaji: "nu"}}
 	p.Update(snap)
 	if p.cells["か"].state != cellNew || p.cells["き"].state != cellLearning || p.cells["く"].state != cellMastered {

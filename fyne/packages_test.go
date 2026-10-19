@@ -20,7 +20,7 @@ func packageReady(n int) *GameState {
 	gs := newTestState()
 	selectRows(gs, "vowels")
 	gs.words = vocab.NewIndex(vowelWords(n), nil)
-	secure(gs, "あ", "い", "う", "え", "お")
+	learnKana(gs, "あ", "い", "う", "え", "お")
 	return gs
 }
 
@@ -57,7 +57,7 @@ func TestFirstPackageWhenASourceWordIsPlayable(t *testing.T) {
 	if len(gs.pendingPackage) != 0 || gs.paused {
 		t.Fatalf("no secure kana: pending %v, paused %v", gs.pendingPackage, gs.paused)
 	}
-	secure(gs, "あ", "い", "う", "え", "お")
+	learnKana(gs, "あ", "い", "う", "え", "お")
 	gs.maybeOfferPackage()
 	if len(gs.pendingPackage) != 5 || !gs.paused {
 		t.Fatalf("pending %v, paused %v; want a package of 5 and a paused game", gs.pendingPackage, gs.paused)
@@ -95,7 +95,7 @@ func TestPackageRuleCountsOnlyPlayableWords(t *testing.T) {
 	gs := packageReady(10)
 	gs.words = vocab.NewIndex(append(vowelWords(10), bw("アイ", 5, "eye"), bw("アオ", 5, "blue"), bw("イエ", 5, "house")), nil)
 	gs.activeScripts[kanacore.ScriptKatakana] = true
-	secure(gs, "ア", "イ", "エ", "オ")
+	learnKana(gs, "ア", "イ", "エ", "オ")
 	gs.newestPackage = []string{"アイ", "アオ", "イエ"}
 	for _, kana := range gs.newestPackage {
 		gs.introduced[kana] = true
@@ -113,8 +113,7 @@ func TestPackageRuleCountsOnlyPlayableWords(t *testing.T) {
 
 	gs = packageReady(20) // the first five: ああ あい あう あえ あああ
 	pkg := introduceFirst(gs, 5)
-	gs.overallStats["え"] = store.KanaStats{Char: "え", CorrectCount: 0} // words with え stop being playable
-	gs.invalidatePlayable()
+	setKanaLevel(gs, "え", 0) // words with え stop being playable
 	playable := 0
 	for _, kana := range pkg {
 		if e, _ := gs.words.Lookup(kana); gs.unitsKnown(e.Units) {
@@ -169,6 +168,7 @@ func TestStartSetsPendingPackageWithoutEvent(t *testing.T) {
 	_ = st.SaveSelectedRows([]string{"vowels"})
 	for _, c := range []string{"あ", "い", "う", "え", "お"} {
 		_ = st.SaveKanaStats(c, 3, 0, 3)
+		_ = st.SaveProgress("kana:"+c, store.Progress{Level: 5})
 	}
 	gs := NewGameState(st)
 	if len(gs.pendingPackage) != 5 || !gs.paused {
@@ -334,6 +334,7 @@ func TestResetClearsPendingAndOffersAgain(t *testing.T) {
 	_ = st.SaveSelectedRows([]string{"vowels"})
 	for _, c := range []string{"あ", "い", "う", "え", "お"} {
 		_ = st.SaveKanaStats(c, 3, 0, 3)
+		_ = st.SaveProgress("kana:"+c, store.Progress{Level: 5})
 	}
 	gs := NewGameState(st)
 	gs.mu.Lock()
@@ -360,11 +361,10 @@ func TestResetClearsPendingAndOffersAgain(t *testing.T) {
 
 func TestRecheckWhenAKanaBecomesSecure(t *testing.T) {
 	gs := packageReady(10)
-	gs.overallStats["あ"] = store.KanaStats{Char: "あ", CorrectCount: 2}
-	gs.overallStats["い"] = store.KanaStats{Char: "い", CorrectCount: 0}
-	gs.overallStats["う"] = store.KanaStats{Char: "う", CorrectCount: 0}
-	gs.overallStats["え"] = store.KanaStats{Char: "え", CorrectCount: 0}
-	gs.invalidatePlayable()
+	setKanaLevel(gs, "あ", learnedLevel-1)
+	setKanaLevel(gs, "い", 0)
+	setKanaLevel(gs, "う", 0)
+	setKanaLevel(gs, "え", 0)
 	gs.tiles = []*KanaTile{tileAt("あ", "a", 100)}
 	gs.checkAnswer("a")
 	if len(gs.pendingPackage) == 0 || !gs.paused {
@@ -424,7 +424,7 @@ func levelDone() *GameState {
 	n5 := vowelWords(6)
 	n4 := []vocab.Word{bw("ええ", 4, "yes"), bw("おお", 4, "big")}
 	gs.words = vocab.NewIndex(append(n5, n4...), nil)
-	secure(gs, "あ", "い", "う", "え", "お")
+	learnKana(gs, "あ", "い", "う", "え", "お")
 	for _, w := range n5 {
 		gs.introduced[w.Kana] = true
 		gs.wordOverallStats[w.Kana] = store.WordStats{Kana: w.Kana, CorrectCount: 3}

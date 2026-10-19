@@ -222,14 +222,6 @@ func withWords(gs *GameState, words ...vocab.Word) {
 	gs.invalidatePlayable()
 }
 
-// secure gives each character three stored correct answers.
-func secure(gs *GameState, chars ...string) {
-	for _, c := range chars {
-		gs.overallStats[c] = store.KanaStats{Char: c, CorrectCount: 3}
-	}
-	gs.invalidatePlayable()
-}
-
 func playableKana(gs *GameState) []string {
 	var out []string
 	for _, e := range gs.playableWords() {
@@ -240,10 +232,9 @@ func playableKana(gs *GameState) []string {
 
 func TestUnitKnown(t *testing.T) {
 	gs := newTestState() // hiragana only
-	secure(gs, "か", "カ")
-	gs.overallStats["き"] = store.KanaStats{Char: "き", CorrectCount: 2}
-	gs.overallStats["く"] = store.KanaStats{Char: "く", CorrectCount: 2}
-	gs.sessionStats["く"] = store.KanaStats{Char: "く", CorrectCount: 1}
+	learnKana(gs, "か", "カ")
+	setKanaLevel(gs, "き", 2)
+	setKanaLevel(gs, "く", 5)
 	cases := map[string]bool{"か": true, "き": false, "く": true, "カ": false, "っ": true, "ッ": false, "ー": true, "け": false}
 	for unit, want := range cases {
 		if got := gs.unitKnown(unit); got != want {
@@ -263,8 +254,8 @@ func TestPlayableWordsAreIntroducedAndKnown(t *testing.T) {
 	gs := newTestState()
 	withWords(gs, bw("あい", 5, "love"), bw("あお", 4, "blue"), bw("いえ", 5, "house"), bw("うえ", 5, "above"))
 	delete(gs.introduced, "うえ")
-	secure(gs, "あ", "い", "う", "お")
-	gs.overallStats["え"] = store.KanaStats{Char: "え", CorrectCount: 2}
+	learnKana(gs, "あ", "い", "う", "お")
+	setKanaLevel(gs, "え", 2)
 	if got := playableKana(gs); !equalIDs(got, []string{"あい", "あお"}) {
 		t.Fatalf("playable = %v, want [あい あお]: いえ needs え, うえ is not introduced, the level does not gate", got)
 	}
@@ -273,7 +264,7 @@ func TestPlayableWordsAreIntroducedAndKnown(t *testing.T) {
 func TestIntroducedWordsKeepFallingAfterLevelOrSourceChange(t *testing.T) {
 	gs := newTestState()
 	withWords(gs, bw("あい", 5, "love"), bw("あお", 3, "blue"))
-	secure(gs, "あ", "い", "お")
+	learnKana(gs, "あ", "い", "お")
 	gs.wordLevel = 2
 	gs.wordSource = listSourcePrefix + "mine"
 	gs.invalidatePlayable()
@@ -285,7 +276,7 @@ func TestIntroducedWordsKeepFallingAfterLevelOrSourceChange(t *testing.T) {
 func TestPrivateListWordsNeedIntroduction(t *testing.T) {
 	gs := newTestState()
 	gs.words = vocab.NewIndex(nil, []vocab.List{{Name: "mine", Words: []vocab.Word{{Kana: "あお", Source: "mine", Meanings: vocab.Meanings{}}}}})
-	secure(gs, "あ", "お")
+	learnKana(gs, "あ", "お")
 	if got := playableKana(gs); len(got) != 0 {
 		t.Fatalf("playable before the intro = %v", got)
 	}
@@ -299,7 +290,7 @@ func TestPrivateListWordsNeedIntroduction(t *testing.T) {
 func TestIntroducedLoadFailureMeansNoWords(t *testing.T) {
 	gs := newTestState()
 	withWords(gs, bw("あい", 5, "love"))
-	secure(gs, "あ", "い")
+	learnKana(gs, "あ", "い")
 	gs.introducedLoadFailed = true
 	gs.invalidatePlayable()
 	if got := playableKana(gs); len(got) != 0 {
@@ -424,7 +415,7 @@ func TestWordsStatusLine(t *testing.T) {
 		[]vocab.List{{Name: "minna-no-nihongo", Words: []vocab.Word{{Kana: "あい", Source: "minna-no-nihongo", Meanings: vocab.Meanings{}}}}},
 	)
 	gs.listNames = []string{"minna-no-nihongo"}
-	secure(gs, "あ", "い", "お")
+	learnKana(gs, "あ", "い", "お")
 	gs.introduced = map[string]bool{"あい": true, "gone": true}
 	gs.wordOverallStats["あい"] = store.WordStats{Kana: "あい", CorrectCount: 3}
 	line := func() string { return formatWordsLine(gs.wordsStatus()) }
@@ -466,8 +457,8 @@ func TestNoWordIndexMeansNoWords(t *testing.T) {
 func TestPlayableRefreshesWhenKanaBecomesSecure(t *testing.T) {
 	gs := newTestState()
 	withWords(gs, bw("あい", 5, "love"))
-	secure(gs, "あ")
-	gs.overallStats["い"] = store.KanaStats{Char: "い", CorrectCount: 2}
+	learnKana(gs, "あ")
+	setKanaLevel(gs, "い", 4)
 	if got := playableKana(gs); len(got) != 0 {
 		t.Fatalf("playable before い is secure = %v", got)
 	}
@@ -481,7 +472,7 @@ func TestKatakanaWordStopsWhenKatakanaTurnsOff(t *testing.T) {
 	gs := newTestState()
 	gs.activeScripts[kanacore.ScriptKatakana] = true
 	withWords(gs, bw("アイ", 5, "eye"))
-	secure(gs, "ア", "イ")
+	learnKana(gs, "ア", "イ")
 	if got := playableKana(gs); !equalIDs(got, []string{"アイ"}) {
 		t.Fatalf("playable with katakana = %v", got)
 	}
@@ -542,7 +533,7 @@ func TestMeaningLangFollowsSystemUnlessStored(t *testing.T) {
 func TestPlayableRefreshesWhenKatakanaOfferIsAccepted(t *testing.T) {
 	gs := newTestState() // hiragana only
 	withWords(gs, bw("アイ", 5, "eye"))
-	secure(gs, "ア", "イ")
+	learnKana(gs, "ア", "イ")
 	if got := playableKana(gs); len(got) != 0 {
 		t.Fatalf("playable before katakana = %v", got)
 	}
@@ -555,11 +546,14 @@ func TestPlayableRefreshesWhenKatakanaOfferIsAccepted(t *testing.T) {
 func TestResetRebuildsPlayable(t *testing.T) {
 	gs := newTestState()
 	withWords(gs, bw("あい", 5, "love"))
-	secure(gs, "あ", "い")
+	learnKana(gs, "あ", "い")
 	if got := playableKana(gs); !equalIDs(got, []string{"あい"}) {
 		t.Fatalf("playable before Reset = %v", got)
 	}
-	gs.Reset() // no store: the stored stats reload as empty
+	// Change a level behind the cache's back; Reset must not serve the
+	// stale cache.
+	gs.kanaProgress["い"] = store.Progress{Level: learnedLevel - 1}
+	gs.Reset()
 	if got := playableKana(gs); len(got) != 0 {
 		t.Fatalf("playable after Reset = %v, want none (cache not rebuilt?)", got)
 	}
@@ -590,7 +584,7 @@ func TestDropInactiveTilesRemovesUnplayableWords(t *testing.T) {
 	gs := newTestState()
 	gs.activeScripts[kanacore.ScriptKatakana] = true
 	withWords(gs, bw("アイ", 5, "eye"), bw("あい", 5, "love"))
-	secure(gs, "ア", "イ", "あ", "い")
+	learnKana(gs, "ア", "イ", "あ", "い")
 	gs.tiles = []*KanaTile{wordTileAt(gs, "アイ", 0), wordTileAt(gs, "あい", 0), tileAt("あ", "a", 0)}
 	gs.applySettings([]string{"vowels", "kata:vowels"}, []kanacore.Script{kanacore.ScriptHiragana}, false, 0, LevelNormal, pointsAuto)
 	if len(gs.tiles) != 2 || gs.tiles[0].word == nil || gs.tiles[0].word.Kana != "あい" || gs.tiles[1].word != nil {
@@ -750,7 +744,7 @@ func TestWordShareOfSpawns(t *testing.T) {
 	if n := countWordSpawns(gs, 200); n != 0 {
 		t.Fatalf("%d words spawned while no vowel is secure", n)
 	}
-	secure(gs, "あ", "い", "う", "え", "お")
+	learnKana(gs, "あ", "い", "う", "え", "お")
 	if n := countWordSpawns(gs, 1000); n < 70 || n > 130 {
 		t.Fatalf("%d/1000 word spawns with 60 playable, want about 100 (the 10 %% cap)", n)
 	}
@@ -761,7 +755,7 @@ func TestFewPlayableWordsSpawnRarely(t *testing.T) {
 	selectRows(gs, "vowels")
 	gs.rnd = rand.New(rand.NewSource(3)).Float64
 	withWords(gs, vowelWords(5)...)
-	secure(gs, "あ", "い", "う", "え", "お")
+	learnKana(gs, "あ", "い", "う", "え", "お")
 	if n := countWordSpawns(gs, 1000); n < 25 || n > 80 {
 		t.Fatalf("%d/1000 word spawns with 5 playable, want about 50", n)
 	}
@@ -773,7 +767,7 @@ func TestWordSpawnFallTimeAndPlacement(t *testing.T) {
 	gs.rnd = func() float64 { return 0 } // always a word, always the first new candidate
 	gs.canvasW = 150
 	withWords(gs, bw("あおい", 5, "blue"))
-	secure(gs, "あ", "お", "い")
+	learnKana(gs, "あ", "お", "い")
 	for i := 0; i < 30; i++ {
 		gs.tiles = nil
 		gs.spawnKana()
@@ -795,7 +789,7 @@ func TestWordSpawnAvoidsFallingWords(t *testing.T) {
 	selectRows(gs, "vowels")
 	gs.rnd = func() float64 { return 0 }
 	withWords(gs, bw("あい", 5, "love"), bw("あお", 5, "blue"))
-	secure(gs, "あ", "い", "お")
+	learnKana(gs, "あ", "い", "お")
 	gs.tiles = []*KanaTile{wordTileAt(gs, "あい", 0)}
 	gs.spawnKana()
 	if got := gs.tiles[1].word; got == nil || got.Kana != "あお" {
@@ -923,7 +917,7 @@ func TestResetClearsFeedback(t *testing.T) {
 func TestSnapshotWordsStatus(t *testing.T) {
 	gs := newTestState()
 	withWords(gs, bw("あい", 5, "love"), bw("あお", 5, "blue"), bw("いえ", 5, "house"))
-	secure(gs, "あ", "い", "お")
+	learnKana(gs, "あ", "い", "お")
 	gs.wordOverallStats["あい"] = store.WordStats{Kana: "あい", CorrectCount: 2}
 	gs.wordSessionStats["あい"] = store.WordStats{Kana: "あい", CorrectCount: 1}
 	snap := gs.snapshot()
@@ -970,7 +964,7 @@ func TestApplySettingsKeepsPlayableCacheUnlessScriptsChange(t *testing.T) {
 	gs := newTestState()
 	selectRows(gs, "vowels")
 	withWords(gs, bw("あい", 5, "love"))
-	secure(gs, "あ", "い")
+	learnKana(gs, "あ", "い")
 	cached := gs.playableWords()
 	if len(cached) != 1 {
 		t.Fatalf("playable = %v, want [あい]", cached)
@@ -991,7 +985,7 @@ func TestApplySettingsKeepsPlayableCacheUnlessScriptsChange(t *testing.T) {
 func TestSpawnFallsBackToWordWithoutKana(t *testing.T) {
 	gs := newTestState()
 	withWords(gs, bw("あい", 5, "love"))
-	secure(gs, "あ", "い")
+	learnKana(gs, "あ", "い")
 	gs.playableWords() // cached while hiragana is active
 	gs.activeScripts = map[kanacore.Script]bool{}
 	if chars := gs.availableCharacters(); len(chars) != 0 {

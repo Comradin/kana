@@ -101,17 +101,17 @@ func gridColumns() *fixedColumns {
 type cellState int
 
 const (
-	cellNew      cellState = iota // never answered correctly
-	cellLearning                  // 1–2 correct
-	cellMastered                  // 3 or more correct
+	cellNew      cellState = iota // level 0
+	cellLearning                  // level 1–4
+	cellMastered                  // level 5 (learned)
 )
 
-// stateFor maps a total correct count to a cell state.
-func stateFor(correct int) cellState {
+// stateFor maps a learning level to a cell state.
+func stateFor(level int) cellState {
 	switch {
-	case correct >= 3:
+	case learned(level):
 		return cellMastered
-	case correct > 0:
+	case level > 0:
 		return cellLearning
 	default:
 		return cellNew

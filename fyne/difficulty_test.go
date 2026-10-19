@@ -31,9 +31,9 @@ func TestLevelByName(t *testing.T) {
 }
 
 func TestCharFallFactor(t *testing.T) {
-	for correct, want := range map[int]float32{0: 1.2, 2: 1.0, 3: 0.7, 9: 0.7} {
-		if got := charFallFactor(correct); got != want {
-			t.Errorf("charFallFactor(%d) = %v, want %v", correct, got, want)
+	for level, want := range map[int]float32{0: 1.2, 1: 1.0, 4: 1.0, 5: 0.7} {
+		if got := charFallFactor(level); got != want {
+			t.Errorf("charFallFactor(%d) = %v, want %v", level, got, want)
 		}
 	}
 }
