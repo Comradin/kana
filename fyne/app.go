@@ -176,22 +176,29 @@ func showGameOverDialog(gs *GameState, snap StatsSnapshot, reason string, statsP
 			w.Close()
 			return
 		}
-		gs.Reset()           // closes old stopCh and eventCh; old watcher drains and exits on stale events
-		gs.Start(gameCanvas) // launches new tick/spawn goroutines
-		gs.mu.Lock()
-		ch := gs.eventCh
-		gs.mu.Unlock()
-		go watchEvents(ch, gs, statsPanel, gameCanvas, inputBar, w) // new watcher tied to the new eventCh
-
-		gs.mu.Lock()
-		snap := gs.snapshot()
-		gs.mu.Unlock()
-		statsPanel.Update(snap)
-		inputBar.Update(snap)
-		inputBar.SetPaused(false) // Reset cleared the user pause
-		gameCanvas.Refresh()
-		showPendingDialogs(gs, statsPanel, inputBar, w)
+		restartRound(gs, statsPanel, gameCanvas, inputBar, w)
 	}, w)
+}
+
+// restartRound starts a new round: Reset, new game goroutines and event
+// watcher, refreshed panel and input bar, then whatever dialog is pending.
+// Play Again and the progress reset use it.
+func restartRound(gs *GameState, statsPanel *StatsPanel, gameCanvas *GameCanvas, inputBar *InputBar, w fyne.Window) {
+	gs.Reset()           // closes old stopCh and eventCh; old watcher drains and exits on stale events
+	gs.Start(gameCanvas) // launches new tick/spawn goroutines
+	gs.mu.Lock()
+	ch := gs.eventCh
+	gs.mu.Unlock()
+	go watchEvents(ch, gs, statsPanel, gameCanvas, inputBar, w) // new watcher tied to the new eventCh
+
+	gs.mu.Lock()
+	snap := gs.snapshot()
+	gs.mu.Unlock()
+	statsPanel.Update(snap)
+	inputBar.Update(snap)
+	inputBar.SetPaused(false) // Reset cleared the user pause
+	gameCanvas.Refresh()
+	showPendingDialogs(gs, statsPanel, inputBar, w)
 }
 
 // missedLines are the game-over dialog's lines about missed tiles: the

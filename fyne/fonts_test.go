@@ -153,7 +153,7 @@ func TestKanaFontSetting(t *testing.T) {
 		t.Fatalf("default font = %q, want noto", id)
 	}
 	gs := NewGameState(st)
-	f := newSettingsForm(gs.settingsState())
+	f := newSettingsForm(gs.settingsState(), nil)
 	if f.kanaFont.Selected != "Noto Sans JP" || len(f.kanaFont.Options) != 3 {
 		t.Fatalf("font options %v, selected %q", f.kanaFont.Options, f.kanaFont.Selected)
 	}
@@ -172,7 +172,7 @@ func TestKanaFontSetting(t *testing.T) {
 
 func TestGameTabPreviewsEachFont(t *testing.T) {
 	test.NewApp()
-	f := newSettingsForm(newTestState().settingsState())
+	f := newSettingsForm(newTestState().settingsState(), nil)
 	f.tabs.Select(f.gameTab)
 	sources := map[fyne.Resource]bool{}
 	previews := 0
