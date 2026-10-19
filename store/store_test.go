@@ -406,3 +406,32 @@ func TestProgressSeededOnceFromStats(t *testing.T) {
 		t.Fatalf("re-open must not seed again: %v", kana)
 	}
 }
+
+func TestResetKana(t *testing.T) {
+	st := openTemp(t)
+	now := time.Now()
+	for _, c := range []string{"か", "カ"} {
+		_ = st.SaveKanaStats(c, 3, 1, 2)
+		_ = st.SaveMemoryState("kana:"+c, memory.State{Stability: 1, LastSeen: now})
+		_ = st.SaveProgress("kana:"+c, Progress{Level: 5})
+	}
+	_ = st.SaveWordStats("か", 1, 0)
+	_ = st.SaveMemoryState("word:か", memory.State{Stability: 1, LastSeen: now})
+	_ = st.SaveProgress("word:か", Progress{Level: 1})
+
+	if err := st.ResetKana([]string{"か", "き"}); err != nil {
+		t.Fatal(err)
+	}
+	stats, _ := st.KanaStatistics()
+	kmem, _ := st.MemoryStates("kana:")
+	kprog, _ := st.Progress("kana:")
+	if _, ok := stats["か"]; ok || len(stats) != 1 || len(kmem) != 1 || len(kprog) != 1 {
+		t.Fatalf("か must be gone, カ kept: stats %v memory %v progress %v", stats, kmem, kprog)
+	}
+	words, _ := st.WordStatistics()
+	wmem, _ := st.MemoryStates("word:")
+	wprog, _ := st.Progress("word:")
+	if len(words) != 1 || len(wmem) != 1 || len(wprog) != 1 {
+		t.Fatal("the word か is not the character か: word data stays")
+	}
+}
