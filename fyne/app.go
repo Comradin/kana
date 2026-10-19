@@ -42,13 +42,7 @@ func buildWindow(a fyne.App, st *store.Store) fyne.Window {
 	// right away without reaching for the mouse.
 	w.Canvas().Focus(inputBar.entry)
 
-	// Esc pauses when nothing has focus; the focused entry handles it itself.
-	// Behind a dialog, Esc is left alone so the dialog keeps the keyboard.
-	w.Canvas().SetOnTypedKey(func(key *fyne.KeyEvent) {
-		if key.Name == fyne.KeyEscape && w.Canvas().Overlays().Top() == nil {
-			inputBar.TogglePause()
-		}
-	})
+	w.Canvas().SetOnTypedKey(func(key *fyne.KeyEvent) { windowKey(key, w, inputBar) })
 
 	// Initial stats render
 	gs.mu.Lock()
@@ -95,6 +89,23 @@ func buildWindow(a fyne.App, st *store.Store) fyne.Window {
 	})
 
 	return w
+}
+
+// windowKey handles a key that reaches the window because nothing has
+// focus. Esc pauses; the focused entry handles it itself, and behind a
+// dialog Esc is left alone so the dialog keeps the keyboard. Enter closes a
+// kana or word intro, so the learner need not reach for the mouse.
+func windowKey(key *fyne.KeyEvent, w fyne.Window, inputBar *InputBar) {
+	switch key.Name {
+	case fyne.KeyEscape:
+		if w.Canvas().Overlays().Top() == nil {
+			inputBar.TogglePause()
+		}
+	case fyne.KeyReturn, fyne.KeyEnter:
+		if enterConfirms != nil {
+			enterConfirms()
+		}
+	}
 }
 
 // watchEvents drains a single game's event channel. ch is captured by the

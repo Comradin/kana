@@ -2,6 +2,7 @@ package main
 
 import (
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"fyne.io/fyne/v2"
@@ -23,6 +24,26 @@ const (
 // Fyne-thread-only: read and written exclusively from code that runs via
 // fyne.Do or a Fyne callback, so it needs no lock.
 var dialogShowing bool
+
+// enterConfirms closes the intro dialog that is showing, as its button
+// does; nil while none is. An Enter within enterGrace of the dialog opening
+// is ignored: it was meant as an answer, typed just before the dialog came
+// up. Fyne-thread-only, like dialogShowing.
+var enterConfirms func()
+
+const enterGrace = 400 * time.Millisecond
+
+// confirmOnEnter lets Enter close d (see enterConfirms). Call it when d is
+// shown and clear enterConfirms when d closes.
+func confirmOnEnter(d dialog.Dialog) {
+	ready := time.Now().Add(enterGrace)
+	enterConfirms = func() {
+		if time.Now().Before(ready) {
+			return
+		}
+		d.Hide()
+	}
+}
 
 // showPendingDialogs shows whatever the game is waiting for, one dialog at a
 // time: a kana intro, the katakana offer, a word package, the level offer.
@@ -85,11 +106,13 @@ func showIntroDialog(gs *GameState, rowIDs []string, statsPanel *StatsPanel, inp
 		// A custom dialog has no response callback; SetOnClosed is the first
 		// callback that runs on close.
 		dialogShowing = false
+		enterConfirms = nil
 		gs.FinishIntro()
 		continueAfterDialog(gs, statsPanel, inputBar, w)
 	})
 	dialogShowing = true
 	d.Show()
+	confirmOnEnter(d)
 }
 
 // showKatakanaOffer asks once whether to add katakana. Call it through
