@@ -345,3 +345,64 @@ func TestWordPackageSettings(t *testing.T) {
 		t.Fatalf("NewestPackage after saving nil = %v, want nil", p)
 	}
 }
+
+func TestProgressRoundTrip(t *testing.T) {
+	st := openTemp(t)
+	if got, err := st.Progress("kana:"); err != nil || len(got) != 0 {
+		t.Fatalf("empty store: %v, %v", got, err)
+	}
+	_ = st.SaveProgress("kana:か", Progress{Level: 3, Flagged: true})
+	_ = st.SaveProgress("kana:か", Progress{Level: 4, Flagged: true})
+	_ = st.SaveProgress("word:ねこ", Progress{Level: 5})
+	kana, err := st.Progress("kana:")
+	if err != nil || len(kana) != 1 || kana["か"] != (Progress{Level: 4, Flagged: true}) {
+		t.Fatalf("kana = %v, %v", kana, err)
+	}
+	if words, _ := st.Progress("word:"); words["ねこ"] != (Progress{Level: 5}) || len(words) != 1 {
+		t.Fatalf("words = %v", words)
+	}
+}
+
+func TestProgressSeededOnceFromStats(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "old.db")
+	st, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A database from before learning levels: stats, but no progress table.
+	_ = st.SaveKanaStats("か", 3, 4, 0)
+	_ = st.SaveKanaStats("き", 2, 1, 0)
+	_ = st.SaveKanaStats("く", 0, 2, 0)
+	_ = st.SaveKanaStats("け", 9, 0, 9)
+	_ = st.SaveWordStats("ねこ", 4, 1)
+	_ = st.SaveWordStats("いぬ", 1, 3)
+	if _, err := st.db.Exec(`DROP TABLE progress`); err != nil {
+		t.Fatal(err)
+	}
+	_ = st.Close()
+
+	st, err = Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	kana, _ := st.Progress("kana:")
+	want := map[string]Progress{"か": {Level: 5}, "き": {Level: 2}, "け": {Level: 5}}
+	if !reflect.DeepEqual(kana, want) {
+		t.Fatalf("kana = %v, want %v (no flags, nothing for 0 correct)", kana, want)
+	}
+	words, _ := st.Progress("word:")
+	if want := map[string]Progress{"ねこ": {Level: 5}, "いぬ": {Level: 1}}; !reflect.DeepEqual(words, want) {
+		t.Fatalf("words = %v, want %v", words, want)
+	}
+	_ = st.SaveKanaStats("こ", 5, 0, 5)
+	_ = st.Close()
+
+	st, err = Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	if kana, _ := st.Progress("kana:"); len(kana) != 3 {
+		t.Fatalf("re-open must not seed again: %v", kana)
+	}
+}
