@@ -668,8 +668,7 @@ func (gs *GameState) checkAnswer(input string) {
 		}
 		gs.maybeOfferPackage()
 		gs.buildSnapshot()
-	}
-	if !matched {
+	} else {
 		gs.wrongInput(input)
 	}
 	canvas := gs.canvas
@@ -824,9 +823,9 @@ func (gs *GameState) lowerTempo() {
 // mergeSessionStats writes (baseline + session) to store for kana and words.
 // Memory and progress are saved first, so a failing stats read cannot lose
 // them. The kana and word merges are independent: each has its own baseline
-// read and early return, so a skipped or failed one never skips the other. A failed merge
-// stays dirty for a later retry, but Reset discards it, for kana and words
-// alike. Must be called under lock.
+// read and early return, so a skipped or failed one never skips the other.
+// A failed merge stays dirty for a later retry, but Reset discards it, for
+// kana and words alike. Must be called under lock.
 func (gs *GameState) mergeSessionStats() {
 	gs.saveIntroducedDirty()
 	if gs.newestPackageDirty {
@@ -1207,10 +1206,16 @@ func (gs *GameState) announceRows(ids []string) {
 // is pending, the learner has paused or the settings dialog is open. It is the
 // only place that unpauses. Must be called under lock.
 func (gs *GameState) settle() {
-	if gs.paused && len(gs.pendingIntro) == 0 && !gs.pendingOffer && len(gs.pendingPackage) == 0 && !gs.pendingLevelOffer &&
-		!gs.userPaused && !gs.settingsOpen {
+	if gs.paused && !gs.dialogPending() && !gs.userPaused && !gs.settingsOpen {
 		gs.paused = false
 	}
+}
+
+// dialogPending reports whether a dialog the game waits for is pending: a
+// kana intro, the katakana offer, a word package or the level offer. Must
+// be called under lock.
+func (gs *GameState) dialogPending() bool {
+	return len(gs.pendingIntro) > 0 || gs.pendingOffer || len(gs.pendingPackage) > 0 || gs.pendingLevelOffer
 }
 
 // TogglePause flips the learner's pause and returns whether it is now on.

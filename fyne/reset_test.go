@@ -11,7 +11,7 @@ import (
 )
 
 // resetGame returns a game on a store with both scripts active, a few rows
-// of each selected and every kana of them learned, flagged on か and カ.
+// of each selected and every kana of them learned, か flagged.
 func resetGame(t *testing.T) (*GameState, *store.Store) {
 	t.Helper()
 	test.NewApp()

@@ -325,8 +325,9 @@ func showSettingsDialog(gs *GameState, statsPanel *StatsPanel, gameCanvas *GameC
 					dialog.ShowError(err, win)
 					return
 				}
-				// Reset clears settingsOpen, so closed() is not called;
-				// unsaved changes in the other tabs are dropped, as with Cancel.
+				// closed() is skipped: Reset clears settingsOpen and
+				// restartRound shows pending dialogs; unsaved changes in
+				// the other tabs are dropped, as with Cancel.
 				d.Hide()
 				restartRound(gs, statsPanel, gameCanvas, inputBar, win)
 			}, win)
