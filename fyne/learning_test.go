@@ -89,10 +89,55 @@ func TestLevelRisesBeforeAutoProgression(t *testing.T) {
 	learnKana(gs, "あ", "い", "う")
 	setKanaLevel(gs, "え", 4)
 	gs.recordCorrect("え") // the hit that reaches 5 completes 80 % of the row
-	// After Task A3 isRowMastered reads levels; until then this test only
-	// checks the level. Task A3 extends it to expect the unlock.
 	if gs.kanaProgress["え"].Level != 5 {
 		t.Fatal("level must rise in recordCorrect")
+	}
+	if !gs.selectedRows["k"] || !equalIDs(gs.pendingIntro, []string{"k", "s"}) {
+		t.Fatalf("the hit that learns え must unlock the k/s step: rows %v, pending %v", gs.selectedRows, gs.pendingIntro)
+	}
+}
+
+func TestRowsStayUnlockedAfterALearnedKanaDrops(t *testing.T) {
+	test.NewApp()
+	gs := newTestState()
+	gs.autoProgress = true
+	selectRows(gs, "vowels", "k")
+	learnKana(gs, "あ", "い", "う", "え", "お")
+	gs.recordMiss("あ")
+	if !gs.selectedRows["k"] {
+		t.Fatal("unlocked rows stay when a kana drops below 5")
+	}
+}
+
+func TestWordPausesWhileItsKanaIsBelowLearned(t *testing.T) {
+	gs := newTestState()
+	withWords(gs, bw("あい", 5, "love"))
+	learnKana(gs, "あ", "い")
+	if got := playableKana(gs); !equalIDs(got, []string{"あい"}) {
+		t.Fatalf("playable = %v", got)
+	}
+	gs.recordMiss("あ")
+	if got := playableKana(gs); len(got) != 0 {
+		t.Fatalf("あ dropped to 3: playable = %v, want none", got)
+	}
+	gs.recordCorrect("あ")
+	gs.recordCorrect("あ")
+	if got := playableKana(gs); !equalIDs(got, []string{"あい"}) {
+		t.Fatalf("あ learned again: playable = %v", got)
+	}
+}
+
+func TestFallingWordKeepsFallingWhenItsKanaDrops(t *testing.T) {
+	test.NewApp()
+	gs := newTestState()
+	withWords(gs, bw("あい", 5, "love"))
+	learnKana(gs, "あ", "い")
+	word := wordTileAt(gs, "あい", 100)
+	gs.tiles = []*KanaTile{word}
+	gs.recordMiss("あ")
+	gs.tick()
+	if len(gs.tiles) != 1 || gs.tiles[0] != word {
+		t.Fatal("a word already falling keeps falling; only new spawns stop")
 	}
 }
 

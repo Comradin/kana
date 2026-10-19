@@ -138,7 +138,7 @@ func (gs *GameState) loadWords() {
 }
 
 // unitKnown reports whether a word unit is known in mixed mode: the kana is
-// secure and its script is active. っ and ッ need their script, ー either
+// learned and its script is active. っ and ッ need their script, ー either
 // script. Must be called under lock.
 func (gs *GameState) unitKnown(unit string) bool {
 	switch unit {
@@ -153,7 +153,7 @@ func (gs *GameState) unitKnown(unit string) bool {
 	if !ok || !gs.activeScripts[kanacore.ScriptOf(rowID)] {
 		return false
 	}
-	return gs.overallStats[unit].CorrectCount+gs.sessionStats[unit].CorrectCount >= secureCorrect
+	return learned(gs.kanaLevel(unit))
 }
 
 // unitsKnown reports whether every unit of a word is known. Must be called

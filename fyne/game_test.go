@@ -207,10 +207,8 @@ func TestSpawnKeepsWideTilesInsideCanvas(t *testing.T) {
 func TestIsRowMastered(t *testing.T) {
 	gs := newTestState()
 	row := kanacore.AllKanaRows[0] // vowels
-	// Give 3 correct answers to 4 out of 5 characters (80%)
-	for _, char := range row.Characters()[:4] {
-		gs.overallStats[char] = store.KanaStats{Char: char, CorrectCount: 3}
-	}
+	// Learn 4 out of 5 characters (80%)
+	learnKana(gs, row.Characters()[:4]...)
 	if !gs.isRowMastered(row) {
 		t.Error("expected row to be mastered at 80% threshold")
 	}
@@ -219,9 +217,7 @@ func TestIsRowMastered(t *testing.T) {
 func masterRows(gs *GameState, ids ...string) {
 	for _, id := range ids {
 		row, _ := kanacore.RowByID(id)
-		for _, char := range row.Characters() {
-			gs.overallStats[char] = store.KanaStats{Char: char, CorrectCount: 3}
-		}
+		learnKana(gs, row.Characters()...)
 	}
 }
 

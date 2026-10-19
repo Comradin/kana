@@ -78,9 +78,10 @@ func pointsLabel(p int) string {
 	return fmt.Sprintf("×%d", p)
 }
 
-// charFallFactor gives new characters more time and mastered ones less.
-func charFallFactor(correct int) float32 {
-	switch stateFor(correct) {
+// charFallFactor takes a learning level: new characters get more time,
+// learned ones less.
+func charFallFactor(level int) float32 {
+	switch stateFor(level) {
 	case cellMastered:
 		return 0.7
 	case cellLearning:

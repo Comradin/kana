@@ -601,8 +601,7 @@ func (gs *GameState) spawnKana() {
 		char := memory.Pick(gs.spawnCandidates(chars), gs.memory, gs.now(), gs.rnd)
 		romaji, _ := gs.charSet.GetRomaji(char)
 		tile = newKanaTile(kanacore.Kana{Char: char, Romaji: romaji}, gs.kanaFont)
-		correct := gs.overallStats[char].CorrectCount + gs.sessionStats[char].CorrectCount
-		tile.fallSeconds = base * charFallFactor(correct) * tempoFactor(gs.tempoStep)
+		tile.fallSeconds = base * charFallFactor(gs.kanaLevel(char)) * tempoFactor(gs.tempoStep)
 	}
 
 	maxX := gs.canvasW - tile.Width()
@@ -712,8 +711,9 @@ func (gs *GameState) endGame(reason string) {
 	}
 }
 
-// recordCorrect updates session stats only. Must be called under lock.
-// Reports whether it announced newly unlocked rows.
+// recordCorrect records a hit on a character: session stats, memory, level
+// and tempo, then auto-progression. Reports whether it announced newly
+// unlocked rows. Must be called under lock.
 func (gs *GameState) recordCorrect(char string) bool {
 	streak := gs.currentStreak[char] + 1
 	gs.currentStreak[char] = streak
@@ -724,9 +724,6 @@ func (gs *GameState) recordCorrect(char string) bool {
 	stat.Streak = streak
 	gs.sessionStats[char] = stat
 	gs.sessionDirty = true
-	if gs.overallStats[char].CorrectCount+stat.CorrectCount == secureCorrect {
-		gs.invalidatePlayable() // the kana just became secure
-	}
 
 	prev, known := gs.memory[char]
 	gs.memory[char] = memory.Correct(prev, known, gs.now())
@@ -850,11 +847,8 @@ func (gs *GameState) mergeKanaStats() {
 		delete(gs.sessionStats, char)
 	}
 
-	// overallStats now holds the stored baseline plus the session. It
-	// equals the old overall + session unless another process changed the
-	// stored stats, which can make a kana (un)secure; the cache is cheap to
-	// rebuild, so it is cleared for that case.
-	gs.invalidatePlayable()
+	// Whether a kana is learned depends on its level, not on these stats,
+	// so the playable cache stays valid.
 	gs.sessionDirty = false
 }
 
@@ -1144,8 +1138,8 @@ func (gs *GameState) prunePendingIntro() {
 	gs.pendingIntro = pruned
 }
 
-// isRowMastered returns true when at least 80% of the row's characters have a
-// combined (overall+session) correct count of 3 or more.
+// isRowMastered returns true when at least 80 % of the row's characters are
+// learned (level 5). Must be called under lock.
 func (gs *GameState) isRowMastered(row kanacore.KanaRow) bool {
 	chars := row.Characters()
 	if len(chars) == 0 {
@@ -1154,8 +1148,7 @@ func (gs *GameState) isRowMastered(row kanacore.KanaRow) bool {
 
 	masteredCount := 0
 	for _, char := range chars {
-		total := gs.overallStats[char].CorrectCount + gs.sessionStats[char].CorrectCount
-		if total >= 3 {
+		if learned(gs.kanaLevel(char)) {
 			masteredCount++
 		}
 	}
