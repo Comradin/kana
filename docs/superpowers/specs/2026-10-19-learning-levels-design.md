@@ -24,7 +24,7 @@ and let the learner start a script over.
 | Which wrong inputs count? | Only with exactly one tile on the field: that tile gets the mistake. With several tiles a wrong input has no effect, as today. |
 | Mistakes on words | Count for the word only, not for its kana (which kana was misread is unknown). |
 | What drops when a learned item falls below 5? | Unlocked rows and the katakana offer stay. A word with a kana below 5 pauses (does not fall) until the kana is learned again. |
-| Migration | Items with ≥ 3 correct start at level 5, others at their correct count (0–2). Nothing the learner sees changes on update. |
+| Migration | Items with ≥ 3 correct start at level 5, others at their correct count (0–2). No item starts flagged (old miss counts say nothing about recent trouble), so the panel looks the same after the update. |
 | Status panel | Three colours stay: level 0 new, 1–4 learning (yellow), 5 learned (green). No level dots for now (the panel is full). The red frame shows a persistent flag: set on every mistake, cleared on reaching level 5. |
 | Fall speed | By the same three bands: level 0 slow (×1.2), 1–4 normal, 5 fast (×0.7). |
 | "Already known" (word packages) | Sets the word to level 5 and clears its flag. |
@@ -67,7 +67,7 @@ the table and seeds it:
 
 - from `kana_stats` as `kana:<char>`, from `word_stats` as `word:<kana>`;
 - `level = 5` if `correct_count >= 3`, else `correct_count`;
-- `flagged = miss_count > 0 AND level < 5`.
+- `flagged = 0` for every row (see Decisions).
 
 Items without a stats row have no progress row; a missing row means level 0,
 not flagged.
@@ -155,10 +155,13 @@ game-over dialog.
 
 ## Error handling
 
-- Migration: one transaction; on error the app starts without the table being
-  created and the next start retries (as for memory and introduced words).
+- Migration: one transaction; on error `store.Open` fails and the app does
+  not start; the next start retries (as for memory and introduced words).
 - Progress load failure: levels of that kind are treated as 0 for the session
   and not written back, so stored levels are never overwritten by fresh ones.
+  The session is degraded and that is accepted: no word is playable, no row
+  counts as mastered, kana fall slowly, and "Already known" lasts only until
+  exit.
 - Progress save failure: stays dirty, retried on the next merge.
 - Reset failure: nothing in memory changes; the error is shown.
 
@@ -182,6 +185,62 @@ game-over dialog.
   step with its intro; words with the script's kana pause; confirmation
   dialog: Cancel changes nothing, Reset closes the settings and restarts the
   round; a failing store leaves everything as it was.
+
+## Review resolutions
+
+These resolve the spec review of 2026-10-19 and take precedence over the
+sections above where they differ.
+
+1. **Restart helper.** The restart after Play Again is inline in
+   `showGameOverDialog` (`Reset`, `Start`, a new `watchEvents`, panel and
+   input-bar updates, `SetPaused(false)`, `showPendingDialogs`). It moves into
+   `restartRound(gs, statsPanel, gameCanvas, inputBar, win)`, used by Play
+   Again and by the reset. The reset sequence is: `ResetScript`, then hide the
+   settings dialog without its `closed()` handler (`Reset` clears
+   `settingsOpen`), then `restartRound`.
+2. **No reset with a dialog pending or after game over.** `Reset` drops pending
+   offers, and the katakana offer is saved as made, so it would be lost.
+   `ResetScript` returns `errResetBusy` and changes nothing while
+   `PendingDialogs()` is not empty or the game is over; the settings show
+   "Finish the open dialog first." Tests cover both refusals.
+3. **Inactive script.** Resetting a script that is not active deletes its
+   data, deselects all its rows and queues no intro. When the script is turned
+   on later, the existing paths select its first step (`enableKatakanaLocked`
+   with its intro; `applySettings` for hiragana). Tested for katakana.
+4. **Pending intro.** Rows are changed through `setSelectedRowsLocked`, which
+   prunes a pending intro of rows no longer selected; the first step is then
+   **appended** to `pendingIntro`, so a pending intro of the other script
+   survives. `Reset` pauses through `len(pendingIntro) > 0` as today.
+5. **Mistake helpers.** `applyKanaMistake(char)` and `applyWordMistake(kana)`
+   hold the shared part: session miss count, streak reset, memory `Miss` (when
+   known), level −2, flag, playable-cache invalidation. `recordMiss` and
+   `recordWordMiss` call them and add `lowerTempo`; the wrong-input case calls
+   only the helpers. A wrong input resets the item's streak.
+6. **Late Enter.** A wrong input is ignored (no mistake) when it answers a tile
+   that fell through within the last 1.5 s: the game keeps the last fallen
+   tile and the time it fell. Tested.
+7. **Test fixtures.** About 70 test sites build "learned" state through
+   correct counts. A helper `gs.setLevel(item, n)` (kana and words) replaces
+   them; rewriting the fixtures is its own plan task.
+8. **Remaining old-rule sites.** `markKnown` seeds memory with
+   `memory.Seed(knownSeed, now)`, `const knownSeed = 3` (unchanged
+   behaviour). The snapshot's `TotalCorrect` is replaced for the grid by
+   `Levels map[string]int` and `Flagged map[string]bool`; `spawnKana` reads
+   the level for `charFallFactor`.
+9. **Order in `recordCorrect`.** The level rises before `checkAutoProgression`
+   and `maybeOfferKatakana` run, so the hit that reaches 5 can unlock.
+10. **Pausing words.** A word tile already falling keeps falling when one of
+    its kana drops below 5; only new spawns stop.
+11. **Wrong input while paused or over** does nothing, as `checkAnswer`
+    already returns early. Tested.
+12. **Labels.** The status legend says "learned" and "slipped" instead of
+    "mastered" and "missed"; the Words lines say "learned" instead of
+    "secure".
+13. **Settings wiring.** `newSettingsForm` gets an `onReset func(kanacore.Script)
+    error` callback; tests pass a fake.
+14. **Plan shape.** One plan, two parts on one branch: (A) levels (store,
+    migration, game state, old-rule sites, wrong input, panel, fixtures), then
+    (B) reset (`ResetKana`, `ResetScript`, `restartRound`, settings UI).
 
 ## Later
 
