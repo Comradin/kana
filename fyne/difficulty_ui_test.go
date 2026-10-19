@@ -30,3 +30,19 @@ func TestLevelAndPointsSettingsMapping(t *testing.T) {
 		t.Fatal("pointsFromLabel maps labels to settings")
 	}
 }
+
+func TestInputBarKeepsItsWidthAsTheScoreGrows(t *testing.T) {
+	test.NewApp()
+	gs := newTestState()
+	ib := newInputBar(gs, newStatsPanel(), newGameCanvas(gs), test.NewWindow(nil))
+	widths := func() (float32, float32) {
+		return ib.scoreBox.MinSize().Width, ib.missedBox.MinSize().Width
+	}
+	ib.Update(gs.snapshot())
+	score0, missed0 := widths()
+	gs.score, gs.missed = 12340, 4
+	ib.Update(gs.snapshot())
+	if score, missed := widths(); score != score0 || missed != missed0 {
+		t.Fatalf("widths %v/%v → %v/%v, want the status to keep its width", score0, missed0, score, missed)
+	}
+}
