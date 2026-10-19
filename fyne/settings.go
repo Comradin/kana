@@ -75,10 +75,14 @@ type settingsForm struct {
 	limitEntry *widget.Entry
 	kanaFont   *widget.RadioGroup
 	limit      int // the score limit the dialog started with
+
+	onReset func(kanacore.Script) // a reset button was clicked; may be nil
 }
 
-func newSettingsForm(st settingsState) *settingsForm {
-	f := &settingsForm{limit: st.limit}
+// newSettingsForm builds the tabs from st; onReset is called with the script
+// whose reset button is clicked.
+func newSettingsForm(st settingsState, onReset func(kanacore.Script)) *settingsForm {
+	f := &settingsForm{limit: st.limit, onReset: onReset}
 	f.kanaTab = container.NewTabItem("Kana", f.newKanaTab(st))
 	f.wordsTab = container.NewTabItem("Words", f.newWordsTab(st))
 	f.gameTab = container.NewTabItem("Game", f.newGameTab(st))
@@ -120,7 +124,27 @@ func (f *settingsForm) newKanaTab(st settingsState) fyne.CanvasObject {
 
 	f.autoCheck = widget.NewCheck("Enable auto-progression", nil)
 	f.autoCheck.SetChecked(st.auto)
-	return container.NewVBox(scriptRow, rowTabs, widget.NewSeparator(), f.autoCheck)
+
+	resets := container.NewHBox()
+	for _, info := range kanacore.Scripts() {
+		s := info.Script
+		resets.Add(widget.NewButton("Reset "+strings.ToLower(info.Label)+" progress…", func() {
+			if f.onReset != nil {
+				f.onReset(s)
+			}
+		}))
+	}
+	return container.NewVBox(scriptRow, rowTabs, widget.NewSeparator(), f.autoCheck, resets)
+}
+
+// scriptLabel is the display name of a script ("Hiragana").
+func scriptLabel(s kanacore.Script) string {
+	for _, info := range kanacore.Scripts() {
+		if info.Script == s {
+			return info.Label
+		}
+	}
+	return string(s)
 }
 
 // newWordsTab holds where new words come from, the JLPT level (for JLPT
@@ -284,12 +308,37 @@ func (f *settingsForm) apply(gs *GameState) {
 		levelFromLabel(f.difficulty.Selected), pointsFromLabel(f.points.Selected))
 }
 
+// showSettingsDialog opens the settings, pausing the game while they are
+// open. A script's reset asks for confirmation, then closes the settings and
+// restarts the round.
 func showSettingsDialog(gs *GameState, statsPanel *StatsPanel, gameCanvas *GameCanvas, inputBar *InputBar, win fyne.Window) {
-	form := newSettingsForm(gs.settingsState())
+	var d *dialog.CustomDialog
+	onReset := func(s kanacore.Script) {
+		name := strings.ToLower(scriptLabel(s))
+		c := dialog.NewConfirm("Reset "+name+" progress",
+			"Delete the statistics and learning state of all "+name+"? This cannot be undone.",
+			func(ok bool) {
+				if !ok {
+					return
+				}
+				if err := gs.ResetScript(s); err != nil {
+					dialog.ShowError(err, win)
+					return
+				}
+				// Reset clears settingsOpen, so closed() is not called;
+				// unsaved changes in the other tabs are dropped, as with Cancel.
+				d.Hide()
+				restartRound(gs, statsPanel, gameCanvas, inputBar, win)
+			}, win)
+		c.SetConfirmText("Reset")
+		c.SetDismissText("Cancel")
+		c.Show()
+	}
+	form := newSettingsForm(gs.settingsState(), onReset)
 	gs.SetSettingsOpen(true)
 	gameCanvas.Refresh()
 
-	d := dialog.NewCustomWithoutButtons("Settings", form.tabs, win)
+	d = dialog.NewCustomWithoutButtons("Settings", form.tabs, win)
 	// closed releases the settings pause on every path; showPendingDialogs
 	// then resumes the game or shows whatever is pending.
 	closed := func(save bool) {

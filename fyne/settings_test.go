@@ -199,7 +199,7 @@ func tabTexts(f *settingsForm) []string {
 
 func TestSettingsFormCarriesValues(t *testing.T) {
 	test.NewApp()
-	f := newSettingsForm(settingsGame().settingsState())
+	f := newSettingsForm(settingsGame().settingsState(), nil)
 	if got := tabTexts(f); !equalIDs(got, []string{"Kana", "Words", "Game", "Sources"}) {
 		t.Fatalf("tabs = %v", got)
 	}
@@ -231,7 +231,7 @@ func TestSettingsFormMissingList(t *testing.T) {
 	test.NewApp()
 	gs := settingsGame()
 	gs.listNames = nil
-	f := newSettingsForm(gs.settingsState())
+	f := newSettingsForm(gs.settingsState(), nil)
 	if !equalIDs(f.sourceSelect.Options, []string{"minna no nihongo", "JLPT"}) || f.wordSource() != "list:minna-no-nihongo" {
 		t.Fatalf("a missing list stays selected: options %v, source %q", f.sourceSelect.Options, f.wordSource())
 	}
@@ -242,7 +242,7 @@ func TestSettingsFormMissingList(t *testing.T) {
 
 func TestSettingsValidationSwitchesToTheTab(t *testing.T) {
 	test.NewApp()
-	f := newSettingsForm(settingsGame().settingsState())
+	f := newSettingsForm(settingsGame().settingsState(), nil)
 	if err := f.validate(); err != nil {
 		t.Fatalf("valid form: %v", err)
 	}
@@ -260,7 +260,7 @@ func TestSettingsApplySavesEveryTab(t *testing.T) {
 	test.NewApp()
 	gs := settingsGame()
 	gs.newestPackage = []string{"あい"}
-	f := newSettingsForm(gs.settingsState())
+	f := newSettingsForm(gs.settingsState(), nil)
 	f.sourceSelect.SetSelected("JLPT")
 	f.wordLevel.SetSelected("N3")
 	f.packageSize.SetSelected("3")
@@ -347,5 +347,104 @@ func TestSettingsDialogSaveAndInvalidValue(t *testing.T) {
 	test.Tap(buttonIn(settings, "Save"))
 	if gs.settingsOpen || gs.scoreLimit != 300 || w.Canvas().Overlays().Top() != nil {
 		t.Fatalf("after Save: open %v, limit %d", gs.settingsOpen, gs.scoreLimit)
+	}
+}
+
+func TestKanaTabHasResetButtons(t *testing.T) {
+	test.NewApp()
+	var asked []kanacore.Script
+	f := newSettingsForm(settingsGame().settingsState(), func(s kanacore.Script) { asked = append(asked, s) })
+	for _, label := range []string{"Reset hiragana progress…", "Reset katakana progress…"} {
+		b := buttonIn(f.kanaTab.Content, label)
+		if b == nil {
+			t.Fatalf("no %q button", label)
+		}
+		test.Tap(b)
+	}
+	if len(asked) != 2 || asked[0] != kanacore.ScriptHiragana || asked[1] != kanacore.ScriptKatakana {
+		t.Fatalf("onReset called with %v", asked)
+	}
+}
+
+func TestKanaTabResetToleratesNilHandler(t *testing.T) {
+	test.NewApp()
+	f := newSettingsForm(settingsGame().settingsState(), nil)
+	test.Tap(buttonIn(f.kanaTab.Content, "Reset hiragana progress…")) // must not panic
+}
+
+func TestSettingsResetConfirmation(t *testing.T) {
+	test.NewApp()
+	defer test.NewApp()
+	defer func() { dialogShowing = false }() // the vowels intro stays open
+	w := test.NewWindow(nil)
+	defer w.Close()
+	w.Resize(fyne.NewSize(1000, 760))
+	gs := settingsGame()
+	learnKana(gs, "あ", "い")
+	statsPanel := newStatsPanel()
+	gameCanvas := newGameCanvas(gs)
+	ib := newInputBar(gs, statsPanel, gameCanvas, w)
+	defer gs.Stop()
+
+	showSettingsDialog(gs, statsPanel, gameCanvas, ib, w)
+	settings := w.Canvas().Overlays().Top()
+	test.Tap(buttonIn(settings, "Reset hiragana progress…"))
+	confirm := w.Canvas().Overlays().Top()
+	if confirm == settings || buttonIn(confirm, "Cancel") == nil {
+		t.Fatal("no confirmation dialog")
+	}
+	test.Tap(buttonIn(confirm, "Cancel"))
+	if gs.kanaProgress["あ"].Level != 5 || w.Canvas().Overlays().Top() != settings {
+		t.Fatal("Cancel changes nothing and keeps the settings open")
+	}
+
+	test.Tap(buttonIn(settings, "Reset hiragana progress…"))
+	test.Tap(buttonIn(w.Canvas().Overlays().Top(), "Reset"))
+	gs.mu.Lock()
+	level, open, over, paused := gs.kanaProgress["あ"].Level, gs.settingsOpen, gs.over, gs.paused
+	intro := append([]string(nil), gs.pendingIntro...)
+	gs.mu.Unlock()
+	if level != 0 || open || over || !equalIDs(intro, []string{"vowels"}) {
+		t.Fatalf("after Reset: level %d, settings open %v, over %v, intro %v", level, open, over, intro)
+	}
+	if !paused || !dialogShowing {
+		t.Fatalf("after Reset the game waits for the intro: paused %v, intro shown %v", paused, dialogShowing)
+	}
+	// The settings dialog is gone; the vowels intro (shown by restartRound) may be on top.
+	for _, o := range w.Canvas().Overlays().List() {
+		if o == settings {
+			t.Fatal("the settings dialog must close after a reset")
+		}
+	}
+}
+
+func TestSettingsResetBusyShowsTheReason(t *testing.T) {
+	test.NewApp()
+	defer test.NewApp()
+	w := test.NewWindow(nil)
+	defer w.Close()
+	w.Resize(fyne.NewSize(1000, 760))
+	gs := settingsGame()
+	gs.pendingOffer = true
+	statsPanel := newStatsPanel()
+	gameCanvas := newGameCanvas(gs)
+	ib := newInputBar(gs, statsPanel, gameCanvas, w)
+
+	showSettingsDialog(gs, statsPanel, gameCanvas, ib, w)
+	settings := w.Canvas().Overlays().Top()
+	test.Tap(buttonIn(settings, "Reset hiragana progress…"))
+	test.Tap(buttonIn(w.Canvas().Overlays().Top(), "Reset"))
+	top := w.Canvas().Overlays().Top()
+	if len(w.Canvas().Overlays().List()) != 2 || !gs.settingsOpen {
+		t.Fatal("want the settings still open with an error dialog on top")
+	}
+	shown := false
+	for _, o := range test.LaidOutObjects(top) {
+		if l, ok := o.(*widget.Label); ok && strings.Contains(l.Text, "Finish the open dialog first.") {
+			shown = true
+		}
+	}
+	if !shown {
+		t.Fatal("the error dialog must name the reason")
 	}
 }
