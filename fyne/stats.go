@@ -50,7 +50,8 @@ type StatsSnapshot struct {
 	ScoreLimit    int
 	Missed        int
 	ActiveScripts map[kanacore.Script]bool
-	TotalCorrect  map[string]int
+	Levels        map[string]int  // learning level per character
+	Flagged       map[string]bool // characters that slipped since they were last learned
 	Paths         map[kanacore.Script]PathStatus
 
 	LevelLabel string
@@ -278,7 +279,7 @@ func newStatsPanel() *StatsPanel {
 		label string
 		st    cellState
 		miss  bool
-	}{{"new", cellNew, false}, {"learning", cellLearning, false}, {"mastered", cellMastered, false}, {"missed", cellNew, true}} {
+	}{{"new", cellNew, false}, {"learning", cellLearning, false}, {"learned", cellMastered, false}, {"slipped", cellNew, true}} {
 		sw := newKanaCell("")
 		sw.set(item.st, item.miss)
 		t := smallText(item.label, 11)
@@ -381,12 +382,8 @@ func (p *StatsPanel) Update(snap StatsSnapshot) {
 		}
 	}
 
-	missed := map[string]bool{}
-	for _, k := range snap.MissedKanas {
-		missed[k.Char] = true
-	}
 	for char, cell := range p.cells {
-		cell.set(stateFor(snap.TotalCorrect[char]), missed[char])
+		cell.set(stateFor(snap.Levels[char]), snap.Flagged[char])
 	}
 
 	for _, g := range kanacore.GroupsFor(kanacore.ScriptHiragana) {

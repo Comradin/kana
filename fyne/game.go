@@ -1396,6 +1396,16 @@ func (gs *GameState) snapshot() StatsSnapshot {
 			paths[info.Script] = gs.pathStatus(info.Script)
 		}
 	}
+	levelsCopy := make(map[string]int)
+	flaggedCopy := make(map[string]bool)
+	for char, p := range gs.kanaProgress {
+		if p.Level > 0 {
+			levelsCopy[char] = p.Level
+		}
+		if p.Flagged {
+			flaggedCopy[char] = true
+		}
+	}
 	return StatsSnapshot{
 		SessionStats:  sessionCopy,
 		SelectedRows:  rowsCopy,
@@ -1405,7 +1415,8 @@ func (gs *GameState) snapshot() StatsSnapshot {
 		ScoreLimit:    gs.scoreLimit,
 		Missed:        gs.missed,
 		ActiveScripts: scriptsCopy,
-		TotalCorrect:  gs.totalCorrect(),
+		Levels:        levelsCopy,
+		Flagged:       flaggedCopy,
 		Paths:         paths,
 		LevelLabel:    gs.level.Label,
 		Tempo:         1 / tempoFactor(gs.tempoStep),

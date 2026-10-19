@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/test"
 	"kana/kanacore"
 	"kana/store"
@@ -14,7 +15,8 @@ func panelSnap(selected []string, scripts []kanacore.Script) StatsSnapshot {
 		SessionStats:  map[string]store.KanaStats{},
 		SelectedRows:  map[string]bool{},
 		ActiveScripts: map[kanacore.Script]bool{},
-		TotalCorrect:  map[string]int{},
+		Levels:        map[string]int{},
+		Flagged:       map[string]bool{},
 		Paths:         map[kanacore.Script]PathStatus{},
 	}
 	for _, id := range selected {
@@ -41,19 +43,45 @@ func TestPanelRowHalves(t *testing.T) {
 	}
 }
 
-func TestPanelCellStatesAndMissed(t *testing.T) {
+func TestPanelCellStatesAndFlags(t *testing.T) {
 	test.NewApp()
 	p := newStatsPanel()
 	snap := panelSnap([]string{"k", "n"}, both)
-	snap.TotalCorrect["き"] = 2
-	snap.TotalCorrect["く"] = 5
-	snap.MissedKanas = []kanacore.Kana{{Char: "ぬ", Romaji: "nu"}}
+	snap.Levels["き"] = 2
+	snap.Levels["く"] = 5
+	snap.Levels["け"] = 4
+	snap.Flagged["ぬ"] = true
+	snap.MissedKanas = []kanacore.Kana{{Char: "な", Romaji: "na"}}
 	p.Update(snap)
-	if p.cells["か"].state != cellNew || p.cells["き"].state != cellLearning || p.cells["く"].state != cellMastered {
-		t.Fatal("cell states must follow TotalCorrect")
+	if p.cells["か"].state != cellNew || p.cells["き"].state != cellLearning ||
+		p.cells["け"].state != cellLearning || p.cells["く"].state != cellMastered {
+		t.Fatal("cell states must follow Levels")
 	}
-	if !p.cells["ぬ"].missed || p.cells["な"].missed {
-		t.Fatal("only ぬ carries the missed border")
+	if !p.cells["ぬ"].flagged {
+		t.Fatal("flagged ぬ must carry the red frame")
+	}
+	if p.cells["な"].flagged {
+		t.Fatal("な was missed this session but is not flagged: no frame")
+	}
+}
+
+func TestPanelLegend(t *testing.T) {
+	test.NewApp()
+	p := newStatsPanel()
+	p.Update(panelSnap([]string{"k"}, both))
+	texts := map[string]bool{}
+	for _, o := range test.LaidOutObjects(p) {
+		if txt, ok := o.(*canvas.Text); ok {
+			texts[txt.Text] = true
+		}
+	}
+	for _, want := range []string{"new", "learning", "learned", "slipped"} {
+		if !texts[want] {
+			t.Errorf("legend lacks %q", want)
+		}
+	}
+	if texts["mastered"] {
+		t.Error("legend still says \"mastered\"")
 	}
 }
 

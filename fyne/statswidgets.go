@@ -124,7 +124,7 @@ type kanaCell struct {
 	bg      *canvas.Rectangle
 	text    *canvas.Text
 	state   cellState
-	missed  bool
+	flagged bool
 	painted bool // false until the first set call, which must always paint
 }
 
@@ -148,14 +148,15 @@ func (c *kanaCell) MinSize() fyne.Size {
 	return fyne.NewSize(cellW, cellH)
 }
 
-// set applies a learning state and the missed-this-session border. It is a
-// no-op when neither has changed since the last call, so Update doesn't
-// repaint every cell on every tick; the first call always paints.
-func (c *kanaCell) set(state cellState, missed bool) {
-	if c.painted && state == c.state && missed == c.missed {
+// set applies a learning state and the red frame of a character that
+// slipped. It is a no-op when neither has changed since the last call, so
+// Update doesn't repaint every cell on every tick; the first call always
+// paints.
+func (c *kanaCell) set(state cellState, flagged bool) {
+	if c.painted && state == c.state && flagged == c.flagged {
 		return
 	}
-	c.state, c.missed, c.painted = state, missed, true
+	c.state, c.flagged, c.painted = state, flagged, true
 	switch state {
 	case cellMastered:
 		c.bg.FillColor, c.text.Color = cellMasteredColor, color.White
@@ -168,7 +169,7 @@ func (c *kanaCell) set(state cellState, missed bool) {
 	if state != cellNew {
 		c.bg.StrokeWidth = 0
 	}
-	if missed {
+	if flagged {
 		c.bg.StrokeColor, c.bg.StrokeWidth = cellMissedColor, 2
 	}
 	c.bg.Refresh()

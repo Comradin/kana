@@ -176,3 +176,20 @@ func TestProgressNotWrittenWhenLoadFailed(t *testing.T) {
 		t.Fatalf("stored progress overwritten: %+v", p["か"])
 	}
 }
+
+func TestFlagShownAfterRestart(t *testing.T) {
+	test.NewApp()
+	st := openTestStore(t)
+	gs := NewGameState(st)
+	gs.mu.Lock()
+	gs.recordMiss("か")
+	gs.mergeSessionStats()
+	gs.mu.Unlock()
+	again := NewGameState(st)
+	again.mu.Lock()
+	snap := again.snapshot()
+	again.mu.Unlock()
+	if !snap.Flagged["か"] {
+		t.Fatal("the red frame must survive a restart")
+	}
+}
