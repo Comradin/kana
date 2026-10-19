@@ -854,3 +854,29 @@ func (s *Store) SaveProgress(item string, p Progress) error {
 	}
 	return nil
 }
+
+// ResetKana deletes the stats, memory and learning progress of the given
+// characters in one transaction; on error nothing is deleted. Word data is
+// not touched.
+func (s *Store) ResetKana(chars []string) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("store: begin kana reset: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	for _, c := range chars {
+		for _, q := range []string{
+			`DELETE FROM kana_stats WHERE char = ?`,
+			`DELETE FROM memory WHERE item = 'kana:' || ?`,
+			`DELETE FROM progress WHERE item = 'kana:' || ?`,
+		} {
+			if _, err := tx.Exec(q, c); err != nil {
+				return fmt.Errorf("store: reset kana %s: %w", c, err)
+			}
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("store: commit kana reset: %w", err)
+	}
+	return nil
+}
