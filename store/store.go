@@ -68,6 +68,13 @@ type WordStats struct {
 	MissCount    int
 }
 
+// Progress is an item's learning level (0–5, learned at 5) and whether it
+// slipped since it was last learned.
+type Progress struct {
+	Level   int
+	Flagged bool
+}
+
 // Open initialises the SQLite database located at path and applies migrations.
 func Open(path string) (*Store, error) {
 	if path == "" {
@@ -639,7 +646,10 @@ func migrate(ctx context.Context, db *sql.DB) error {
 	if err := ensureMemory(ctx, db, now); err != nil {
 		return err
 	}
-	return ensureIntroduced(ctx, db, now)
+	if err := ensureIntroduced(ctx, db, now); err != nil {
+		return err
+	}
+	return ensureProgress(ctx, db)
 }
 
 // ensureIntroduced creates the introduced_words table if it is missing and,
@@ -676,6 +686,47 @@ func ensureIntroduced(ctx context.Context, db *sql.DB, now time.Time) error {
 		SELECT substr(item, 6), ? FROM memory WHERE substr(item, 1, 5) = 'word:'
 	`, now.Unix(), now.Unix()); err != nil {
 		return fmt.Errorf("store: seed introduced words: %w", err)
+	}
+	return tx.Commit()
+}
+
+// ensureProgress creates the progress table if it is missing and, in the
+// same transaction, seeds it from the stats: three or more correct answers
+// (the old "secure") give level 5, fewer give their count; nothing starts
+// flagged. If anything fails nothing is committed and the next open tries
+// again.
+func ensureProgress(ctx context.Context, db *sql.DB) error {
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("store: begin progress migration: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var name string
+	err = tx.QueryRowContext(ctx, `SELECT name FROM sqlite_master WHERE type='table' AND name='progress'`).Scan(&name)
+	if err == nil {
+		return tx.Commit()
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return fmt.Errorf("store: check progress table: %w", err)
+	}
+
+	if _, err := tx.ExecContext(ctx, `CREATE TABLE progress (
+		item TEXT PRIMARY KEY,
+		level INTEGER NOT NULL,
+		flagged INTEGER NOT NULL
+	)`); err != nil {
+		return fmt.Errorf("store: create progress table: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO progress (item, level, flagged)
+		SELECT 'kana:' || char, CASE WHEN correct_count >= 3 THEN 5 ELSE correct_count END, 0
+		FROM kana_stats WHERE correct_count > 0
+		UNION ALL
+		SELECT 'word:' || kana, CASE WHEN correct_count >= 3 THEN 5 ELSE correct_count END, 0
+		FROM word_stats WHERE correct_count > 0
+	`); err != nil {
+		return fmt.Errorf("store: seed progress: %w", err)
 	}
 	return tx.Commit()
 }
@@ -768,6 +819,38 @@ func (s *Store) SaveMemoryState(item string, st memory.State) error {
 	`, item, st.Stability, st.LastSeen.Unix())
 	if err != nil {
 		return fmt.Errorf("store: save memory %s: %w", item, err)
+	}
+	return nil
+}
+
+// Progress returns the learning progress of all items starting with prefix,
+// keyed by the rest of the item ID. Items without a row are at level 0.
+func (s *Store) Progress(prefix string) (map[string]Progress, error) {
+	rows, err := s.db.Query(`SELECT item, level, flagged FROM progress WHERE substr(item, 1, length(?)) = ?`, prefix, prefix)
+	if err != nil {
+		return nil, fmt.Errorf("store: query progress: %w", err)
+	}
+	defer rows.Close()
+	out := make(map[string]Progress)
+	for rows.Next() {
+		var item string
+		var p Progress
+		if err := rows.Scan(&item, &p.Level, &p.Flagged); err != nil {
+			return nil, fmt.Errorf("store: scan progress: %w", err)
+		}
+		out[strings.TrimPrefix(item, prefix)] = p
+	}
+	return out, rows.Err()
+}
+
+// SaveProgress stores one item's learning progress.
+func (s *Store) SaveProgress(item string, p Progress) error {
+	_, err := s.db.Exec(`
+		INSERT INTO progress (item, level, flagged) VALUES (?, ?, ?)
+		ON CONFLICT(item) DO UPDATE SET level = excluded.level, flagged = excluded.flagged
+	`, item, p.Level, p.Flagged)
+	if err != nil {
+		return fmt.Errorf("store: save progress %s: %w", item, err)
 	}
 	return nil
 }
