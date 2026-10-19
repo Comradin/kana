@@ -25,14 +25,15 @@ func (gs *GameState) recordWordCorrect(kana string) {
 	prev, known := gs.wordMemory[kana]
 	gs.wordMemory[kana] = memory.Correct(prev, known, gs.now())
 	gs.wordMemoryDirty[kana] = true
+	gs.raiseWord(kana)
 
 	gs.raiseTempo()
 }
 
-// recordWordMiss records a word that fell through: word session stats, word
-// memory (only if the word has a state) and the tempo. Must be called under
-// lock.
-func (gs *GameState) recordWordMiss(kana string) {
+// applyWordMistake records a mistake on a word: session miss, word memory
+// miss (if known), level down and flag. Its kana are not touched. Must be
+// called under lock.
+func (gs *GameState) applyWordMistake(kana string) {
 	stat := gs.wordSessionStats[kana]
 	stat.Kana = kana
 	stat.MissCount++
@@ -43,7 +44,13 @@ func (gs *GameState) recordWordMiss(kana string) {
 		gs.wordMemory[kana] = memory.Miss(prev, gs.now())
 		gs.wordMemoryDirty[kana] = true
 	}
+	gs.lowerWord(kana)
+}
 
+// recordWordMiss records a word that fell through: a mistake plus the
+// tempo. Must be called under lock.
+func (gs *GameState) recordWordMiss(kana string) {
+	gs.applyWordMistake(kana)
 	gs.lowerTempo()
 }
 
