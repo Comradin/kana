@@ -53,12 +53,17 @@ func TestSnapshotPathsOnlyForActiveScripts(t *testing.T) {
 	}
 }
 
-func TestSnapshotTotalCorrectAddsStoredAndSession(t *testing.T) {
+func TestSnapshotLevelsAndFlags(t *testing.T) {
 	gs := newTestState()
-	gs.overallStats["か"] = store.KanaStats{Char: "か", CorrectCount: 2}
-	gs.sessionStats["か"] = store.KanaStats{Char: "か", CorrectCount: 1}
-	if got := gs.snapshot().TotalCorrect["か"]; got != 3 {
-		t.Fatalf("TotalCorrect[か] = %d, want 3", got)
+	gs.kanaProgress["か"] = store.Progress{Level: 3, Flagged: true}
+	snap := gs.snapshot()
+	if snap.Levels["か"] != 3 || !snap.Flagged["か"] {
+		t.Fatalf("Levels[か] = %d, Flagged[か] = %v, want 3 true", snap.Levels["か"], snap.Flagged["か"])
+	}
+	gs.kanaProgress["か"] = store.Progress{Level: 5}
+	gs.kanaProgress["き"] = store.Progress{Level: 1, Flagged: true}
+	if snap.Levels["か"] != 3 || !snap.Flagged["か"] || snap.Levels["き"] != 0 || snap.Flagged["き"] {
+		t.Fatal("the snapshot maps must be copies")
 	}
 }
 

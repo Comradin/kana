@@ -48,16 +48,3 @@ func (gs *GameState) pathStatus(s kanacore.Script) PathStatus {
 	ps.Next = gs.nextStepRows(s)
 	return ps
 }
-
-// totalCorrect returns stored plus session correct answers per character.
-// Must be called under lock.
-func (gs *GameState) totalCorrect() map[string]int {
-	total := make(map[string]int, len(gs.overallStats))
-	for char, st := range gs.overallStats {
-		total[char] += st.CorrectCount
-	}
-	for char, st := range gs.sessionStats {
-		total[char] += st.CorrectCount
-	}
-	return total
-}
