@@ -183,11 +183,13 @@ func showWordPackageDialog(gs *GameState, statsPanel *StatsPanel, inputBar *Inpu
 	d := dialog.NewCustom(intro.Title, "Let's go", scroll, w)
 	d.SetOnClosed(func() {
 		dialogShowing = false
+		enterConfirms = nil
 		gs.FinishPackage(view.known())
 		continueAfterDialog(gs, statsPanel, inputBar, w)
 	})
 	dialogShowing = true
 	d.Show()
+	confirmOnEnter(d)
 }
 
 // levelOfferText asks whether to continue with the next JLPT level.

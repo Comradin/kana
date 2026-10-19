@@ -2,6 +2,7 @@ package main
 
 import (
 	"testing"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/test"
@@ -186,5 +187,45 @@ func TestLevelOfferDialog(t *testing.T) {
 	test.NewApp()
 	if got := levelOfferText(5); got != "N5 finished — continue with N4?" {
 		t.Fatalf("text = %q", got)
+	}
+}
+
+func TestEnterClosesTheIntroDialogs(t *testing.T) {
+	test.NewApp()
+	defer test.NewApp()
+	w := test.NewWindow(nil)
+	defer w.Close()
+	w.Resize(fyne.NewSize(1000, 760))
+	gs := packageReady(20)
+	gs.pendingIntro = []string{"k"}
+	gs.paused = true
+	statsPanel := newStatsPanel()
+	ib := newInputBar(gs, statsPanel, newGameCanvas(gs), w)
+	enter := &fyne.KeyEvent{Name: fyne.KeyReturn}
+
+	showPendingDialogs(gs, statsPanel, ib, w)
+	if len(gs.pendingIntro) == 0 || enterConfirms == nil {
+		t.Fatal("the kana intro is not showing")
+	}
+	windowKey(enter, w, ib) // right after it opened: an answer, not a confirmation
+	if len(gs.pendingIntro) == 0 {
+		t.Fatal("an Enter right after the dialog opened must not close it")
+	}
+	time.Sleep(enterGrace)
+	windowKey(enter, w, ib)
+	if len(gs.pendingIntro) != 0 {
+		t.Fatal("Enter must close the kana intro")
+	}
+
+	gs.maybeOfferPackage()
+	drainEvents(gs)
+	showPendingDialogs(gs, statsPanel, ib, w)
+	if len(gs.pendingPackage) == 0 || enterConfirms == nil {
+		t.Fatal("the word package dialog is not showing")
+	}
+	time.Sleep(enterGrace)
+	windowKey(enter, w, ib)
+	if len(gs.pendingPackage) != 0 || dialogShowing || enterConfirms != nil {
+		t.Fatalf("Enter must finish the package: pending %v, showing %v", gs.pendingPackage, dialogShowing)
 	}
 }
