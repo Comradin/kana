@@ -22,14 +22,14 @@ func scriptChars(s kanacore.Script) []string {
 
 // ResetScript deletes the stats, memory and learning progress of every
 // character of the script and starts its learning path again: all its rows
-// are deselected and, if the script is active, its first step is selected
-// with its intro queued and auto-progression on. The other script, the
-// katakana offer and all word data stay. Nothing changes on error. The
-// caller restarts the round.
+// are deselected, auto-progression is turned on and, if the script is
+// active, its first step is selected with its intro queued. The other
+// script, the katakana offer and all word data stay. Nothing changes on
+// error. The caller restarts the round.
 func (gs *GameState) ResetScript(s kanacore.Script) error {
 	gs.mu.Lock()
 	defer gs.mu.Unlock()
-	if gs.over || len(gs.pendingIntro) > 0 || gs.pendingOffer || len(gs.pendingPackage) > 0 || gs.pendingLevelOffer {
+	if gs.over || gs.dialogPending() {
 		return errResetBusy
 	}
 	// Merge first, so a later merge of older session data cannot bring
