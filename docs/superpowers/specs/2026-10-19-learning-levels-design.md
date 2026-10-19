@@ -167,8 +167,8 @@ game-over dialog.
 
 ## Testing
 
-- **store:** migration seeding (≥ 3 correct → 5, else the count; flag only
-  with misses below 5; words too), migration skipped when the table exists,
+- **store:** migration seeding (≥ 3 correct → 5, else the count; nothing
+  flagged; words too), migration skipped when the table exists,
   `Progress`/`SaveProgress` round trip, `ResetKana` removes exactly the given
   characters from all three tables and leaves the rest.
 - **levels:** hit +1 capped at 5, mistake −2 floored at 0, flag set on a
