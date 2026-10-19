@@ -9,7 +9,6 @@ import (
 	"fyne.io/fyne/v2/test"
 	"fyne.io/fyne/v2/widget"
 	"kana/kanacore"
-	"kana/store"
 	"kana/vocab"
 )
 
@@ -180,7 +179,7 @@ func settingsGame() *GameState {
 	gs.listNames = []string{"minna-no-nihongo"}
 	gs.wordSource = listSourcePrefix + "minna-no-nihongo"
 	gs.introduced = map[string]bool{"あい": true}
-	gs.wordOverallStats["あい"] = store.WordStats{Kana: "あい", CorrectCount: 3}
+	setWordLevel(gs, "あい", learnedLevel)
 	gs.wordLevel = 4
 	gs.packageSize = 10
 	gs.scoreLimit = 500
@@ -213,7 +212,7 @@ func TestSettingsFormCarriesValues(t *testing.T) {
 	if f.packageSize.Selected != "10" {
 		t.Fatalf("package size = %q", f.packageSize.Selected)
 	}
-	if f.summary.Text != "Introduced: 1 · secure: 1 · left in source: 1" {
+	if f.summary.Text != "Introduced: 1 · learned: 1 · left in source: 1" {
 		t.Fatalf("summary = %q", f.summary.Text)
 	}
 	if f.limitEntry.Text != "500" || f.difficulty.Selected != "Fast" || f.points.Selected != pointsLabel(2) || !f.autoCheck.Checked {

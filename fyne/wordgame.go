@@ -54,12 +54,6 @@ func (gs *GameState) recordWordMiss(kana string) {
 	gs.lowerTempo()
 }
 
-// wordCorrect is a reading's stored plus session correct count. Must be
-// called under lock.
-func (gs *GameState) wordCorrect(kana string) int {
-	return gs.wordOverallStats[kana].CorrectCount + gs.wordSessionStats[kana].CorrectCount
-}
-
 // mergeWordStats writes (baseline + session) word stats, independently of
 // the kana stats. A failed baseline read keeps wordSessionDirty so the next
 // merge retries. Must be called under lock.
@@ -86,9 +80,6 @@ func (gs *GameState) mergeWordStats() {
 		}
 		base := baseline[kana]
 		base.Kana = kana
-		if gs.knownDirty[kana] {
-			base.CorrectCount = max(base.CorrectCount, secureCorrect)
-		}
 		base.CorrectCount += session.CorrectCount
 		base.MissCount += session.MissCount
 		if gs.store != nil {
@@ -98,15 +89,10 @@ func (gs *GameState) mergeWordStats() {
 		}
 		gs.wordOverallStats[kana] = base
 		delete(gs.wordSessionStats, kana)
-		delete(gs.knownDirty, kana)
 	}
 
 	gs.wordSessionDirty = false
 }
-
-// secureCorrect is the correct count at which a kana or word counts as
-// secure (the panel's "mastered").
-const secureCorrect = 3
 
 // loadWords builds the word index: the private lists merged into the
 // bundled index, which is built once per process. A bundled load error is
@@ -191,7 +177,7 @@ func (gs *GameState) playableWords() []vocab.Entry {
 }
 
 // invalidatePlayable marks the playable cache stale. Call it whenever a kana
-// may have become secure, or the active scripts, the introduced words or
+// may have become learned or stopped being learned, or the active scripts, the introduced words or
 // the index changed. Must be called under lock.
 func (gs *GameState) invalidatePlayable() {
 	gs.playableOK = false
@@ -265,21 +251,21 @@ func (gs *GameState) sourceLeft(src vocab.Source) int {
 }
 
 // introducedCounts counts the introduced readings in the word index and
-// those of them that are secure. Must be called under lock.
-func (gs *GameState) introducedCounts() (introduced, secure int) {
+// those of them that are learned. Must be called under lock.
+func (gs *GameState) introducedCounts() (introduced, learnedN int) {
 	for kana := range gs.introduced {
 		if _, ok := gs.words.Lookup(kana); !ok {
 			continue
 		}
 		introduced++
-		if gs.wordCorrect(kana) >= secureCorrect {
-			secure++
+		if gs.wordLearned(kana) {
+			learnedN++
 		}
 	}
-	return introduced, secure
+	return introduced, learnedN
 }
 
-// wordsSummary is the settings' Words tab line: "Introduced: 25 · secure:
+// wordsSummary is the settings' Words tab line: "Introduced: 25 · learned:
 // 18 · left in source: 101", or that the chosen list is missing. Must be
 // called under lock.
 func (gs *GameState) wordsSummary() string {
@@ -290,8 +276,8 @@ func (gs *GameState) wordsSummary() string {
 	if gs.words == nil {
 		return "No words available"
 	}
-	introduced, secure := gs.introducedCounts()
-	return fmt.Sprintf("Introduced: %d · secure: %d · left in source: %d", introduced, secure, gs.sourceLeft(src))
+	introduced, learnedN := gs.introducedCounts()
+	return fmt.Sprintf("Introduced: %d · learned: %d · left in source: %d", introduced, learnedN, gs.sourceLeft(src))
 }
 
 // wordsStatus summarises the words for the status panel. Must be called
@@ -309,7 +295,7 @@ func (gs *GameState) wordsStatus() WordsStatus {
 	if gs.words == nil {
 		return ws
 	}
-	ws.Introduced, ws.Secure = gs.introducedCounts()
+	ws.Introduced, ws.Learned = gs.introducedCounts()
 	if found && !ws.LoadFailed && len(vocab.NextPackage(gs.words, src, gs.introduced, 1, gs.unitKnown)) == 0 {
 		ws.Next = wordsFinished
 		if gs.sourceLeft(src) > 0 {

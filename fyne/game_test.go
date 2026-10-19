@@ -41,7 +41,6 @@ func newTestState() *GameState {
 		meaningLang:       "en",
 		introduced:        map[string]bool{},
 		introducedDirty:   map[string]bool{},
-		knownDirty:        map[string]bool{},
 		packageSize:       5,
 		wordSource:        jlptSource,
 	}

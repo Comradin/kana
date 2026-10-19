@@ -287,9 +287,9 @@ func TestPanelShowsWordsLine(t *testing.T) {
 	test.NewApp()
 	p := newStatsPanel()
 	snap := panelSnap([]string{"vowels"}, both)
-	snap.Words = WordsStatus{Introduced: 42, Secure: 17, Source: "JLPT N5", Level: 5}
+	snap.Words = WordsStatus{Introduced: 42, Learned: 17, Source: "JLPT N5", Level: 5}
 	p.Update(snap)
-	if p.wordsText.Text != "Words: 42 introduced · 17 secure · JLPT N5" {
+	if p.wordsText.Text != "Words: 42 introduced · 17 learned · JLPT N5" {
 		t.Fatalf("words line = %q", p.wordsText.Text)
 	}
 }
@@ -323,9 +323,9 @@ func TestPanelFitsWordsErrorToItsWidth(t *testing.T) {
 		t.Fatalf("words line = %q, want the start kept and an ellipsis", p.wordsText.Text)
 	}
 
-	snap.Words = WordsStatus{Introduced: 42, Secure: 17, Source: "JLPT N5", Level: 5}
+	snap.Words = WordsStatus{Introduced: 42, Learned: 17, Source: "JLPT N5", Level: 5}
 	p.Update(snap)
-	if p.wordsText.TextSize != statsWordsTextSize || p.wordsText.Text != "Words: 42 introduced · 17 secure · JLPT N5" {
+	if p.wordsText.TextSize != statsWordsTextSize || p.wordsText.Text != "Words: 42 introduced · 17 learned · JLPT N5" {
 		t.Fatalf("short line = %q at %v pt, want it whole at %v pt", p.wordsText.Text, p.wordsText.TextSize, statsWordsTextSize)
 	}
 

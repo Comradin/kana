@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"kana/memory"
+	"kana/store"
 	"kana/vocab"
 )
 
@@ -37,21 +38,21 @@ func readingsOf(entries []vocab.Entry) []string {
 
 // newestPackageDone reports whether the newest package is learned well
 // enough for the next one: at least ceil(0.8 × p) of its p readings that
-// are playable now are secure. With none playable (a script switched off,
+// are playable now are learned. With none playable (a script switched off,
 // a list gone) it counts as done. Must be called under lock.
 func (gs *GameState) newestPackageDone() bool {
-	playable, secured := 0, 0
+	playable, learnedN := 0, 0
 	for _, kana := range gs.newestPackage {
 		e, ok := gs.words.Lookup(kana)
 		if !ok || !gs.unitsKnown(e.Units) {
 			continue
 		}
 		playable++
-		if gs.wordCorrect(kana) >= secureCorrect {
-			secured++
+		if gs.wordLearned(kana) {
+			learnedN++
 		}
 	}
-	return playable == 0 || secured*5 >= playable*4
+	return playable == 0 || learnedN*5 >= playable*4
 }
 
 // packageDue returns the next word package if one is due, or reports that
@@ -144,46 +145,21 @@ func (gs *GameState) saveIntroducedDirty() {
 	}
 }
 
-// markKnown records a word the learner already knows as secure: its stored
-// correct count becomes at least secureCorrect, written at once and kept
-// out of the session stats so the session tiles stay honest, and it gets
-// the memory state of three correct answers. No points, no tempo change.
-// A failed save is kept in knownDirty, which mergeSessionStats retries.
-// Must be called under lock.
+// knownSeed is the memory a word ticked as "already known" starts with: the
+// state of three correct answers.
+const knownSeed = 3
+
+// markKnown records a word the learner already knows: it becomes learned
+// (level 5, not flagged), saved at once, and gets the memory state of
+// knownSeed correct answers. Its stats keep their real counts. No points,
+// no tempo change. A failed save stays dirty and mergeSessionStats retries
+// it. Must be called under lock.
 func (gs *GameState) markKnown(kana string, now time.Time) {
-	gs.knownDirty[kana] = true
-	gs.boostKnownDirty()
-	gs.saveKnownDirty()
-	gs.wordMemory[kana] = memory.Seed(secureCorrect, now)
+	gs.wordProgress[kana] = store.Progress{Level: learnedLevel}
+	gs.wordProgressDirty[kana] = true
+	gs.saveProgress()
+	gs.wordMemory[kana] = memory.Seed(knownSeed, now)
 	gs.wordMemoryDirty[kana] = true
-}
-
-// boostKnownDirty raises the overall correct count of every reading in
-// knownDirty to at least secureCorrect, so the boost holds in memory while
-// its save is pending, also after the stats are reloaded. Must be called
-// under lock.
-func (gs *GameState) boostKnownDirty() {
-	for kana := range gs.knownDirty {
-		ws := gs.wordOverallStats[kana]
-		ws.Kana = kana
-		ws.CorrectCount = max(ws.CorrectCount, secureCorrect)
-		gs.wordOverallStats[kana] = ws
-	}
-}
-
-// saveKnownDirty saves the stats of "already known" readings whose save
-// failed. Must be called under lock.
-func (gs *GameState) saveKnownDirty() {
-	gs.boostKnownDirty()
-	for kana := range gs.knownDirty {
-		ws := gs.wordOverallStats[kana]
-		if gs.store != nil {
-			if err := gs.store.SaveWordStats(kana, ws.CorrectCount, ws.MissCount); err != nil {
-				continue
-			}
-		}
-		delete(gs.knownDirty, kana)
-	}
 }
 
 // saveNewestPackage saves the newest package; a failed save sets
@@ -197,7 +173,7 @@ func (gs *GameState) saveNewestPackage() {
 }
 
 // FinishPackage closes the word package intro: every pending reading
-// becomes introduced, the ones in known count as secure, and the others
+// becomes introduced, the ones in known count as learned, and the others
 // form the newest package for the 80 % rule. Both are saved at once. Then
 // the game resumes unless another dialog is due.
 func (gs *GameState) FinishPackage(known []string) {

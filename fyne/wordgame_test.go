@@ -417,10 +417,10 @@ func TestWordsStatusLine(t *testing.T) {
 	gs.listNames = []string{"minna-no-nihongo"}
 	learnKana(gs, "あ", "い", "お")
 	gs.introduced = map[string]bool{"あい": true, "gone": true}
-	gs.wordOverallStats["あい"] = store.WordStats{Kana: "あい", CorrectCount: 3}
+	setWordLevel(gs, "あい", learnedLevel)
 	line := func() string { return formatWordsLine(gs.wordsStatus()) }
 
-	if got := line(); got != "Words: 1 introduced · 1 secure · JLPT N5" {
+	if got := line(); got != "Words: 1 introduced · 1 learned · JLPT N5" {
 		t.Fatalf("counts = %q (a reading missing from the index does not count)", got)
 	}
 	gs.introduced["あお"] = true
@@ -454,17 +454,17 @@ func TestNoWordIndexMeansNoWords(t *testing.T) {
 	}
 }
 
-func TestPlayableRefreshesWhenKanaBecomesSecure(t *testing.T) {
+func TestPlayableRefreshesWhenKanaBecomesLearned(t *testing.T) {
 	gs := newTestState()
 	withWords(gs, bw("あい", 5, "love"))
 	learnKana(gs, "あ")
 	setKanaLevel(gs, "い", 4)
 	if got := playableKana(gs); len(got) != 0 {
-		t.Fatalf("playable before い is secure = %v", got)
+		t.Fatalf("playable before い is learned = %v", got)
 	}
 	gs.recordCorrect("い")
 	if got := playableKana(gs); !equalIDs(got, []string{"あい"}) {
-		t.Fatalf("playable after い is secure = %v", got)
+		t.Fatalf("playable after い is learned = %v", got)
 	}
 }
 
@@ -742,7 +742,7 @@ func TestWordShareOfSpawns(t *testing.T) {
 	gs.rnd = rand.New(rand.NewSource(7)).Float64
 	withWords(gs, vowelWords(60)...)
 	if n := countWordSpawns(gs, 200); n != 0 {
-		t.Fatalf("%d words spawned while no vowel is secure", n)
+		t.Fatalf("%d words spawned while no vowel is learned", n)
 	}
 	learnKana(gs, "あ", "い", "う", "え", "お")
 	if n := countWordSpawns(gs, 1000); n < 70 || n > 130 {
@@ -918,11 +918,11 @@ func TestSnapshotWordsStatus(t *testing.T) {
 	gs := newTestState()
 	withWords(gs, bw("あい", 5, "love"), bw("あお", 5, "blue"), bw("いえ", 5, "house"))
 	learnKana(gs, "あ", "い", "お")
-	gs.wordOverallStats["あい"] = store.WordStats{Kana: "あい", CorrectCount: 2}
+	setWordLevel(gs, "あい", learnedLevel)
 	gs.wordSessionStats["あい"] = store.WordStats{Kana: "あい", CorrectCount: 1}
 	snap := gs.snapshot()
-	if snap.Words != (WordsStatus{Introduced: 3, Secure: 1, Source: "JLPT N5", Level: 5, Next: wordsFinished}) {
-		t.Fatalf("Words = %+v, want 3 introduced, 1 secure, JLPT N5 finished", snap.Words)
+	if snap.Words != (WordsStatus{Introduced: 3, Learned: 1, Source: "JLPT N5", Level: 5, Next: wordsFinished}) {
+		t.Fatalf("Words = %+v, want 3 introduced, 1 learned, JLPT N5 finished", snap.Words)
 	}
 	if snap.WordCorrect != 1 {
 		t.Fatalf("WordCorrect = %d, want the session's 1", snap.WordCorrect)

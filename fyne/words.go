@@ -184,7 +184,7 @@ type WordsStatus struct {
 	Source     string    // "JLPT N5" or a pretty list name
 	Level      int       // the JLPT level of a JLPT source; 0 for a list
 	Introduced int       // introduced readings in the word index
-	Secure     int       // introduced readings with 3 or more correct answers
+	Learned    int       // introduced readings at level 5
 	Next       wordsNext // whether new words can come from the source
 }
 
@@ -208,7 +208,7 @@ func formatWordsLine(ws WordsStatus) string {
 	case ws.Next == wordsFinished:
 		s = "Words: " + ws.Source + " finished"
 	default:
-		s = fmt.Sprintf("Words: %d introduced · %d secure · %s", ws.Introduced, ws.Secure, ws.Source)
+		s = fmt.Sprintf("Words: %d introduced · %d learned · %s", ws.Introduced, ws.Learned, ws.Source)
 	}
 	return truncateRunes(s, maxWordsLineRunes)
 }

@@ -14,7 +14,7 @@ import (
 	"kana/vocab"
 )
 
-// packageReady returns a game with secure vowels and n vowel words (N5),
+// packageReady returns a game with learned vowels and n vowel words (N5),
 // none of them introduced.
 func packageReady(n int) *GameState {
 	gs := newTestState()
@@ -55,7 +55,7 @@ func TestFirstPackageWhenASourceWordIsPlayable(t *testing.T) {
 	gs.words = vocab.NewIndex(vowelWords(12), nil)
 	gs.maybeOfferPackage()
 	if len(gs.pendingPackage) != 0 || gs.paused {
-		t.Fatalf("no secure kana: pending %v, paused %v", gs.pendingPackage, gs.paused)
+		t.Fatalf("no learned kana: pending %v, paused %v", gs.pendingPackage, gs.paused)
 	}
 	learnKana(gs, "あ", "い", "う", "え", "お")
 	gs.maybeOfferPackage()
@@ -71,22 +71,22 @@ func TestFirstPackageWhenASourceWordIsPlayable(t *testing.T) {
 	}
 }
 
-func TestNextPackageAt80PercentSecure(t *testing.T) {
+func TestNextPackageAt80PercentLearned(t *testing.T) {
 	for size, need := range map[int]int{5: 4, 3: 3, 10: 8} {
 		gs := packageReady(40)
 		gs.packageSize = size
 		pkg := introduceFirst(gs, size)
 		for _, kana := range pkg[:need-1] {
-			gs.wordOverallStats[kana] = store.WordStats{Kana: kana, CorrectCount: 3}
+			setWordLevel(gs, kana, learnedLevel)
 		}
 		gs.maybeOfferPackage()
 		if len(gs.pendingPackage) != 0 {
-			t.Fatalf("size %d: offered with %d of %d secure", size, need-1, size)
+			t.Fatalf("size %d: offered with %d of %d learned", size, need-1, size)
 		}
-		gs.wordSessionStats[pkg[need-1]] = store.WordStats{Kana: pkg[need-1], CorrectCount: 3}
+		setWordLevel(gs, pkg[need-1], learnedLevel)
 		gs.maybeOfferPackage()
 		if len(gs.pendingPackage) != size {
-			t.Fatalf("size %d: pending %v with %d secure, want the next %d words", size, gs.pendingPackage, need, size)
+			t.Fatalf("size %d: pending %v with %d learned, want the next %d words", size, gs.pendingPackage, need, size)
 		}
 	}
 }
@@ -102,7 +102,7 @@ func TestPackageRuleCountsOnlyPlayableWords(t *testing.T) {
 	}
 	gs.maybeOfferPackage()
 	if len(gs.pendingPackage) != 0 {
-		t.Fatal("offered while no katakana word of the newest package is secure")
+		t.Fatal("offered while no katakana word of the newest package is learned")
 	}
 	gs.activeScripts = map[kanacore.Script]bool{kanacore.ScriptHiragana: true}
 	gs.invalidatePlayable()
@@ -118,7 +118,7 @@ func TestPackageRuleCountsOnlyPlayableWords(t *testing.T) {
 	for _, kana := range pkg {
 		if e, _ := gs.words.Lookup(kana); gs.unitsKnown(e.Units) {
 			playable++
-			gs.wordOverallStats[kana] = store.WordStats{Kana: kana, CorrectCount: 3}
+			setWordLevel(gs, kana, learnedLevel)
 		}
 	}
 	if playable == 0 || playable == len(pkg) {
@@ -126,7 +126,7 @@ func TestPackageRuleCountsOnlyPlayableWords(t *testing.T) {
 	}
 	gs.maybeOfferPackage()
 	if len(gs.pendingPackage) == 0 {
-		t.Fatal("every playable word of the newest package is secure, so the next package is due")
+		t.Fatal("every playable word of the newest package is learned, so the next package is due")
 	}
 }
 
@@ -190,6 +190,7 @@ func TestFinishPackage(t *testing.T) {
 	gs.now = func() time.Time { return now }
 	gs.words = vocab.NewIndex(vowelWords(30), nil)
 	gs.wordOverallStats["あお"] = store.WordStats{Kana: "あお", CorrectCount: 5, MissCount: 2}
+	gs.wordProgress["あお"] = store.Progress{Level: 2, Flagged: true}
 	gs.pendingPackage = []string{"あい", "あう", "あえ", "あお"}
 	gs.paused = true
 	gs.mu.Unlock()
@@ -216,14 +217,22 @@ func TestFinishPackage(t *testing.T) {
 		t.Fatalf("stored newest_package = %v", np)
 	}
 	words, _ := st.WordStatistics()
-	if w := words["あう"]; w.CorrectCount != 3 || w.MissCount != 0 {
-		t.Fatalf("stored あう = %+v, want 3 correct", w)
+	if w := words["あう"]; w.CorrectCount != 0 || w.MissCount != 0 {
+		t.Fatalf("stored あう = %+v, want no answers: known words get no stats", w)
 	}
 	if w := words["あお"]; w.CorrectCount != 5 || w.MissCount != 2 {
-		t.Fatalf("stored あお = %+v, want its 5/2 kept (max(3, current))", w)
+		t.Fatalf("stored あお = %+v, want its 5/2 kept", w)
 	}
-	if gs.wordCorrect("あう") != 3 {
-		t.Fatalf("wordCorrect(あう) = %d, want 3", gs.wordCorrect("あう"))
+	if ws := gs.wordOverallStats["あう"]; ws.CorrectCount != 0 || ws.MissCount != 0 {
+		t.Fatalf("overall あう = %+v, want no answers", ws)
+	}
+	learnedP := store.Progress{Level: learnedLevel}
+	if gs.wordProgress["あう"] != learnedP || gs.wordProgress["あお"] != learnedP {
+		t.Fatalf("progress あう %+v, あお %+v; want level 5, not flagged", gs.wordProgress["あう"], gs.wordProgress["あお"])
+	}
+	stored, _ := st.Progress("word:")
+	if stored["あう"] != learnedP || stored["あお"] != learnedP || len(gs.wordProgressDirty) != 0 {
+		t.Fatalf("stored progress %+v, dirty %v; want both saved at once", stored, gs.wordProgressDirty)
 	}
 	want := memory.Seed(3, now)
 	if s, ok := gs.wordMemory["あう"]; !ok || math.Abs(s.Stability-want.Stability) > 1e-12 || !s.LastSeen.Equal(now) || !gs.wordMemoryDirty["あう"] {
@@ -359,7 +368,7 @@ func TestResetClearsPendingAndOffersAgain(t *testing.T) {
 	}
 }
 
-func TestRecheckWhenAKanaBecomesSecure(t *testing.T) {
+func TestRecheckWhenAKanaBecomesLearned(t *testing.T) {
 	gs := packageReady(10)
 	setKanaLevel(gs, "あ", learnedLevel-1)
 	setKanaLevel(gs, "い", 0)
@@ -368,7 +377,7 @@ func TestRecheckWhenAKanaBecomesSecure(t *testing.T) {
 	gs.tiles = []*KanaTile{tileAt("あ", "a", 100)}
 	gs.checkAnswer("a")
 	if len(gs.pendingPackage) == 0 || !gs.paused {
-		t.Fatalf("あ became secure: pending %v, want a package of あ/お words", gs.pendingPackage)
+		t.Fatalf("あ became learned: pending %v, want a package of あ/お words", gs.pendingPackage)
 	}
 }
 
@@ -416,7 +425,7 @@ func TestSourceChangeClearsNewestPackage(t *testing.T) {
 	}
 }
 
-// levelDone returns a game whose N5 words are all introduced and secure,
+// levelDone returns a game whose N5 words are all introduced and learned,
 // with N4 words left.
 func levelDone() *GameState {
 	gs := newTestState()
@@ -427,7 +436,7 @@ func levelDone() *GameState {
 	learnKana(gs, "あ", "い", "う", "え", "お")
 	for _, w := range n5 {
 		gs.introduced[w.Kana] = true
-		gs.wordOverallStats[w.Kana] = store.WordStats{Kana: w.Kana, CorrectCount: 3}
+		setWordLevel(gs, w.Kana, learnedLevel)
 	}
 	gs.newestPackage = []string{n5[5].Kana}
 	return gs
@@ -550,7 +559,7 @@ func TestFailedKnownAndNewestSavesAreRetriedByTheMerge(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer db.Close()
-	for _, q := range []string{"ALTER TABLE word_stats RENAME TO hidden_stats", "ALTER TABLE settings RENAME TO hidden_settings"} {
+	for _, q := range []string{"ALTER TABLE progress RENAME TO hidden_progress", "ALTER TABLE settings RENAME TO hidden_settings"} {
 		if _, err := db.Exec(q); err != nil {
 			t.Fatal(err)
 		}
@@ -561,25 +570,26 @@ func TestFailedKnownAndNewestSavesAreRetriedByTheMerge(t *testing.T) {
 	gs.mu.Unlock()
 	gs.FinishPackage([]string{"あう"})
 	gs.mu.Lock()
-	known, newest := gs.knownDirty["あう"], gs.newestPackageDirty
+	known, newest := gs.wordProgressDirty["あう"], gs.newestPackageDirty
 	gs.mergeSessionStats() // still failing: both stay dirty
-	known, newest = known && gs.knownDirty["あう"], newest && gs.newestPackageDirty
+	known, newest = known && gs.wordProgressDirty["あう"], newest && gs.newestPackageDirty
+	level := gs.wordProgress["あう"].Level
 	gs.mu.Unlock()
-	if !known || !newest {
-		t.Fatalf("failed saves must stay dirty: known %v, newest package %v", known, newest)
+	if !known || !newest || level != learnedLevel {
+		t.Fatalf("failed saves must stay dirty: known %v, newest package %v, level %d", known, newest, level)
 	}
-	for _, q := range []string{"ALTER TABLE hidden_stats RENAME TO word_stats", "ALTER TABLE hidden_settings RENAME TO settings"} {
+	for _, q := range []string{"ALTER TABLE hidden_progress RENAME TO progress", "ALTER TABLE hidden_settings RENAME TO settings"} {
 		if _, err := db.Exec(q); err != nil {
 			t.Fatal(err)
 		}
 	}
 	gs.Reset() // merges first, then reloads the word stats from the store
 	gs.mu.Lock()
-	correct, left := gs.wordCorrect("あう"), len(gs.knownDirty)
+	level, left := gs.wordProgress["あう"].Level, len(gs.wordProgressDirty)
 	newest = gs.newestPackageDirty
 	gs.mu.Unlock()
-	if words, _ := st.WordStatistics(); words["あう"].CorrectCount != 3 || correct != 3 || left != 0 {
-		t.Fatalf("after the merge: stored あう %+v, wordCorrect %d, still dirty %d", words["あう"], correct, left)
+	if stored, _ := st.Progress("word:"); stored["あう"].Level != learnedLevel || level != learnedLevel || left != 0 {
+		t.Fatalf("after the merge: stored あう %+v, level %d, still dirty %d", stored["あう"], level, left)
 	}
 	if np, _ := st.NewestPackage(); !equalIDs(np, []string{"あい"}) || newest {
 		t.Fatalf("after the merge: stored newest_package %v, still dirty %v", np, newest)
