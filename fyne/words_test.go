@@ -80,8 +80,8 @@ func TestFormatWordsLine(t *testing.T) {
 		ws   WordsStatus
 		want string
 	}{
-		{"JLPT counts", WordsStatus{Introduced: 25, Secure: 18, Source: "JLPT N5", Level: 5}, "Words: 25 introduced · 18 secure · JLPT N5"},
-		{"list counts", WordsStatus{Introduced: 3, Secure: 1, Source: "minna no nihongo"}, "Words: 3 introduced · 1 secure · minna no nihongo"},
+		{"JLPT counts", WordsStatus{Introduced: 25, Learned: 18, Source: "JLPT N5", Level: 5}, "Words: 25 introduced · 18 learned · JLPT N5"},
+		{"list counts", WordsStatus{Introduced: 3, Learned: 1, Source: "minna no nihongo"}, "Words: 3 introduced · 1 learned · minna no nihongo"},
 		{"load failed", WordsStatus{LoadFailed: true, Err: "broken data", Introduced: 3}, "Words unavailable: could not load progress"},
 		{"bundled error", WordsStatus{Err: "broken data", Introduced: 3, Level: 5}, "Words unavailable: broken data"},
 		{"missing list", WordsStatus{Missing: true, Dir: "~/.local/share/kana/words", Source: "minna"}, "Words: add a list to ~/.local/share/kana/words or choose JLPT"},

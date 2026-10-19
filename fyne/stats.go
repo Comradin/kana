@@ -122,7 +122,7 @@ type StatsPanel struct {
 
 	correctText, missedText, accuracyText *canvas.Text
 
-	wordsText *canvas.Text // "Words: … introduced · … secure · JLPT N5", or a hint
+	wordsText *canvas.Text // "Words: … introduced · … learned · JLPT N5", or a hint
 
 	pathLines map[kanacore.Script]*fyne.Container
 	pathSegs  map[kanacore.Script][]*canvas.Rectangle

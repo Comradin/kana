@@ -81,7 +81,6 @@ type GameState struct {
 	// Word packages: only introduced words fall.
 	introduced           map[string]bool // readings shown in a package intro
 	introducedDirty      map[string]bool // introduced readings whose save failed; mergeSessionStats retries
-	knownDirty           map[string]bool // "already known" readings whose stats save failed; mergeSessionStats retries
 	newestPackageDirty   bool            // the newest package's save failed; mergeSessionStats retries
 	introducedLoadFailed bool            // introduced words unreadable: no words, no packages, no writes
 	newestPackage        []string        // readings of the newest package, without "already known" ones
@@ -164,7 +163,6 @@ func NewGameState(st *store.Store) *GameState {
 		wordLevel:         store.DefaultWordLevel,
 		introduced:        map[string]bool{},
 		introducedDirty:   map[string]bool{},
-		knownDirty:        map[string]bool{},
 		packageSize:       store.DefaultPackageSize,
 		wordSource:        jlptSource,
 		kanaFont:          fontByID(store.DefaultKanaFont),
@@ -454,7 +452,6 @@ func (gs *GameState) Reset() {
 			gs.wordOverallStats = ws
 		}
 	}
-	gs.boostKnownDirty()
 	gs.invalidatePlayable()
 	// A package due now is offered before the new game starts; the offer
 	// pauses it (settle cannot, it only ever unpauses).
@@ -798,7 +795,6 @@ func (gs *GameState) lowerTempo() {
 // alike. Must be called under lock.
 func (gs *GameState) mergeSessionStats() {
 	gs.saveIntroducedDirty()
-	gs.saveKnownDirty()
 	if gs.newestPackageDirty {
 		gs.saveNewestPackage()
 	}
