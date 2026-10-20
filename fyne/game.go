@@ -89,6 +89,7 @@ type GameState struct {
 	newestPackage        []string        // readings of the newest package, without "already known" ones
 	packageSize          int             // words per package: 3, 5 or 10
 	wordSource           string          // where new words come from: jlptSource or listSourcePrefix + name
+	wordsOnly            bool            // words-only mode: only words fall; the kana learning path rests
 
 	selectedRows  map[string]bool
 	autoProgress  bool
@@ -230,6 +231,9 @@ func NewGameState(st *store.Store) *GameState {
 		}
 		if src, err := st.WordSource(); err == nil {
 			storedSource, sourceLoaded = src, true
+		}
+		if on, err := st.WordsOnly(); err == nil {
+			gs.wordsOnly = on
 		}
 		if id, err := st.KanaFont(); err == nil {
 			gs.kanaFont = fontByID(id)
@@ -437,7 +441,7 @@ func (gs *GameState) Reset() {
 	gs.pendingLevelOffer = false
 	gs.userPaused = false
 	gs.settingsOpen = false
-	gs.paused = len(gs.pendingIntro) > 0
+	gs.paused = gs.introPending()
 
 	// reload overall stats
 	gs.overallStats = make(map[string]store.KanaStats)
@@ -584,9 +588,11 @@ func (gs *GameState) tick() {
 	}
 }
 
-// spawnKana adds one falling tile: a word with probability wordShare when
-// words are playable, otherwise a kana. With no kana available it spawns a
-// word if one is playable, else nothing.
+// spawnKana adds one falling tile. In mixed mode it is a word with
+// probability wordShare when words are playable, otherwise a kana; with no
+// kana available it spawns a word if one is playable, else nothing. In
+// words-only mode every spawn is a word while one is playable, and a kana
+// only when none is.
 func (gs *GameState) spawnKana() {
 	gs.mu.Lock()
 	if gs.over || gs.paused {
@@ -597,7 +603,7 @@ func (gs *GameState) spawnKana() {
 	var tile *KanaTile
 	base := gs.level.MinFall + rand.Float32()*(gs.level.MaxFall-gs.level.MinFall)
 	chars := gs.availableCharacters()
-	if entry, ok := gs.pickWord(len(chars) == 0); ok {
+	if entry, ok := gs.pickWord(gs.wordsOnly || len(chars) == 0); ok {
 		tile = newWordTile(entry, gs.canvasW, gs.kanaFont)
 		tile.fallSeconds = base * wordFallFactor(len(entry.Units)) * tempoFactor(gs.tempoStep)
 	} else if len(chars) == 0 {
@@ -1081,10 +1087,11 @@ func (gs *GameState) SetScoreLimit(limit int) {
 }
 
 // checkAutoProgression unlocks, for each active script, the rest of its next
-// progression step once all selected rows of that script are mastered. Must be
+// progression step once all selected rows of that script are mastered.
+// Nothing is unlocked in words-only mode, where the kana path rests. Must be
 // called under lock. Returns the IDs unlocked, hiragana first.
 func (gs *GameState) checkAutoProgression() []string {
-	if !gs.autoProgress {
+	if !gs.autoProgress || gs.wordsOnly {
 		return nil
 	}
 	var unlocked []string
@@ -1213,11 +1220,18 @@ func (gs *GameState) settle() {
 	}
 }
 
+// introPending reports whether a kana intro waits to be shown: never in
+// words-only mode, where the kana path rests and its intros wait until
+// mixed mode is back. Must be called under lock.
+func (gs *GameState) introPending() bool {
+	return len(gs.pendingIntro) > 0 && !gs.wordsOnly
+}
+
 // dialogPending reports whether a dialog the game waits for is pending: a
-// kana intro, the katakana offer, a word package or the level offer. Must
-// be called under lock.
+// kana intro (not in words-only mode), the katakana offer, a word package or
+// the level offer. Must be called under lock.
 func (gs *GameState) dialogPending() bool {
-	return len(gs.pendingIntro) > 0 || gs.pendingOffer || len(gs.pendingPackage) > 0 || gs.pendingLevelOffer
+	return gs.introPending() || gs.pendingOffer || len(gs.pendingPackage) > 0 || gs.pendingLevelOffer
 }
 
 // TogglePause flips the learner's pause and returns whether it is now on.
@@ -1279,10 +1293,11 @@ func (gs *GameState) IsUserPaused() bool {
 }
 
 // maybeOfferKatakana raises the one-time katakana offer once all hiragana
-// basic rows are mastered. It never fires after game over, while katakana is
-// active, or once already offered. Must be called under lock.
+// basic rows are mastered. It never fires after game over, in words-only
+// mode, while katakana is active, or once already offered. Must be called
+// under lock.
 func (gs *GameState) maybeOfferKatakana() {
-	if gs.over || gs.katakanaOffered || !gs.activeScripts[kanacore.ScriptHiragana] || gs.activeScripts[kanacore.ScriptKatakana] {
+	if gs.over || gs.wordsOnly || gs.katakanaOffered || !gs.activeScripts[kanacore.ScriptHiragana] || gs.activeScripts[kanacore.ScriptKatakana] {
 		return
 	}
 	for _, row := range kanacore.BasicRows() {
@@ -1357,9 +1372,11 @@ func (gs *GameState) PendingDialogs() Pending {
 	gs.mu.Lock()
 	defer gs.mu.Unlock()
 	p := Pending{
-		Intro:         append([]string(nil), gs.pendingIntro...),
 		KatakanaOffer: gs.pendingOffer,
 		Package:       append([]string(nil), gs.pendingPackage...),
+	}
+	if gs.introPending() {
+		p.Intro = append([]string(nil), gs.pendingIntro...)
 	}
 	if gs.pendingLevelOffer {
 		p.LevelOffer = gs.wordLevel
