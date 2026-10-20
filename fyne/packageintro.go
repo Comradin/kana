@@ -71,7 +71,7 @@ func packageTitle(ix *vocab.Index, src vocab.Source, entries []vocab.Entry) stri
 	}
 	title := "New words · " + prettyListName(src.List)
 	for _, e := range entries {
-		if l := ix.Lesson(e, src.List); l != "" && !slices.Contains(parts, l) {
+		if l := ix.LessonIn(e, src); l != "" && !slices.Contains(parts, l) {
 			parts = append(parts, l)
 		}
 	}

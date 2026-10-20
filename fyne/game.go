@@ -82,14 +82,15 @@ type GameState struct {
 	playableOK             bool                      // playable is up to date
 
 	// Word packages: only introduced words fall.
-	introduced           map[string]bool // readings shown in a package intro
-	introducedDirty      map[string]bool // introduced readings whose save failed; mergeSessionStats retries
-	newestPackageDirty   bool            // the newest package's save failed; mergeSessionStats retries
-	introducedLoadFailed bool            // introduced words unreadable: no words, no packages, no writes
-	newestPackage        []string        // readings of the newest package, without "already known" ones
-	packageSize          int             // words per package: 3, 5 or 10
-	wordSource           string          // where new words come from: jlptSource or listSourcePrefix + name
-	wordsOnly            bool            // words-only mode: only words fall; the kana learning path rests
+	introduced           map[string]bool     // readings shown in a package intro
+	introducedDirty      map[string]bool     // introduced readings whose save failed; mergeSessionStats retries
+	newestPackageDirty   bool                // the newest package's save failed; mergeSessionStats retries
+	introducedLoadFailed bool                // introduced words unreadable: no words, no packages, no writes
+	newestPackage        []string            // readings of the newest package, without "already known" ones
+	packageSize          int                 // words per package: 3, 5 or 10
+	wordSource           string              // where new words come from: jlptSource or listSourcePrefix + name
+	lessonFilters        map[string][]string // lesson filter per list name; absent = all lessons
+	wordsOnly            bool                // words-only mode: only words fall; the kana learning path rests
 
 	selectedRows  map[string]bool
 	autoProgress  bool
@@ -99,6 +100,7 @@ type GameState struct {
 
 	level         LevelInfo // chosen difficulty
 	pointsSetting int       // pointsAuto or a fixed factor
+	focusWeak     bool      // focus on weak items: half the picks go to them
 	answerStreak  int       // correct answers in a row this game
 	tempoStep     int       // session tempo, 0..maxTempoStep
 
@@ -234,6 +236,9 @@ func NewGameState(st *store.Store) *GameState {
 		}
 		if on, err := st.WordsOnly(); err == nil {
 			gs.wordsOnly = on
+		}
+		if on, err := st.FocusWeak(); err == nil {
+			gs.focusWeak = on
 		}
 		if id, err := st.KanaFont(); err == nil {
 			gs.kanaFont = fontByID(id)
@@ -610,7 +615,7 @@ func (gs *GameState) spawnKana() {
 		gs.mu.Unlock()
 		return
 	} else {
-		char := memory.Pick(gs.spawnCandidates(chars), gs.memory, gs.now(), gs.rnd)
+		char := gs.pickKana(gs.spawnCandidates(chars))
 		romaji, _ := gs.charSet.GetRomaji(char)
 		tile = newKanaTile(kanacore.Kana{Char: char, Romaji: romaji}, gs.kanaFont)
 		tile.fallSeconds = base * charFallFactor(gs.kanaLevel(char)) * tempoFactor(gs.tempoStep)
@@ -1282,6 +1287,16 @@ func (gs *GameState) SetKanaFont(id string) {
 	gs.kanaFont = fontByID(id)
 	if gs.store != nil {
 		_ = gs.store.SaveKanaFont(gs.kanaFont.id)
+	}
+}
+
+// SetFocusWeak turns the focus on weak items on or off and saves it.
+func (gs *GameState) SetFocusWeak(on bool) {
+	gs.mu.Lock()
+	defer gs.mu.Unlock()
+	gs.focusWeak = on
+	if gs.store != nil {
+		_ = gs.store.SaveFocusWeak(on)
 	}
 }
 
