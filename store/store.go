@@ -31,6 +31,9 @@ const (
 	wordSourceKey      = "word_source"
 	kanaFontKey        = "kana_font"
 	newestPackageKey   = "newest_package"
+	wordsOnlyKey       = "words_only"
+	focusWeakKey       = "focus_weak"
+	lessonFilterPrefix = "lesson_filter:" // followed by a word list's name
 	databaseFilePerm   = 0o644
 	databaseDirPerm    = 0o755
 	defaultOpenTimout  = 5 * time.Second
@@ -393,6 +396,73 @@ func (s *Store) NewestPackage() ([]string, error) {
 // joined with "\n"; nil or empty stores an empty package.
 func (s *Store) SaveNewestPackage(readings []string) error {
 	return s.setSetting(newestPackageKey, strings.Join(readings, "\n"))
+}
+
+// WordsOnly reports whether only words fall (words-only mode); false when
+// unset.
+func (s *Store) WordsOnly() (bool, error) { return s.flag(wordsOnlyKey) }
+
+// SaveWordsOnly persists words-only mode.
+func (s *Store) SaveWordsOnly(on bool) error { return s.saveFlag(wordsOnlyKey, on) }
+
+// FocusWeak reports whether practice focuses on weak items; false when
+// unset.
+func (s *Store) FocusWeak() (bool, error) { return s.flag(focusWeakKey) }
+
+// SaveFocusWeak persists the focus on weak items.
+func (s *Store) SaveFocusWeak(on bool) error { return s.saveFlag(focusWeakKey, on) }
+
+// LessonFilter returns a word list's lesson filter: the chosen lessons, ""
+// for words without a lesson. Nil when unset: all lessons.
+func (s *Store) LessonFilter(list string) ([]string, error) {
+	value, err := s.getSetting(lessonFilterPrefix + list)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var lessons []string
+	if err := json.Unmarshal([]byte(value), &lessons); err != nil {
+		return nil, fmt.Errorf("store: decode lesson filter: %w", err)
+	}
+	if len(lessons) == 0 {
+		return nil, nil
+	}
+	return lessons, nil
+}
+
+// SaveLessonFilter persists a word list's lesson filter as a JSON array;
+// nil or empty removes it (all lessons).
+func (s *Store) SaveLessonFilter(list string, lessons []string) error {
+	if len(lessons) == 0 {
+		return s.deleteSetting(lessonFilterPrefix + list)
+	}
+	payload, err := json.Marshal(lessons)
+	if err != nil {
+		return fmt.Errorf("store: encode lesson filter: %w", err)
+	}
+	return s.setSetting(lessonFilterPrefix+list, string(payload))
+}
+
+// flag reads a setting stored as "1" or "0"; unset is false.
+func (s *Store) flag(key string) (bool, error) {
+	value, err := s.getSetting(key)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return value == "1", nil
+}
+
+// saveFlag stores a setting as "1" or "0".
+func (s *Store) saveFlag(key string, on bool) error {
+	if on {
+		return s.setSetting(key, "1")
+	}
+	return s.setSetting(key, "0")
 }
 
 // IntroducedWords returns the readings that were shown in a word package
