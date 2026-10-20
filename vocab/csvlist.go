@@ -11,6 +11,9 @@ import (
 	"kana/kanacore"
 )
 
+// problemNoKanaColumn is the problem of a header without a kana column.
+const problemNoKanaColumn = `no "kana" column in the header`
+
 // headerAliases maps other (lower-case) column names to the canonical ones,
 // so lists exported from other tools load without renaming.
 var headerAliases = map[string]string{
@@ -73,7 +76,7 @@ func readCSV(name string, r io.Reader) List {
 	}
 	kanaCol, ok := idx["kana"]
 	if !ok {
-		l.problem(`no "kana" column in the header`)
+		l.problem(problemNoKanaColumn)
 		return l
 	}
 	field := func(rec []string, col string) string {
