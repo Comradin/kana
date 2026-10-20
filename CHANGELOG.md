@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.4.0](https://github.com/Comradin/kana/compare/v0.3.0...v0.4.0) (2026-10-20)
+
+
+### Features
+
+* **fyne:** import a word list from the settings ([7a96ef6](https://github.com/Comradin/kana/commit/7a96ef6c77e42b4b1e84e8c2505b09036fa61172))
+* **fyne:** reload word lists at runtime and create their folder ([40f8c36](https://github.com/Comradin/kana/commit/40f8c368cc3e0fe136ae373d857a8b8376f9ed04))
+* **vocab:** check and store a word list for import ([f661147](https://github.com/Comradin/kana/commit/f66114789c471ee9cdcdae99d75f1f17acf5e1ac))
+
+
+### Bug Fixes
+
+* name every file a word list import replaces ([5ee95bf](https://github.com/Comradin/kana/commit/5ee95bfff8478fb1b393bec0263ffd84d4228684))
+
 ## [0.3.0](https://github.com/Comradin/kana/compare/v0.2.0...v0.3.0) (2026-10-19)
 
 
