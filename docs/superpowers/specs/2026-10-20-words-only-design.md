@@ -33,8 +33,9 @@ item**, **learning level**, **learned**, **slipped**, **waiting word**.
 - Playable words in words-only mode: introduced words that pass the source
   and lesson filter and whose script(s) are active — active scripts still
   matter (a katakana word needs katakana switched on), learned kana do not.
-- Packages in words-only mode ignore whether kana are known
-  (`NextPackage`'s `known` accepts every unit).
+- Packages in words-only mode ignore whether kana are known; they still
+  need the word's script(s) to be active, so that an introduced word can
+  fall (`NextPackage`'s `known` accepts every unit of an active script).
 - The kana learning path rests: `checkAutoProgression`, row intros and the
   katakana offer do nothing while words-only mode is on. Pending kana intros
   stay pending until the mode is switched back.
@@ -59,8 +60,9 @@ item**, **learning level**, **learned**, **slipped**, **waiting word**.
 ### Meaning language
 
 - The list of languages is the union of the meaning languages of the
-  bundled data and the loaded lists, sorted by display name, with "System"
-  first. The language-less `meaning` column counts as no language.
+  bundled data and the loaded lists, ordered by language code, each named
+  in its own language, with "System" first. A stored language that is no
+  longer in the data stays selectable. The language-less `meaning` column counts as no language.
 - Changing it takes effect at once for feedback and answers.
 
 ### Focus on weak items
