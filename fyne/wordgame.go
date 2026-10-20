@@ -138,14 +138,6 @@ func (gs *GameState) loadLists() {
 	gs.invalidatePlayable()
 }
 
-// ReloadLists reads the word list folder again. The word source is left as
-// it is.
-func (gs *GameState) ReloadLists() {
-	gs.mu.Lock()
-	defer gs.mu.Unlock()
-	gs.loadLists()
-}
-
 // ListNames returns the private word lists found, sorted by name.
 func (gs *GameState) ListNames() []string {
 	gs.mu.Lock()
@@ -160,17 +152,16 @@ func (gs *GameState) MeaningLang() string {
 	return gs.meaningLang
 }
 
-// HasList reports whether a word list of that name exists (ignoring case
-// and extension).
-func (gs *GameState) HasList(name string) bool {
+// ListFiles returns the names (with extension) of the word list files named
+// like name, ignoring case and extension.
+func (gs *GameState) ListFiles(name string) []string {
 	gs.mu.Lock()
 	dir := gs.wordsDir
 	gs.mu.Unlock()
 	if dir == "" {
-		return false
+		return nil
 	}
-	_, ok := vocab.Existing(dir, name)
-	return ok
+	return vocab.Existing(dir, name)
 }
 
 // ImportList stores c in the word list folder, reloads the lists and
@@ -182,11 +173,9 @@ func (gs *GameState) ImportList(c vocab.Candidate) (string, error) {
 		return "", errors.New("no folder for word lists")
 	}
 	name, err := vocab.Import(gs.wordsDir, c)
-	if err != nil {
-		return "", err
-	}
+	// Also after an error: a partial failure may have changed the folder.
 	gs.loadLists()
-	return name, nil
+	return name, err
 }
 
 // unitKnown reports whether a word unit is known in mixed mode: the kana is

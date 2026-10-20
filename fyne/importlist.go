@@ -24,12 +24,16 @@ const importPreviewWords = 3
 // shown so that their hint can be given.
 var importFileExts = []string{".csv", ".tsv", ".txt", ".json", ".xlsx", ".xls", ".ods"}
 
-// importPreviewLines describes a candidate: its name, whether it replaces a
-// word list, counts, skipped rows and the first words with meanings in lang.
-func importPreviewLines(c vocab.Candidate, lang string, replaces bool) []string {
+// importPreviewLines describes a candidate: its name, the word list files it
+// replaces, counts, skipped rows and the first words with meanings in lang.
+func importPreviewLines(c vocab.Candidate, lang string, files []string) []string {
 	lines := []string{"Word list: " + prettyListName(c.Name)}
-	if replaces {
+	switch len(files) {
+	case 0:
+	case 1:
 		lines = append(lines, "Replaces the word list of the same name; your progress is kept.")
+	default:
+		lines = append(lines, "Replaces "+strings.Join(files, ", ")+"; your progress is kept.")
 	}
 	lessons := map[string]bool{}
 	langs := map[string]bool{}
@@ -117,16 +121,19 @@ func importChosen(gs *GameState, f *settingsForm, fileName string, data []byte, 
 		showImportError(err, win)
 		return
 	}
-	replaces := gs.HasList(c.Name)
+	files := gs.ListFiles(c.Name)
+	replaces := len(files) > 0
 	body := container.NewVBox()
-	for _, line := range importPreviewLines(c, gs.MeaningLang(), replaces) {
-		body.Add(widget.NewLabel(line))
+	for _, line := range importPreviewLines(c, gs.MeaningLang(), files) {
+		label := widget.NewLabel(line)
+		label.Wrapping = fyne.TextWrapWord
+		body.Add(label)
 	}
 	confirm := "Import"
 	if replaces {
 		confirm = "Replace"
 	}
-	dialog.ShowCustomConfirm("Import word list", confirm, "Cancel", body, func(ok bool) {
+	d := dialog.NewCustomConfirm("Import word list", confirm, "Cancel", body, func(ok bool) {
 		if !ok {
 			return
 		}
@@ -139,6 +146,8 @@ func importChosen(gs *GameState, f *settingsForm, fileName string, data []byte, 
 		// The summary may have said the chosen list was missing.
 		f.summary.SetText(gs.settingsState().summary)
 	}, win)
+	d.Resize(fyne.NewSize(480, 0))
+	d.Show()
 }
 
 // showImportError shows why a file cannot be imported and what to do.
