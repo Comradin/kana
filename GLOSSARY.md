@@ -15,3 +15,33 @@ _Avoid_: original, upload
 **Import**:
 Turning a source file into a word list: the game checks it and keeps its own copy.
 _Avoid_: upload, add list
+
+## Practice
+
+**Learning level**:
+A kana's or word's progress from 0 (new) to 5 (learned); a hit raises it by one, a mistake lowers it by two.
+_Avoid_: score, mastery
+
+**Learned**:
+At learning level 5.
+_Avoid_: known, secure, mastered
+
+**Slipped**:
+Made a mistake since it was last learned; shown with a red frame until learned again.
+_Avoid_: flagged, failed
+
+**Weak item**:
+A kana or word that is learning (level 1–4) or slipped.
+_Avoid_: problem item, difficult item
+
+**Waiting word**:
+An introduced word that cannot fall yet because one of its kana is not learned.
+_Avoid_: paused word, blocked word
+
+**Words-only mode**:
+Practice in which only words fall, no single kana.
+_Avoid_: vocabulary mode, word mode
+
+**Lesson filter**:
+The lessons of a word list chosen for practice; they decide which words fall and where new word packages come from.
+_Avoid_: lesson selection, chapter

@@ -2,30 +2,55 @@
 
 ## [0.4.1](https://github.com/Comradin/kana/compare/v0.4.0...v0.4.1) (2026-10-20)
 
+**Answer words by their meaning.** A falling word now also accepts its meaning: type `Regenschirm` or `umbrella` instead of `kasa`. Your meaning language and English both count. Capitals, text in parentheses, a leading "to" or article, and umlauts written as `ae`, `oe`, `ue`, `ss` don't matter; typos do. After a hit by meaning the reading is shown as well, so you pick it up along the way.
 
-### Bug Fixes
+**Why didn't any words fall?** A word only falls once all its kana are learned. After a progress reset most words wait until their kana are learned again – the status panel now tells you how many words are waiting for kana. And when only a few words are playable they come more often: at least one tile in twenty is a word.
+
+### Commits
+
+#### Improvements and fixes
 
 * **fyne:** accept a word's meaning as its answer ([853ec96](https://github.com/Comradin/kana/commit/853ec96db3a05072dcb42886e3e8671ce3a56fde))
 * **fyne:** count words waiting for kana, raise the word share ([4fe8052](https://github.com/Comradin/kana/commit/4fe805252fcb96e6fe9e4a5dba2a267ba9887d40))
 
 ## [0.4.0](https://github.com/Comradin/kana/compare/v0.3.0...v0.4.0) (2026-10-20)
 
+**Import your own word lists.** *Settings → Words → Import word list…* lets you pick a CSV, TSV, TXT or JSON file, for example a vocabulary list from your textbook. The game checks it, shows a preview – number of words and lessons, meaning languages, skipped rows and the first few words – and keeps its own copy. No more copying files into hidden folders, no restart.
 
-### Features
+- Importing a list with the same name replaces it; your progress is kept.
+- Files Excel saves as "Unicode Text" work too. For spreadsheets (`.xlsx`, `.ods`) and files in other encodings the game explains how to save them as "CSV UTF-8".
+- The imported list is selected as the source of new words, and the Words tab shows where your word lists are kept.
+
+### Commits
+
+#### New
 
 * **fyne:** import a word list from the settings ([7a96ef6](https://github.com/Comradin/kana/commit/7a96ef6c77e42b4b1e84e8c2505b09036fa61172))
 * **fyne:** reload word lists at runtime and create their folder ([40f8c36](https://github.com/Comradin/kana/commit/40f8c368cc3e0fe136ae373d857a8b8376f9ed04))
 * **vocab:** check and store a word list for import ([f661147](https://github.com/Comradin/kana/commit/f66114789c471ee9cdcdae99d75f1f17acf5e1ac))
 
 
-### Bug Fixes
+#### Improvements and fixes
 
 * name every file a word list import replaces ([5ee95bf](https://github.com/Comradin/kana/commit/5ee95bfff8478fb1b393bec0263ffd84d4228684))
 
 ## [0.3.0](https://github.com/Comradin/kana/compare/v0.2.0...v0.3.0) (2026-10-19)
 
+**Word packages.** New words now arrive in small packages of 3, 5 or 10 words. Each package is introduced in a dialog with the kana, romaji and meaning before its words start to fall. Tick "Already known" for a word you know and a replacement comes instead. Words come from your own list, lesson by lesson, or from the JLPT list (N5 first, the most common words first); when a JLPT level is done, the game offers the next one.
 
-### Features
+**Learning levels.** Every kana and every word has a level from 0 to 5: a hit raises it by one, a mistake lowers it by two, and at 5 it is learned. A wrong answer counts as a mistake when only one tile is on the field. The status panel colours the kana by level – new, learning, learned – and keeps a red frame on kana that slipped until you have learned them again.
+
+**Start a script over.** The Kana tab of the settings can reset your hiragana or katakana progress and restart its learning path.
+
+**Settings in tabs, and your choice of kana font.** The settings are split into Kana, Words, Game and Sources. Choose between Noto Sans JP, M PLUS Rounded 1c and the system font, each previewed at tile size.
+
+**Keyboard first.** The introductions of new kana rows and word packages close with Enter, so you never have to reach for the mouse.
+
+Also: the status labels no longer jump around, and the font licences ship with the downloads.
+
+### Commits
+
+#### New
 
 * **fyne:** colour the kana grid by level and keep the slipped frame ([29ad8a0](https://github.com/Comradin/kana/commit/29ad8a0273a40c1b2af68526b6c337fd8c18bee1))
 * **fyne:** confirm the kana and word intros with Enter ([9c771ca](https://github.com/Comradin/kana/commit/9c771ca4dc18eb440bbe0b2ed1a55d0e5ff95019))
@@ -47,7 +72,7 @@
 * **vocab:** pick the next word package in learning order ([99266d8](https://github.com/Comradin/kana/commit/99266d85ade68705befa889ed1ed5b29f92d21cb))
 
 
-### Bug Fixes
+#### Improvements and fixes
 
 * **fyne:** keep package refills in their lesson and retry failed saves ([e0ea7f9](https://github.com/Comradin/kana/commit/e0ea7f90fb3005ad88db59bab25cf0fda50da23e))
 * **fyne:** keep the status labels at a steady width ([a26b762](https://github.com/Comradin/kana/commit/a26b762e4e2d885f0209b3297a48db0f60a9c620))
@@ -58,8 +83,17 @@
 
 ## [0.2.0](https://github.com/Comradin/kana/compare/v0.1.0...v0.2.0) (2026-10-15)
 
+**Words join the kana.** Once you know enough kana, words made only of kana you know start falling among the single characters. Type the whole reading – `sensei`, `kitte`, `koohii` or `ko-hi-` all work, spaces are ignored. A hit shows the meaning; a missed word shows its romaji and meaning.
 
-### Features
+**Bring your own word lists.** Put a CSV, TSV or JSON file, for example from your textbook, into the game's `words` folder; lessons and German or English meanings are understood, and common column names such as "Japanische Schrift" or "Lektion" are recognised.
+
+**A bundled JLPT word list** built from JMdict (CC BY-SA) with meanings in several languages, refreshed monthly. It is off by default so beginners are not flooded; words make up at most a tenth of the falling tiles.
+
+The status panel shows how many words you have and where they come from.
+
+### Commits
+
+#### New
 
 * **fyne:** add word tiles ([2f3e297](https://github.com/Comradin/kana/commit/2f3e29741597345421f1c02abf190569feb4d18b))
 * **fyne:** answer and miss word tiles ([b3d24eb](https://github.com/Comradin/kana/commit/b3d24ebd7d1eb2e95bd887b207c049ce5a2db436))
@@ -78,7 +112,7 @@
 * **vocab:** update the word data monthly ([e84f3b4](https://github.com/Comradin/kana/commit/e84f3b4352c55c110e0586228233310ff7df3bc5))
 
 
-### Bug Fixes
+#### Improvements and fixes
 
 * **fyne:** address stage 3 review ([b0d9224](https://github.com/Comradin/kana/commit/b0d9224bdcd8da4325a3a58b9130a9f23e9c9d4b))
 * **vocab:** address stage 2 review ([7be7316](https://github.com/Comradin/kana/commit/7be7316060f5bfde4e3bc6da677cb274401043da))
