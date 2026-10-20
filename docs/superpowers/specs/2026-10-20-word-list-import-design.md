@@ -37,7 +37,7 @@ list** by **import**.
 
 A dialog titled "Import word list" with:
 
-- the list's name and, if it exists, "Replaces the word list of the same name; your progress is kept.";
+- the list's name and, if it exists, "Replaces the word list of the same name; your progress is kept."; if several files of that name exist (other case or extension): "Replaces Genki.json, genki.csv; your progress is kept." with their file names;
 - counts: words, lessons (if any), meaning languages found (e.g. "de, en");
 - skipped rows with up to ten problems, as the parser reports them;
 - the first three words: kana, meaning (in the meaning language), lesson.
@@ -60,20 +60,22 @@ Hints:
   `Candidate{Name, Ext string; List List; Data []byte}` where `Data` is the
   UTF-8 bytes to write. Errors are a type with the reason and the hint, so the
   UI can show both. Pure: no file system access, easy to test.
-- `Existing(dir, name string) (string, bool)`: the name of a list file in dir named like name, ignoring case.
+- `Existing(dir, name string) []string`: the file names (with extension, sorted) of the list files in dir named like name, ignoring case.
 - `Import(dir string, c Candidate) (string, error)`: creates dir if needed, writes
-  `<name><ext>` (an existing list's name wins) and returns the name, through a temporary file and a rename, then removes other files
+  `<name><ext>` (the name of the first existing file wins) and returns the name, through a temporary file and a rename, then removes other files
   of the same name (other extension or case). A failure leaves the old list in
   place.
 
 ### `fyne`: reloading and the dialog
 
 - `wordsDir` is created in `loadWords` (startup).
-- `GameState.ReloadLists()`: under the lock, reads the folder again, rebuilds
-  `listNames` and the word index (`bundledIndex().WithLists`) and invalidates
-  the playable cache. The stored word source is not changed here.
-- `GameState.ImportList(c vocab.Candidate) error`: `vocab.Import` into
-  `wordsDir`, then `ReloadLists`.
+- `GameState.ImportList(c vocab.Candidate) (string, error)`: `vocab.Import` into
+  `wordsDir`, then, under the lock and also after an error, reads the folder
+  again, rebuilds `listNames` and the word index (`bundledIndex().WithLists`)
+  and invalidates the playable cache. The stored word source is not changed
+  here. Returns the list's name.
+- `GameState.ListFiles(name string) []string`: the existing files of that name,
+  for the preview.
 - Words tab: the "Import word list…" button and the folder line. After an
   import, the form rebuilds the source select's options from the new list
   names and selects the imported list.
@@ -87,7 +89,7 @@ Hints:
   extension, size limit, dot name, `jmdict`, JSON; `Import` for a new list, a
   replacement with another extension and case, and a failed write keeping the
   old file.
-- `fyne`: `ReloadLists` adds the new list and keeps progress of a replaced
+- `fyne`: `ImportList` adds the new list and keeps progress of a replaced
   list; the startup creates the words folder; the Words tab preselects the
   imported list and keeps it after Cancel of the settings (the word list stays,
   the source does not change); the preview shows Replace for an existing name.

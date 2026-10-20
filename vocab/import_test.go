@@ -53,6 +53,13 @@ func TestInspectAcceptsUTF8(t *testing.T) {
 	}
 }
 
+func TestInspectIgnoresDirectories(t *testing.T) {
+	c, err := Inspect("sub/../../x.csv", []byte("kana\nえき\n"))
+	if err != nil || c.Name != "x" {
+		t.Fatalf("name %q, err %v; a path must not escape the folder", c.Name, err)
+	}
+}
+
 func TestInspectConvertsUTF16(t *testing.T) {
 	text := "kana\tmeaning\nせんせい\tteacher\n"
 	for _, be := range []bool{false, true} {
@@ -90,6 +97,7 @@ func TestInspectRejects(t *testing.T) {
 		{"question marks", "lost.csv", []byte("kana;meaning\n???;teacher\n"), "no kana", "CSV UTF-8"},
 		{"no kana column", "cols.csv", []byte("word;meaning\nせんせい;teacher\n"), "kana", "kana;meaning;lesson"},
 		{"empty", "empty.csv", nil, "empty", ""},
+		{"UTF-16 without BOM", "nobom.csv", []byte("k\x00a\x00n\x00a\x00"), "UTF-8", "CSV UTF-8"},
 		{"odd UTF-16", "odd.txt", []byte{0xFF, 0xFE, 0x41}, "UTF-8", "CSV UTF-8"},
 	}
 	for _, tc := range cases {
@@ -132,7 +140,7 @@ func TestImportNewList(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := Existing(dir, "mine"); ok {
+	if got := Existing(dir, "mine"); len(got) != 0 {
 		t.Fatal("Existing before the import")
 	}
 	if name, err := Import(dir, c); err != nil || name != "mine" {
@@ -141,8 +149,8 @@ func TestImportNewList(t *testing.T) {
 	if got := dirNames(t, dir); len(got) != 1 || got[0] != "mine.tsv" {
 		t.Fatalf("files = %v", got)
 	}
-	if name, ok := Existing(dir, "MINE"); !ok || name != "mine" {
-		t.Fatalf("Existing ignores case and keeps the stored one: %q %v", name, ok)
+	if got := Existing(dir, "MINE"); !slices.Equal(got, []string{"mine.tsv"}) {
+		t.Fatalf("Existing ignores case and keeps the stored name: %v", got)
 	}
 	lists, err := LoadDir(dir)
 	if err != nil || len(lists) != 1 || lists[0].Name != "mine" || len(lists[0].Words) != 1 {
@@ -159,7 +167,7 @@ func TestImportReplacesSameName(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if name, ok := Existing(dir, "mine"); !ok || name != "Mine" {
+	if got := Existing(dir, "mine"); !slices.Equal(got, []string{"Mine.json"}) {
 		t.Fatal("Mine.json exists under the same name")
 	}
 	if name, err := Import(dir, c); err != nil || name != "Mine" {
@@ -200,5 +208,24 @@ func TestImportFailureKeepsTheOldList(t *testing.T) {
 	got := dirNames(t, dir)
 	if !slices.Contains(got, "mine.json") || len(got) != 2 {
 		t.Fatalf("files = %v; want the old list kept and no temporary file", got)
+	}
+}
+
+func TestImportReplacesSeveralFiles(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "genki.csv", "kana\nあお\n")
+	writeFile(t, dir, "Genki.json", `[{"kana":"いえ"}]`)
+	c, err := Inspect("genki.tsv", []byte("kana\nえき\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := Existing(dir, "GENKI"); !slices.Equal(got, []string{"Genki.json", "genki.csv"}) {
+		t.Fatalf("Existing = %v", got)
+	}
+	if name, err := Import(dir, c); err != nil || name != "Genki" {
+		t.Fatalf("name %q, err %v; the first existing name wins", name, err)
+	}
+	if got := dirNames(t, dir); !slices.Equal(got, []string{"Genki.tsv"}) {
+		t.Fatalf("files = %v; want only the new file", got)
 	}
 }

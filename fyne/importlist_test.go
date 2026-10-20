@@ -30,13 +30,13 @@ func TestImportListReloadsAndKeepsProgress(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if gs.HasList("mine") {
-		t.Fatal("HasList before the import")
+	if got := gs.ListFiles("mine"); len(got) != 0 {
+		t.Fatal("ListFiles before the import")
 	}
 	if name, err := gs.ImportList(c); err != nil || name != "mine" {
 		t.Fatalf("name %q, err %v", name, err)
 	}
-	if !equalIDs(gs.listNames, []string{"mine"}) || !gs.HasList("MINE") {
+	if !equalIDs(gs.listNames, []string{"mine"}) || !slices.Equal(gs.ListFiles("MINE"), []string{"mine.csv"}) {
 		t.Fatalf("lists = %v", gs.listNames)
 	}
 	if _, ok := gs.words.Lookup("あお"); !ok {
@@ -81,7 +81,7 @@ func TestImportPreviewLines(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := importPreviewLines(c, "de", true)
+	got := importPreviewLines(c, "de", []string{"minna.csv"})
 	want := []string{
 		"Word list: minna no nihongo",
 		"Replaces the word list of the same name; your progress is kept.",
@@ -98,10 +98,18 @@ func TestImportPreviewLines(t *testing.T) {
 	}
 
 	c, _ = vocab.Inspect("a.csv", []byte("kana;meaning\nせんせい;teacher\n"))
-	if got := importPreviewLines(c, "en", false); !equalIDs(got, []string{
+	if got := importPreviewLines(c, "en", nil); !equalIDs(got, []string{
 		"Word list: a", "1 word", "First words:", "せんせい · teacher",
 	}) {
 		t.Fatalf("plain list: %q", got)
+	}
+}
+
+func TestImportPreviewLinesSeveralFiles(t *testing.T) {
+	c, _ := vocab.Inspect("genki.csv", []byte("kana;meaning\nせんせい;teacher\n"))
+	got := importPreviewLines(c, "en", []string{"Genki.json", "genki.csv"})
+	if want := "Replaces Genki.json, genki.csv; your progress is kept."; len(got) < 2 || got[1] != want {
+		t.Fatalf("lines: %q, want line 2 %q", got, want)
 	}
 }
 

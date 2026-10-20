@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"unicode/utf16"
 	"unicode/utf8"
@@ -50,6 +51,7 @@ type Candidate struct {
 // encoding (UTF-16 with BOM is converted to UTF-8) and content. It touches
 // no files.
 func Inspect(fileName string, data []byte) (Candidate, error) {
+	fileName = filepath.Base(fileName) // a path must not escape the folder
 	ext := strings.ToLower(filepath.Ext(fileName))
 	base := strings.TrimSuffix(fileName, filepath.Ext(fileName))
 	if spreadsheetExts[ext] {
@@ -111,7 +113,8 @@ func toUTF8(data []byte) ([]byte, error) {
 	case bytes.HasPrefix(data, []byte{0xFE, 0xFF}):
 		be = true
 	default:
-		if !utf8.Valid(data) {
+		// A NUL byte is UTF-16 without a byte order mark.
+		if !utf8.Valid(data) || bytes.IndexByte(data, 0) >= 0 {
 			return nil, errors.New("not UTF-8")
 		}
 		return data, nil
@@ -146,16 +149,18 @@ func listFile(name string) (string, bool) {
 	return strings.TrimSuffix(name, filepath.Ext(name)), true
 }
 
-// Existing returns the name of the word list file in dir named like name
-// (any extension, ignoring case), keeping its case.
-func Existing(dir, name string) (string, bool) {
+// Existing returns the names (with extension, sorted) of the word list files
+// in dir named like name, ignoring case and extension.
+func Existing(dir, name string) []string {
 	entries, _ := os.ReadDir(dir)
+	var files []string
 	for _, e := range entries {
 		if base, ok := listFile(e.Name()); ok && !e.IsDir() && strings.EqualFold(base, name) {
-			return base, true
+			files = append(files, e.Name())
 		}
 	}
-	return "", false
+	slices.Sort(files)
+	return files
 }
 
 // Import stores c in dir, creating dir if needed, and returns the word
@@ -177,12 +182,21 @@ func Import(dir string, c Candidate) (string, error) {
 		tmp.Close()
 		return "", fmt.Errorf("import: %w", err)
 	}
+	// CreateTemp makes the file 0600; a word list is an ordinary file.
+	if err := tmp.Chmod(0o644); err != nil {
+		tmp.Close()
+		return "", fmt.Errorf("import: %w", err)
+	}
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		return "", fmt.Errorf("import: %w", err)
+	}
 	if err := tmp.Close(); err != nil {
 		return "", fmt.Errorf("import: %w", err)
 	}
 	name := c.Name
-	if old, ok := Existing(dir, c.Name); ok {
-		name = old
+	if old := Existing(dir, c.Name); len(old) > 0 {
+		name = strings.TrimSuffix(old[0], filepath.Ext(old[0]))
 	}
 	target := filepath.Join(dir, name+c.Ext)
 	if err := os.Rename(tmp.Name(), target); err != nil {
