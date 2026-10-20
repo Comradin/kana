@@ -29,7 +29,7 @@ The spec leaves these open or calls them indicative; check them before Task 1.
 9. **Kana fallback:** in words-only mode a spawn tries a word (`pickWord(true)`) and spawns a kana when none is playable — no extra "package could come" check at spawn time; a due package is offered at the usual re-check points and pauses the game.
 10. **Pending kana intros in words-only mode** are invisible to `dialogPending`, `PendingDialogs` and `Reset` (`introPending`); switching back to mixed mode pauses the game so `showPendingDialogs` shows them.
 11. **Words line texts** (words-only, problems only): "Words only: could not load progress", "Words only: words unavailable: <err>", "Words only: add a list to <dir> or choose JLPT" / "… add a word list or choose JLPT", "Words only: no words in the chosen lessons" / "Words only: no words in <source>", "Words only: no word fits the active scripts", and, with words falling but new ones held back by a script, "Words only: new words need a script that is off". Mixed mode gains "Words: no words in the chosen lessons".
-12. **Meaning languages** are listed by language code (de, en, es, fr, hu, nl, ru, sl, sv — the spec's example order), each by its own name from a built-in table (an unknown code shows as itself), "System" first. The spec text says "sorted by display name", but its example is in code order and plain string sorting would put Русский last; the controller may flip this in `meaningLangOptions`. A stored language the data no longer has stays as an option.
+12. **Meaning languages** are listed by language code (de, en, es, fr, hu, nl, ru, sl, sv — the spec's example order), each by its own name from a built-in table (an unknown code shows as itself), "System" first. This is the spec's order. A stored language the data no longer has stays as an option.
 13. **Focus pick:** focus off or no weak candidate → no `rnd` draw at all (the usual pick is untouched, seeded tests stay stable). Otherwise one draw against `focusShare = 0.5`, then a weighted draw. Slipped = `Flagged` at any level (weight 2); learning = level 1–4 and not slipped (weight 1).
 14. **Focus setting** is applied with a separate `SetFocusWeak` (like `SetKanaFont`); `applySettings`' signature stays, so no fixture changes.
 15. **Settings dialog:** only the selected list's lesson filter is saved; edits to other lists' checks are kept while the dialog is open (switching back and forth) but dropped on Save. The lesson box is hidden for JLPT and for a list without lessons; check labels are the lesson names, `""` is "No lesson".
@@ -1413,6 +1413,7 @@ func TestMeaningLangSettingDecidesShownAndAcceptedMeaning(t *testing.T) {
 
 	gs := newTestState()
 	withWords(gs, kasa)
+	gs.levelOfferDeclined = true // かさ is the whole source: no level offer may pause the game
 	gs.applyWordSettings(wordSettings{source: jlptSource, level: 5, packageSize: 5, meaningLang: "fr"})
 	if gs.meaningLang != "fr" || gs.meaningSetting != "fr" {
 		t.Fatalf("meaningLang %q, setting %q", gs.meaningLang, gs.meaningSetting)
@@ -2072,7 +2073,7 @@ func linkAllCheck(all *widget.Check, checks []*widget.Check) {
 
 `newGameTab`: `f.focusCheck = widget.NewCheck("Focus on weak items", nil)`, `f.focusCheck.SetChecked(st.focusWeak)`, placed after the points row. `apply`: after `gs.SetKanaFont(f.kanaFontID())` add `gs.SetFocusWeak(f.focusCheck.Checked)`.
 
-`setLists` ends with `f.showLessons()` (selecting the same index again fires no `OnChanged`). In `fyne/importlist.go` (around line 145) refresh the lessons with the lists:
+`setLists` ends with `f.showLessons()` (`SetSelectedIndex` fires `OnChanged` even for the same index, so `showLessons` may run twice; that is harmless because `keepLessons` keeps the current checks). In `fyne/importlist.go` (around line 145) refresh the lessons with the lists:
 
 ```go
 		st := gs.settingsState()
