@@ -459,10 +459,17 @@ conventional commit messages on `main`:
    start a release.
 2. On every push to `main` the `release` workflow opens or updates the release PR
    "chore(main): release 0.x.y" with the `CHANGELOG.md` entry and the new version.
-3. Merging that PR creates the tag `v0.x.y` and the GitHub Release. In the same run the
+3. Just before merging, rewrite the release notes for players: a few short paragraphs on
+   what is new and better, in their words, above a `### Commits` heading that keeps the
+   generated list. Put the same text into the PR description (between the `---` lines; the
+   GitHub Release takes its notes from there) and into the version's `CHANGELOG.md` entry on
+   the release branch. Do it last: any new commit on `main` regenerates the PR. Without a
+   rewrite the notes use the section names from `release-please-config.json` ("New",
+   "Improvements and fixes").
+4. Merging that PR creates the tag `v0.x.y` and the GitHub Release. In the same run the
    Windows and Linux packages and their checksums are built and attached, and the release
    notes get a line saying the macOS build follows.
-4. Build and upload the macOS package from an Apple Silicon Mac:
+5. Build and upload the macOS package from an Apple Silicon Mac:
 
    ```bash
    git fetch --tags && git checkout v0.x.y
