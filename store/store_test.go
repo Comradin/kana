@@ -435,3 +435,52 @@ func TestResetKana(t *testing.T) {
 		t.Fatal("the word か is not the character か: word data stays")
 	}
 }
+
+func TestWordsOnlyFocusAndLessonFilter(t *testing.T) {
+	st := openTemp(t)
+	if on, err := st.WordsOnly(); err != nil || on {
+		t.Fatalf("unset WordsOnly = %v, %v; want false", on, err)
+	}
+	if on, err := st.FocusWeak(); err != nil || on {
+		t.Fatalf("unset FocusWeak = %v, %v; want false", on, err)
+	}
+	if l, err := st.LessonFilter("minna"); err != nil || l != nil {
+		t.Fatalf("unset LessonFilter = %v, %v; want nil (all lessons)", l, err)
+	}
+	if err := st.SaveWordsOnly(true); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SaveFocusWeak(true); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SaveLessonFilter("minna", []string{"2", ""}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SaveLessonFilter("other", []string{"1"}); err != nil {
+		t.Fatal(err)
+	}
+	if on, _ := st.WordsOnly(); !on {
+		t.Fatal("WordsOnly not saved")
+	}
+	if on, _ := st.FocusWeak(); !on {
+		t.Fatal("FocusWeak not saved")
+	}
+	if l, _ := st.LessonFilter("minna"); !reflect.DeepEqual(l, []string{"2", ""}) {
+		t.Fatalf("minna = %v, want [2 \"\"]", l)
+	}
+	if err := st.SaveLessonFilter("minna", nil); err != nil {
+		t.Fatal(err)
+	}
+	if l, _ := st.LessonFilter("minna"); l != nil {
+		t.Fatalf("cleared filter = %v, want nil", l)
+	}
+	if l, _ := st.LessonFilter("other"); !reflect.DeepEqual(l, []string{"1"}) {
+		t.Fatalf("other = %v: filters are per list", l)
+	}
+	if err := st.SaveWordsOnly(false); err != nil {
+		t.Fatal(err)
+	}
+	if on, _ := st.WordsOnly(); on {
+		t.Fatal("WordsOnly off not saved")
+	}
+}
