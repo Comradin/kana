@@ -175,6 +175,36 @@ type Filter struct {
 	Lesson string // with a private List: only this lesson ("" = all)
 }
 
+// Lessons returns a list's lessons in learning order (by number if every
+// lesson is an integer, else by first appearance) and whether the list has
+// words without a lesson. Nil and false for an unknown list.
+func (ix *Index) Lessons(list string) (lessons []string, noLesson bool) {
+	ranks := ix.lessonRanks(list)
+	lessons = slices.Clone(ix.lessons[list])
+	sort.SliceStable(lessons, func(a, b int) bool { return ranks[lessons[a]] < ranks[lessons[b]] })
+	for _, i := range ix.order(list) {
+		if len(ix.entries[i].Lists[list]) == 0 {
+			noLesson = true
+			break
+		}
+	}
+	return lessons, noLesson
+}
+
+// Languages returns the meaning languages of the index's entries, sorted by
+// code. Meanings without a language do not count.
+func (ix *Index) Languages() []string {
+	seen := map[string]bool{}
+	for _, e := range ix.entries {
+		for lang, items := range e.Meanings {
+			if lang != "" && len(items) > 0 {
+				seen[lang] = true
+			}
+		}
+	}
+	return slices.Sorted(maps.Keys(seen))
+}
+
 // Playable returns the entries whose units all satisfy known and which pass
 // the filter, in index order.
 func Playable(entries []Entry, known func(unit string) bool, f Filter) []Entry {

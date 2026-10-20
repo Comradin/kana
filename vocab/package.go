@@ -8,23 +8,42 @@ import (
 
 // Source names where new words come from.
 type Source struct {
-	List  string // private list name; "" = JLPT (the bundled list)
-	Level int    // JLPT: lowest level number allowed (5 = N5 only); ignored for lists
+	List    string   // private list name; "" = JLPT (the bundled list)
+	Level   int      // JLPT: lowest level number allowed (5 = N5 only); ignored for lists
+	Lessons []string // list: the chosen lessons, "" for words without a lesson; empty = all lessons. Ignored for JLPT
 }
 
 // Has reports whether e belongs to the source: for JLPT a bundled entry
-// with JLPT >= Level, for a list an entry of that list.
+// with JLPT >= Level, for a list an entry of that list in one of the chosen
+// lessons (or without a lesson, if "" is chosen).
 func (s Source) Has(e Entry) bool {
 	if s.List == "" {
 		return e.Bundled && e.JLPT >= s.Level
 	}
-	return hasList(e, s.List)
+	lessons, ok := e.Lists[s.List]
+	if !ok {
+		return false
+	}
+	if len(s.Lessons) == 0 {
+		return true
+	}
+	if len(lessons) == 0 {
+		return contains(s.Lessons, "")
+	}
+	for _, l := range lessons {
+		if contains(s.Lessons, l) {
+			return true
+		}
+	}
+	return false
 }
 
 // NextPackage returns up to n entries from src that are not introduced and
 // whose units are all known, in learning order. Entries that are not
 // playable yet are skipped, not waited for: they come once their kana are
-// known. A list package holds words of a single lesson.
+// known. A list package holds words of a single lesson: the earliest chosen
+// lesson (src.Lessons, all when empty) with a word to introduce; an entry in
+// several lessons counts for its first chosen one.
 //
 // JLPT order: level from N5 down to src.Level, then frequency rank, then
 // fewer units, then the reading. List order: by lesson (numeric if every
@@ -41,27 +60,49 @@ func NextPackageWhere(ix *Index, src Source, introduced map[string]bool, n int, 
 	if ix == nil || n <= 0 {
 		return nil
 	}
+	eligible := func(e Entry) bool {
+		return src.Has(e) && !introduced[e.Kana] && allKnown(e.Units, known) && (keep == nil || keep(e))
+	}
+	order := ix.order(src.List)
 	var out []Entry
-	var lesson string
-	for _, i := range ix.order(src.List) {
-		e := ix.entries[i]
-		if !src.Has(e) || introduced[e.Kana] || !allKnown(e.Units, known) || (keep != nil && !keep(e)) {
-			continue
-		}
-		// A list package holds words of one lesson only. The order is by
-		// lesson, so the first readable word fixes the lesson; earlier
-		// lessons' unreadable words do not hold the package back.
-		if src.List != "" {
-			l := ix.Lesson(e, src.List)
-			if len(out) == 0 {
-				lesson = l
-			} else if l != lesson {
-				break
+	if src.List == "" {
+		for _, i := range order {
+			if e := ix.entries[i]; eligible(e) {
+				out = append(out, e)
+				if len(out) == n {
+					break
+				}
 			}
 		}
-		out = append(out, e)
-		if len(out) == n {
-			break
+		return out
+	}
+	// A list package holds words of one lesson only: the earliest (chosen)
+	// lesson with an eligible word, so earlier lessons' unreadable words do
+	// not hold it back. Words without a lesson come last.
+	ranks := ix.lessonRanks(src.List)
+	var lesson string
+	var rank int
+	found, hasLesson := false, false
+	for _, i := range order {
+		e := ix.entries[i]
+		if !eligible(e) {
+			continue
+		}
+		l, r, ok := firstLesson(e, src, ranks)
+		if !found || (ok && (!hasLesson || r < rank)) {
+			lesson, rank, hasLesson, found = l, r, ok, true
+		}
+	}
+	if !found {
+		return nil
+	}
+	for _, i := range order {
+		e := ix.entries[i]
+		if l, _, _ := firstLesson(e, src, ranks); l == lesson && eligible(e) {
+			out = append(out, e)
+			if len(out) == n {
+				break
+			}
 		}
 	}
 	return out
@@ -70,7 +111,16 @@ func NextPackageWhere(ix *Index, src Source, introduced map[string]bool, n int, 
 // Lesson returns e's first lesson in the list's lesson order, "" if it has
 // none in that list.
 func (ix *Index) Lesson(e Entry, list string) string {
-	lesson, _, _ := firstLesson(e, list, ix.lessonRanks(list))
+	return ix.LessonIn(e, Source{List: list})
+}
+
+// LessonIn returns e's first lesson in the lesson order of src's list,
+// among src.Lessons when set; "" if it has none there or src is JLPT.
+func (ix *Index) LessonIn(e Entry, src Source) string {
+	if src.List == "" {
+		return ""
+	}
+	lesson, _, _ := firstLesson(e, src, ix.lessonRanks(src.List))
 	return lesson
 }
 
@@ -113,7 +163,7 @@ func (ix *Index) order(list string) []int {
 		keys := make(map[int]key, len(idx))
 		for _, i := range idx {
 			e := ix.entries[i]
-			_, r, ok := firstLesson(e, list, ranks)
+			_, r, ok := firstLesson(e, Source{List: list}, ranks)
 			keys[i] = key{hasLesson: ok, lesson: r, pos: e.ListPos[list]}
 		}
 		sort.SliceStable(idx, func(a, b int) bool {
@@ -159,10 +209,14 @@ func (ix *Index) lessonRanks(list string) map[string]int {
 	return ranks
 }
 
-// firstLesson returns e's lesson in list that comes first by ranks and its
-// rank; ok is false when e has no lesson there.
-func firstLesson(e Entry, list string, ranks map[string]int) (lesson string, rank int, ok bool) {
-	for _, l := range e.Lists[list] {
+// firstLesson returns e's lesson in src's list that comes first by ranks,
+// among src.Lessons when set, and its rank; ok is false when e has none
+// there.
+func firstLesson(e Entry, src Source, ranks map[string]int) (lesson string, rank int, ok bool) {
+	for _, l := range e.Lists[src.List] {
+		if len(src.Lessons) > 0 && !contains(src.Lessons, l) {
+			continue
+		}
 		if r, known := ranks[l]; known && (!ok || r < rank) {
 			lesson, rank, ok = l, r, true
 		}
