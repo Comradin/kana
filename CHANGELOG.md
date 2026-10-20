@@ -2,8 +2,16 @@
 
 ## [0.5.0](https://github.com/Comradin/kana/compare/v0.4.1...v0.5.0) (2026-10-20)
 
+**Practise your course's vocabulary.** Four new settings help you drill exactly the words you are working on.
 
-### New
+- **Words only** (*Settings → Words → Tiles*): only words fall, no single kana. Every word you were introduced to can fall, even if you haven't learned all its kana yet – only its script needs to be switched on. Your kana progress waits meanwhile (no new rows, no katakana offer) and goes on when you switch back. If no word can fall, kana fall instead and the status panel says why.
+- **Choose lessons** (*Settings → Words*): for your own word list, tick the lessons you want to practise. Only their words fall, and new word packages come from the earliest chosen lesson. Each list remembers its choice.
+- **Meanings in** (*Settings → Words*): pick the language meanings are shown and accepted in – Deutsch, English, Español, Français and more, whatever your word lists contain. English answers always count too.
+- **Focus on weak items** (*Settings → Game*): half of the tiles come from what you are still learning or recently got wrong; the ones you got wrong come twice as often.
+
+### Commits
+
+#### New
 
 * **fyne:** add tiles, lessons, meaning language and focus settings ([5b79f8b](https://github.com/Comradin/kana/commit/5b79f8b97752b2b93094067dccd6b24486152c96))
 * **fyne:** add words-only mode in which the kana path rests ([ccfc058](https://github.com/Comradin/kana/commit/ccfc05828660a148fbc1c0d8998b5278908a314e))
@@ -13,7 +21,7 @@
 * **vocab:** choose lessons of a list and list its lessons and languages ([40a27f1](https://github.com/Comradin/kana/commit/40a27f1b27129af515225200d725251fbe47beca))
 
 
-### Improvements and fixes
+#### Improvements and fixes
 
 * **fyne:** ignore lessons a list no longer has in its lesson filter ([73a5ba3](https://github.com/Comradin/kana/commit/73a5ba37f0130ce0b77f944399e56b65c277aec1))
 
