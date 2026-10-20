@@ -115,10 +115,20 @@ func missReason(missed int) string {
 	return fmt.Sprintf("%d tiles slipped through.", missed)
 }
 
+// Bounds of wordShare once a word is playable: a few playable words still
+// fall now and then, many do not crowd out the kana.
+const (
+	minWordShare = 0.05
+	maxWordShare = 0.1
+)
+
 // wordShare is the chance that a spawn is a word: one percent per playable
-// word, at most 10 %.
+// word, at least 5 % once one is playable and at most 10 %.
 func wordShare(playable int) float64 {
-	return math.Min(0.1, float64(playable)/100)
+	if playable == 0 {
+		return 0
+	}
+	return math.Min(maxWordShare, math.Max(minWordShare, float64(playable)/100))
 }
 
 // wordFallFactor gives longer words more time: 20 % per kana unit after the

@@ -185,6 +185,7 @@ type WordsStatus struct {
 	Level      int       // the JLPT level of a JLPT source; 0 for a list
 	Introduced int       // introduced readings in the word index
 	Learned    int       // introduced readings at level 5
+	Waiting    int       // introduced readings that cannot fall: a kana is not learned
 	Next       wordsNext // whether new words can come from the source
 }
 
@@ -207,6 +208,8 @@ func formatWordsLine(ws WordsStatus) string {
 		s = "Words: JLPT finished"
 	case ws.Next == wordsFinished:
 		s = "Words: " + ws.Source + " finished"
+	case ws.Waiting > 0:
+		s = fmt.Sprintf("Words: %d introduced · %d learned · %d waiting for kana · %s", ws.Introduced, ws.Learned, ws.Waiting, ws.Source)
 	default:
 		s = fmt.Sprintf("Words: %d introduced · %d learned · %s", ws.Introduced, ws.Learned, ws.Source)
 	}

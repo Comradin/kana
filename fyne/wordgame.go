@@ -305,9 +305,10 @@ func (gs *GameState) sourceLeft(src vocab.Source) int {
 	return n
 }
 
-// introducedCounts counts the introduced readings in the word index and
-// those of them that are learned. Must be called under lock.
-func (gs *GameState) introducedCounts() (introduced, learnedN int) {
+// introducedCounts counts the introduced readings in the word index, those
+// of them that are learned and those that wait for a kana to be learned
+// before they can fall. Must be called under lock.
+func (gs *GameState) introducedCounts() (introduced, learnedN, waiting int) {
 	for kana := range gs.introduced {
 		if _, ok := gs.words.Lookup(kana); !ok {
 			continue
@@ -317,12 +318,12 @@ func (gs *GameState) introducedCounts() (introduced, learnedN int) {
 			learnedN++
 		}
 	}
-	return introduced, learnedN
+	return introduced, learnedN, introduced - len(gs.playableWords())
 }
 
 // wordsSummary is the settings' Words tab line: "Introduced: 25 · learned:
-// 18 · left in source: 101", or that the chosen list is missing. Must be
-// called under lock.
+// 18 · waiting for kana: 4 · left in source: 101" (the waiting part only when
+// some wait), or that the chosen list is missing. Must be called under lock.
 func (gs *GameState) wordsSummary() string {
 	src, found := gs.source()
 	if !found {
@@ -331,8 +332,12 @@ func (gs *GameState) wordsSummary() string {
 	if gs.words == nil {
 		return "No words available"
 	}
-	introduced, learnedN := gs.introducedCounts()
-	return fmt.Sprintf("Introduced: %d · learned: %d · left in source: %d", introduced, learnedN, gs.sourceLeft(src))
+	introduced, learnedN, waiting := gs.introducedCounts()
+	s := fmt.Sprintf("Introduced: %d · learned: %d", introduced, learnedN)
+	if waiting > 0 {
+		s += fmt.Sprintf(" · waiting for kana: %d", waiting)
+	}
+	return s + fmt.Sprintf(" · left in source: %d", gs.sourceLeft(src))
 }
 
 // wordsStatus summarises the words for the status panel. Must be called
@@ -350,7 +355,7 @@ func (gs *GameState) wordsStatus() WordsStatus {
 	if gs.words == nil {
 		return ws
 	}
-	ws.Introduced, ws.Learned = gs.introducedCounts()
+	ws.Introduced, ws.Learned, ws.Waiting = gs.introducedCounts()
 	if found && !ws.LoadFailed && len(vocab.NextPackage(gs.words, src, gs.introduced, 1, gs.unitKnown)) == 0 {
 		ws.Next = wordsFinished
 		if gs.sourceLeft(src) > 0 {

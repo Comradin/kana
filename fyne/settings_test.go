@@ -214,7 +214,7 @@ func TestSettingsFormCarriesValues(t *testing.T) {
 	if f.packageSize.Selected != "10" {
 		t.Fatalf("package size = %q", f.packageSize.Selected)
 	}
-	if f.summary.Text != "Introduced: 1 · learned: 1 · left in source: 1" {
+	if f.summary.Text != "Introduced: 1 · learned: 1 · waiting for kana: 1 · left in source: 1" {
 		t.Fatalf("summary = %q", f.summary.Text)
 	}
 	if f.limitEntry.Text != "500" || f.difficulty.Selected != "Fast" || f.points.Selected != pointsLabel(2) || !f.autoCheck.Checked {
