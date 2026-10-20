@@ -33,6 +33,12 @@ Kana is a Fyne v2 desktop app (`kana-desktop`).
   a hit shows the meaning (and the romaji when answered by meaning), a missed word shows its
   romaji and meaning. One spawn in a hundred is a word per
   playable word, at most 10 %; longer words fall more slowly (up to twice the time).
+- **Words only**: Settings → Words → Tiles "Words only" lets only words fall: every word you
+  were introduced to (of the chosen source and lessons, in an active script) falls, whether or
+  not you have learned its kana, and new word packages come the same way. The kana learning
+  path waits meanwhile (no new rows, no katakana offer) and goes on when you switch back. If no
+  word can fall (no word in the chosen lessons, list missing), kana fall and the status panel
+  says why.
 - **Learning path**: start with あいうえお, unlock two rows at a time; each automatically unlocked row is introduced before it is asked, and the game pauses while new rows are introduced
 - **Two scripts**: hiragana and katakana progress independently; switch scripts in the settings. After the basic hiragana you are offered katakana once.
 - **Score Limit Mode**: Set a target score or 0 for endless practice
@@ -73,6 +79,9 @@ Kana is a Fyne v2 desktop app (`kana-desktop`).
   weight never drops below a tenth of a just-missed character's), and brand-new characters make
   up at most 40% of spawns. A character already falling on screen is not spawned again while
   it's still there, unless it is the only choice.
+- **Focus on weak items** (Settings → Game): half the tiles are drawn from what you are
+  learning (levels 1–4) or slipped, slipped ones twice as often; the other half and all new
+  items come as usual. It does not change how often a word falls.
 
 ### Progress Tracking
 - **Persistent Statistics**: Progress is saved to a local SQLite database (`kana.db`)
@@ -83,8 +92,11 @@ Kana is a Fyne v2 desktop app (`kana-desktop`).
 - **Row Selection**: Choose which hiragana and katakana rows to practice, grouped by Basic, Dakuon, Handakuon, Yōon, Yōon + Dakuten and (katakana only) Extended katakana
 - **Auto-Progression**: per script, unlocks the next learning-path step (one or two rows) once every active row of that script is mastered: at least 80% of its kana (rounded down, at least one) answered correctly three times
 - **Configurable Score Limit**: Set a target or play endlessly
-- **Word packages**: where new words come from (a private list or JLPT), the JLPT level and
-  the package size (3, 5 or 10)
+- **Word packages**: where new words come from (a private list or JLPT), the JLPT level, the
+  lessons of a list (checkboxes with "All lessons" and "No lesson", stored per list: only these
+  lessons' words fall and new packages come from the earliest chosen lesson), the package size
+  (3, 5 or 10) and the meaning language ("Meanings in": System, or any language of the word
+  data; English answers are always accepted)
 - **Kana font**: Noto Sans JP (default), M PLUS Rounded 1c or the system font, for tiles,
   intros, the kana grid and the word labels; both fonts ship with the app
 
@@ -305,6 +317,7 @@ Built on [Fyne v2](https://fyne.io) with goroutine-based game loop:
 - `words.go`: word helpers — meaning language, missed-word and feedback texts, the words line
 - `wordgame.go`: word progress (stats, memory, merge), the playable-word rule and cache, word spawning
 - `feedback.go`: the labels shown after a word hit or miss
+- `focus.go`: the focus pick on weak items
 - `packages.go`: word packages — when the next one is due, finishing it ("already known" words
   count as secure), replacement words, the JLPT level offer
 - `packageintro.go`: the word package intro and the level offer dialogs
@@ -314,13 +327,13 @@ Built on [Fyne v2](https://fyne.io) with goroutine-based game loop:
 - `progress.go`: computes each script's learning-path status (`PathStatus`) and total correct counts per character
 - `statswidgets.go`: the fixed-column grid layout and the kana cell widget used by the stats panel
 - `input.go`: `InputBar` — score, level, tempo, miss count, text entry
-- `settings.go`: In-game settings dialog with the tabs Kana (scripts and row selection, one tab per script, per-group "all" toggle, auto-progression), Words (source, JLPT level, package size), Game (difficulty level, points per hit, score limit, kana font) and Sources
+- `settings.go`: In-game settings dialog with the tabs Kana (scripts and row selection, one tab per script, per-group "all" toggle, auto-progression), Words (tiles, source, lessons, JLPT level, package size, meaning language), Game (difficulty level, points per hit, focus on weak items, score limit, kana font) and Sources
 - `version.go`: the version label and the Sources tab
 - `theme.go`: `KanaTheme` — warm paper colour palette
 
 ### Persistence (`store/`)
 
-- `store/store.go`: SQLite persistence, including active scripts, the katakana offer flag, the chosen difficulty level, the points setting and per-character spaced-repetition memory states (seeded once from past correct counts), per-word statistics, the introduced words and the word settings (`word_level`, `word_source`, `package_size`, `newest_package`, `meaning_lang`) and the kana font (`kana_font`)
+- `store/store.go`: SQLite persistence, including active scripts, the katakana offer flag, the chosen difficulty level, the points setting and per-character spaced-repetition memory states (seeded once from past correct counts), per-word statistics, the introduced words and the word settings (`word_level`, `word_source`, `package_size`, `newest_package`, `meaning_lang`, `words_only`, `focus_weak`, `lesson_filter:<list>`) and the kana font (`kana_font`)
 
 ### Game Timing
 - Tick loop: 100ms
@@ -391,6 +404,9 @@ Choose a list as the source of new words in the settings (Words tab; an imported
 preselected); its words are introduced lesson by lesson (numeric lessons in number order,
 others in the order they first appear), then in file order, with words without a lesson last.
 If the chosen list is missing, the status panel says where to add it.
+
+Choose lessons below the source to practise only them (all lessons by default); renaming a list
+file forgets its lesson choice.
 
 - **CSV/TSV** (`*.csv`, `*.tsv`): a header row; the separator (tab, semicolon or comma) is
   taken from it. Columns: `kana` (required), `meaning` (any language), `meaning_de`,

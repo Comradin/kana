@@ -34,6 +34,13 @@ type settingsState struct {
 	summary     string // the Words tab's summary line
 	wordsDir    string // the word list folder for display; "" if unknown
 	kanaFont    string // the kana font's id
+
+	wordsOnly     bool
+	lessons       map[string][]string // per list: its lessons in learning order, "" last when it has words without a lesson
+	lessonFilters map[string][]string // per list: the stored lesson filter; absent = all lessons
+	meaningLang   string              // the stored meaning language; "" = System
+	languages     []string            // the meaning languages of the words, by code
+	focusWeak     bool
 }
 
 // settingsState copies the current settings for the dialog.
@@ -44,6 +51,22 @@ func (gs *GameState) settingsState() settingsState {
 	var dir string
 	if gs.wordsDir != "" {
 		dir = displayDir(gs.wordsDir, home)
+	}
+	lessons := make(map[string][]string, len(gs.listNames))
+	var langs []string
+	if gs.words != nil {
+		for _, name := range gs.listNames {
+			ls, none := gs.words.Lessons(name)
+			if none {
+				ls = append(ls, "")
+			}
+			lessons[name] = ls
+		}
+		langs = gs.words.Languages()
+	}
+	filters := make(map[string][]string, len(gs.lessonFilters))
+	for name, ls := range gs.lessonFilters {
+		filters[name] = slices.Clone(ls)
 	}
 	return settingsState{
 		selected:    maps.Clone(gs.selectedRows),
@@ -59,8 +82,21 @@ func (gs *GameState) settingsState() settingsState {
 		summary:     gs.wordsSummary(),
 		wordsDir:    dir,
 		kanaFont:    gs.kanaFont.id,
+
+		wordsOnly:     gs.wordsOnly,
+		lessons:       lessons,
+		lessonFilters: filters,
+		meaningLang:   gs.meaningSetting,
+		languages:     langs,
+		focusWeak:     gs.focusWeak,
 	}
 }
+
+// The Words tab's "Tiles" choices.
+const (
+	tilesMixed     = "Kana and words"
+	tilesWordsOnly = "Words only"
+)
 
 // settingsForm is the settings dialog's content: the tabs Kana, Words, Game
 // and Sources, whose widgets carry the settings.
@@ -79,6 +115,19 @@ type settingsForm struct {
 	packageSize  *widget.RadioGroup
 	summary      *widget.Label
 	folder       *widget.Label // where the word lists are kept
+
+	tiles         *widget.RadioGroup  // tilesMixed or tilesWordsOnly
+	listLessons   map[string][]string // per list: its lessons, "" last for words without one
+	lessonFilters map[string][]string // per list: its lesson filter as edited in this dialog
+	lessonBox     *fyne.Container     // "All lessons" and the selected list's lesson checks
+	lessonScroll  *container.Scroll
+	lessonList    string   // the list lessonBox shows; "" = none
+	lessonOrder   []string // its lessons, in order
+	lessonChecks  map[string]*widget.Check
+	allLessons    *widget.Check
+	meaningSelect *widget.Select
+	meaningValues []string // the meaning language of each meaningSelect option; "" = System
+	focusCheck    *widget.Check
 
 	difficulty *widget.RadioGroup
 	points     *widget.Select
@@ -182,11 +231,13 @@ func (f *settingsForm) setLists(lists []string, selected string) {
 	if i := slices.Index(values, listSourcePrefix+selected); i >= 0 {
 		f.sourceSelect.SetSelectedIndex(i)
 	}
+	f.showLessons()
 }
 
-// newWordsTab holds where new words come from, the import button, the JLPT
-// level (for JLPT only), the package size, a summary of the current source
-// and the word list folder.
+// newWordsTab holds the tiles (kana and words, or words only), where new
+// words come from, the import button, the lessons of a list, the JLPT level
+// (for JLPT only), the package size, the meaning language, a summary of the
+// current source and the word list folder.
 func (f *settingsForm) newWordsTab(st settingsState) fyne.CanvasObject {
 	f.storedSource = st.wordSource
 	labels, values := sourceOptions(st.lists, st.wordSource)
@@ -197,18 +248,44 @@ func (f *settingsForm) newWordsTab(st settingsState) fyne.CanvasObject {
 	f.wordLevel.Required = true
 	f.wordLevel.SetSelected(fmt.Sprintf("N%d", st.wordLevel))
 
+	f.tiles = widget.NewRadioGroup([]string{tilesMixed, tilesWordsOnly}, nil)
+	f.tiles.Horizontal = true
+	f.tiles.Required = true
+	f.tiles.SetSelected(tilesMixed)
+	if st.wordsOnly {
+		f.tiles.SetSelected(tilesWordsOnly)
+	}
+
+	// The lesson box comes before the source select, whose OnChanged
+	// fills it.
+	f.listLessons = st.lessons
+	f.lessonFilters = maps.Clone(st.lessonFilters)
+	if f.lessonFilters == nil {
+		f.lessonFilters = map[string][]string{}
+	}
+	f.lessonBox = container.NewVBox()
+	f.lessonScroll = container.NewVScroll(f.lessonBox)
+	f.lessonScroll.SetMinSize(fyne.NewSize(460, 96))
+
 	f.sourceSelect = widget.NewSelect(labels, func(string) {
 		if f.wordSource() == jlptSource {
 			f.wordLevel.Enable()
 		} else {
 			f.wordLevel.Disable()
 		}
+		f.showLessons()
 	})
 	if i := slices.Index(f.sourceValues, st.wordSource); i >= 0 {
 		f.sourceSelect.SetSelectedIndex(i)
 	} else {
 		f.sourceSelect.SetSelectedIndex(len(labels) - 1)
 	}
+	f.showLessons()
+
+	mLabels, mValues := meaningLangOptions(st.languages, st.meaningLang)
+	f.meaningValues = mValues
+	f.meaningSelect = widget.NewSelect(mLabels, nil)
+	f.meaningSelect.SetSelectedIndex(slices.Index(mValues, st.meaningLang))
 
 	sizes := make([]string, len(packageSizes))
 	for i, n := range packageSizes {
@@ -231,21 +308,26 @@ func (f *settingsForm) newWordsTab(st settingsState) fyne.CanvasObject {
 
 	f.summary = widget.NewLabel(st.summary)
 	return container.NewVBox(
+		widget.NewLabelWithStyle("Tiles", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		f.tiles,
+		widget.NewSeparator(),
 		widget.NewLabelWithStyle("New words from", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 		f.sourceSelect,
 		importButton,
+		f.lessonScroll,
 		widget.NewLabel("JLPT level"),
 		f.wordLevel,
 		widget.NewLabel("Words per package"),
 		f.packageSize,
+		container.NewHBox(widget.NewLabel("Meanings in"), f.meaningSelect),
 		widget.NewSeparator(),
 		f.summary,
 		f.folder,
 	)
 }
 
-// newGameTab holds the difficulty, points per hit, the score limit and the
-// kana font, each font previewed in itself.
+// newGameTab holds the difficulty, points per hit, the focus on weak items,
+// the score limit and the kana font, each font previewed in itself.
 func (f *settingsForm) newGameTab(st settingsState) fyne.CanvasObject {
 	f.limitEntry = widget.NewEntry()
 	f.limitEntry.SetText(strconv.Itoa(st.limit))
@@ -273,6 +355,9 @@ func (f *settingsForm) newGameTab(st settingsState) fyne.CanvasObject {
 	f.points = widget.NewSelect(pointsLabels, nil)
 	f.points.SetSelected(pointsLabel(st.points))
 
+	f.focusCheck = widget.NewCheck("Focus on weak items", nil)
+	f.focusCheck.SetChecked(st.focusWeak)
+
 	fontLabels := make([]string, len(fontChoices))
 	previews := container.NewGridWithColumns(2)
 	for i, c := range fontChoices {
@@ -292,6 +377,7 @@ func (f *settingsForm) newGameTab(st settingsState) fyne.CanvasObject {
 		widget.NewLabelWithStyle("Difficulty", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 		f.difficulty,
 		container.NewHBox(widget.NewLabel("Points per hit"), f.points),
+		f.focusCheck,
 		widget.NewSeparator(),
 		widget.NewLabel("Score limit (0 = endless)"),
 		f.limitEntry,
@@ -324,7 +410,98 @@ func (f *settingsForm) wordSource() string {
 func (f *settingsForm) words() wordSettings {
 	level, _ := strconv.Atoi(strings.TrimPrefix(f.wordLevel.Selected, "N"))
 	size, _ := strconv.Atoi(f.packageSize.Selected)
-	return wordSettings{source: f.wordSource(), level: level, packageSize: size}
+	return wordSettings{source: f.wordSource(), level: level, packageSize: size,
+		wordsOnly: f.tiles.Selected == tilesWordsOnly, lessons: f.selectedLessons(), meaningLang: f.meaningLang()}
+}
+
+// showLessons fills the lesson box for the selected source: "All lessons"
+// and a check per lesson of the list ("No lesson" for words without one),
+// checked as the list's filter in this dialog says (all when it has none).
+// JLPT and a list without lessons hide the box. The checks of the list
+// shown so far are kept first. Must run on the Fyne thread.
+func (f *settingsForm) showLessons() {
+	f.keepLessons()
+	f.lessonList, f.lessonOrder, f.lessonChecks, f.allLessons = "", nil, nil, nil
+	f.lessonBox.RemoveAll()
+	name, isList := strings.CutPrefix(f.wordSource(), listSourcePrefix)
+	lessons := f.listLessons[name]
+	if !isList || !slices.ContainsFunc(lessons, func(l string) bool { return l != "" }) {
+		f.lessonScroll.Hide()
+		return
+	}
+	chosen := f.lessonFilters[name]
+	f.lessonList, f.lessonOrder = name, lessons
+	f.lessonChecks = make(map[string]*widget.Check, len(lessons))
+	checks := make([]*widget.Check, 0, len(lessons))
+	grid := container.NewGridWithColumns(4)
+	for _, l := range lessons {
+		c := widget.NewCheck(lessonLabel(l), nil)
+		c.SetChecked(len(chosen) == 0 || slices.Contains(chosen, l))
+		f.lessonChecks[l] = c
+		checks = append(checks, c)
+		grid.Add(c)
+	}
+	f.allLessons = widget.NewCheck("All lessons", nil)
+	f.allLessons.SetChecked(allChecked(checks))
+	linkAllCheck(f.allLessons, checks)
+	f.lessonBox.Add(f.allLessons)
+	f.lessonBox.Add(grid)
+	f.lessonScroll.Show()
+}
+
+// keepLessons keeps the lesson checks shown as that list's filter in this
+// dialog, so switching sources back and forth keeps them.
+func (f *settingsForm) keepLessons() {
+	if f.lessonList != "" {
+		f.lessonFilters[f.lessonList] = f.chosenLessons()
+	}
+}
+
+// chosenLessons is the filter the lesson checks shown give: the checked
+// lessons in list order; nil (all lessons) when all or none are checked.
+func (f *settingsForm) chosenLessons() []string {
+	var out []string
+	for _, l := range f.lessonOrder {
+		if f.lessonChecks[l].Checked {
+			out = append(out, l)
+		}
+	}
+	if len(out) == len(f.lessonOrder) {
+		return nil
+	}
+	return out
+}
+
+// selectedLessons is the lesson filter to save for the selected source:
+// the checks for a list that shows them, the list's filter as it is for
+// one that does not (a missing list keeps its filter), nil for JLPT.
+func (f *settingsForm) selectedLessons() []string {
+	name, ok := strings.CutPrefix(f.wordSource(), listSourcePrefix)
+	switch {
+	case !ok:
+		return nil
+	case name == f.lessonList:
+		return f.chosenLessons()
+	}
+	return f.lessonFilters[name]
+}
+
+// lessonLabel is a lesson's check label: its name, "No lesson" for words
+// without one.
+func lessonLabel(l string) string {
+	if l == "" {
+		return "No lesson"
+	}
+	return l
+}
+
+// meaningLang is the meaning language the Words tab has selected; "" =
+// System.
+func (f *settingsForm) meaningLang() string {
+	if i := f.meaningSelect.SelectedIndex(); i >= 0 {
+		return f.meaningValues[i]
+	}
+	return ""
 }
 
 // validate checks every tab; on an error it switches to the tab that has it.
@@ -345,6 +522,7 @@ func (f *settingsForm) apply(gs *GameState) {
 	}
 	gs.applyWordSettings(f.words())
 	gs.SetKanaFont(f.kanaFontID())
+	gs.SetFocusWeak(f.focusCheck.Checked)
 	gs.applySettings(checkedRowIDs(f.rowChecks), checkedScripts(f.scriptChecks), f.autoCheck.Checked, limit,
 		levelFromLabel(f.difficulty.Selected), pointsFromLabel(f.points.Selected))
 }
@@ -414,9 +592,7 @@ func showSettingsDialog(gs *GameState, statsPanel *StatsPanel, gameCanvas *GameC
 }
 
 // newGroupChecks builds the per-row checks and the "all" check for one kana
-// group, keeping them in sync: checking/unchecking "all" sets every row, and
-// checking/unchecking a row updates "all" to match. A per-group syncing flag
-// guards against the two handlers recursing into each other.
+// group, keeping them in sync (linkAllCheck).
 func newGroupChecks(rows []kanacore.KanaRow, selected map[string]bool) (all *widget.Check, checks map[string]*widget.Check, grid *fyne.Container) {
 	checks = make(map[string]*widget.Check, len(rows))
 	checkList := make([]*widget.Check, 0, len(rows))
@@ -432,32 +608,35 @@ func newGroupChecks(rows []kanacore.KanaRow, selected map[string]bool) (all *wid
 
 	all = widget.NewCheck("all", nil)
 	all.SetChecked(allChecked(checkList))
+	linkAllCheck(all, checkList)
+	return all, checks, grid
+}
 
+// linkAllCheck keeps all and checks in sync: checking or unchecking all
+// sets every check, and a check's change sets all to whether every check is
+// on. A syncing flag guards against the handlers recursing into each other.
+func linkAllCheck(all *widget.Check, checks []*widget.Check) {
 	syncing := false
-
 	all.OnChanged = func(on bool) {
 		if syncing {
 			return
 		}
 		syncing = true
-		for _, c := range checkList {
+		for _, c := range checks {
 			c.SetChecked(on)
 		}
 		syncing = false
 	}
-
-	for _, c := range checkList {
+	for _, c := range checks {
 		c.OnChanged = func(bool) {
 			if syncing {
 				return
 			}
 			syncing = true
-			all.SetChecked(allChecked(checkList))
+			all.SetChecked(allChecked(checks))
 			syncing = false
 		}
 	}
-
-	return all, checks, grid
 }
 
 // checkedRowIDs returns the IDs of checked rows in progression order.

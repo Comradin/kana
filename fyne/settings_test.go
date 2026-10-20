@@ -466,3 +466,117 @@ func TestSettingsResetBusyShowsTheReason(t *testing.T) {
 		t.Fatal("the error dialog must name the reason")
 	}
 }
+
+// lessonsGame is settingsGame with lessons in its list, a second list and
+// every new setting away from its default.
+func lessonsGame() *GameState {
+	gs := settingsGame()
+	gs.words = vocab.NewIndex(
+		[]vocab.Word{bw("あい", 5, "love")},
+		[]vocab.List{
+			{Name: "minna-no-nihongo", Words: []vocab.Word{
+				lw("minna-no-nihongo", "あい", "2"), lw("minna-no-nihongo", "うえ", "1"), lw("minna-no-nihongo", "いえ", ""),
+			}},
+			{Name: "other", Words: []vocab.Word{lw("other", "あお", "A")}},
+		},
+	)
+	gs.listNames = []string{"minna-no-nihongo", "other"}
+	gs.lessonFilters = map[string][]string{"minna-no-nihongo": {"2"}}
+	gs.wordsOnly = true
+	gs.focusWeak = true
+	gs.meaningSetting = "de"
+	return gs
+}
+
+func checkedLessons(f *settingsForm) []string {
+	var out []string
+	for _, l := range f.lessonOrder {
+		if f.lessonChecks[l].Checked {
+			out = append(out, l)
+		}
+	}
+	return out
+}
+
+func TestSettingsFormCarriesTheNewSettings(t *testing.T) {
+	test.NewApp()
+	f := newSettingsForm(lessonsGame().settingsState(), nil)
+	if f.tiles.Selected != "Words only" || !f.focusCheck.Checked {
+		t.Fatalf("tiles %q, focus %v", f.tiles.Selected, f.focusCheck.Checked)
+	}
+	if !equalIDs(f.meaningSelect.Options, []string{"System", "Deutsch", "English"}) || f.meaningSelect.Selected != "Deutsch" {
+		t.Fatalf("meaning options %v, selected %q", f.meaningSelect.Options, f.meaningSelect.Selected)
+	}
+	if !equalIDs(f.lessonOrder, []string{"1", "2", ""}) || !equalIDs(checkedLessons(f), []string{"2"}) || f.allLessons.Checked {
+		t.Fatalf("lessons %v, checked %v, all %v", f.lessonOrder, checkedLessons(f), f.allLessons.Checked)
+	}
+	if f.lessonChecks[""].Text != "No lesson" || !f.lessonScroll.Visible() {
+		t.Fatalf("label %q, box visible %v", f.lessonChecks[""].Text, f.lessonScroll.Visible())
+	}
+	f.allLessons.SetChecked(true)
+	if f.words().lessons != nil {
+		t.Fatalf("all lessons checked: %v, want nil", f.words().lessons)
+	}
+	f.lessonChecks["1"].SetChecked(false)
+	if got := f.words().lessons; !equalIDs(got, []string{"2", ""}) {
+		t.Fatalf("lessons = %v", got)
+	}
+
+	f.sourceSelect.SetSelected("other")
+	if !equalIDs(f.lessonOrder, []string{"A"}) || !equalIDs(checkedLessons(f), []string{"A"}) {
+		t.Fatalf("the lesson list follows the source: %v, checked %v", f.lessonOrder, checkedLessons(f))
+	}
+	f.sourceSelect.SetSelected("minna no nihongo")
+	if !equalIDs(checkedLessons(f), []string{"2", ""}) {
+		t.Fatalf("switching back keeps the edited checks: %v", checkedLessons(f))
+	}
+	f.sourceSelect.SetSelected("JLPT")
+	if f.lessonScroll.Visible() || f.words().lessons != nil {
+		t.Fatal("JLPT has no lesson filter")
+	}
+}
+
+func TestSettingsApplySavesTheNewSettings(t *testing.T) {
+	test.NewApp()
+	gs := settingsGame()
+	gs.words = lessonsGame().words
+	gs.listNames = []string{"minna-no-nihongo", "other"}
+	f := newSettingsForm(gs.settingsState(), nil)
+	f.tiles.SetSelected("Words only")
+	f.focusCheck.SetChecked(true)
+	f.meaningSelect.SetSelected("Deutsch")
+	f.lessonChecks["1"].SetChecked(false)
+	f.apply(gs)
+	if !gs.wordsOnly || !gs.focusWeak || gs.meaningSetting != "de" || gs.meaningLang != "de" {
+		t.Fatalf("words-only %v, focus %v, meaning %q/%q", gs.wordsOnly, gs.focusWeak, gs.meaningSetting, gs.meaningLang)
+	}
+	if got := gs.lessonFilters["minna-no-nihongo"]; !equalIDs(got, []string{"2", ""}) {
+		t.Fatalf("lesson filter = %v", got)
+	}
+}
+
+func TestSettingsApplyWithoutChangesKeepsTheNewSettings(t *testing.T) {
+	test.NewApp()
+	gs := lessonsGame()
+	gs.lessonFilters["other"] = []string{"A"}
+	f := newSettingsForm(gs.settingsState(), nil)
+	f.apply(gs)
+	if !gs.wordsOnly || !gs.focusWeak || gs.meaningSetting != "de" {
+		t.Fatalf("words-only %v, focus %v, meaning %q", gs.wordsOnly, gs.focusWeak, gs.meaningSetting)
+	}
+	want := map[string][]string{"minna-no-nihongo": {"2"}, "other": {"A"}}
+	if !reflect.DeepEqual(gs.lessonFilters, want) {
+		t.Fatalf("lesson filters = %v, want %v", gs.lessonFilters, want)
+	}
+	if gs.wordSource != listSourcePrefix+"minna-no-nihongo" || gs.wordLevel != 4 || gs.packageSize != 10 {
+		t.Fatalf("source %q, level %d, size %d", gs.wordSource, gs.wordLevel, gs.packageSize)
+	}
+}
+
+func TestLessonBoxHiddenForAListWithoutLessons(t *testing.T) {
+	test.NewApp()
+	f := newSettingsForm(settingsGame().settingsState(), nil) // its list has no lessons
+	if f.lessonScroll.Visible() || f.words().lessons != nil {
+		t.Fatal("a list without lessons shows no lesson box")
+	}
+}

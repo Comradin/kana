@@ -142,9 +142,11 @@ func importChosen(gs *GameState, f *settingsForm, fileName string, data []byte, 
 			dialog.ShowError(err, win)
 			return
 		}
-		f.setLists(gs.ListNames(), name)
+		st := gs.settingsState()
+		f.listLessons = st.lessons
+		f.setLists(st.lists, name)
 		// The summary may have said the chosen list was missing.
-		f.summary.SetText(gs.settingsState().summary)
+		f.summary.SetText(st.summary)
 	}, win)
 	d.Resize(fyne.NewSize(480, 0))
 	d.Show()
