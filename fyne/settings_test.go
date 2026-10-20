@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -224,6 +226,21 @@ func TestSettingsFormCarriesValues(t *testing.T) {
 	}
 	if got := f.words(); got != (wordSettings{source: jlptSource, level: 4, packageSize: 10}) {
 		t.Fatalf("words() = %+v", got)
+	}
+	if buttonIn(f.wordsTab.Content, "Import word list…") == nil {
+		t.Fatal("the Words tab needs an import button")
+	}
+	if f.folder.Text != "" {
+		t.Fatalf("folder line %q without a words folder", f.folder.Text)
+	}
+
+	home, _ := os.UserHomeDir()
+	gs := settingsGame()
+	gs.wordsDir = filepath.Join(home, ".local", "share", "kana", "words")
+	f = newSettingsForm(gs.settingsState(), nil)
+	want := "Word lists are kept in " + filepath.Join("~", ".local", "share", "kana", "words")
+	if f.folder.Text != want || !labelContains(f.wordsTab.Content, want) {
+		t.Fatalf("folder line %q, want %q", f.folder.Text, want)
 	}
 }
 
