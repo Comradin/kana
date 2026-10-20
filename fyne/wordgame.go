@@ -178,10 +178,10 @@ func (gs *GameState) ImportList(c vocab.Candidate) (string, error) {
 	return name, err
 }
 
-// unitKnown reports whether a word unit is known in mixed mode: the kana is
-// learned and its script is active. っ and ッ need their script, ー either
-// script. Must be called under lock.
-func (gs *GameState) unitKnown(unit string) bool {
+// unitActive reports whether a word unit's script is active: a kana's own
+// script; っ and ッ need their script, ー either script. Must be called
+// under lock.
+func (gs *GameState) unitActive(unit string) bool {
 	switch unit {
 	case "っ":
 		return gs.activeScripts[kanacore.ScriptHiragana]
@@ -191,10 +191,17 @@ func (gs *GameState) unitKnown(unit string) bool {
 		return gs.activeScripts[kanacore.ScriptHiragana] || gs.activeScripts[kanacore.ScriptKatakana]
 	}
 	rowID, ok := kanacore.CharToRow[unit]
-	if !ok || !gs.activeScripts[kanacore.ScriptOf(rowID)] {
-		return false
+	return ok && gs.activeScripts[kanacore.ScriptOf(rowID)]
+}
+
+// unitKnown reports whether a word unit is known in mixed mode: its script
+// is active and, for a kana, the kana is learned. Must be called under lock.
+func (gs *GameState) unitKnown(unit string) bool {
+	switch unit {
+	case "っ", "ッ", "ー":
+		return gs.unitActive(unit)
 	}
-	return learned(gs.kanaLevel(unit))
+	return gs.unitActive(unit) && learned(gs.kanaLevel(unit))
 }
 
 // unitsKnown reports whether every unit of a word is known. Must be called
@@ -208,19 +215,53 @@ func (gs *GameState) unitsKnown(units []string) bool {
 	return true
 }
 
-// playableWords returns the entries that may fall: introduced words all of
-// whose units are known, from every source and level, sorted by reading.
-// None while the introduced words could not be loaded. The result is
-// cached until invalidatePlayable; do not modify it. Must be called under
-// lock.
+// unitFits reports whether a word unit lets its word fall and be
+// introduced in the current mode: known in mixed mode, of an active script
+// in words-only mode. Must be called under lock.
+func (gs *GameState) unitFits(unit string) bool {
+	if gs.wordsOnly {
+		return gs.unitActive(unit)
+	}
+	return gs.unitKnown(unit)
+}
+
+// unitsFit reports whether every unit of a word fits (see unitFits). Must
+// be called under lock.
+func (gs *GameState) unitsFit(units []string) bool {
+	for _, u := range units {
+		if !gs.unitFits(u) {
+			return false
+		}
+	}
+	return true
+}
+
+// practised reports whether an introduced word belongs to what is
+// practised: in words-only mode the source with its lesson filter; in mixed
+// mode every introduced word, unless a lesson filter is set, which limits
+// it to the source as well. found is whether the source exists. Must be
+// called under lock.
+func (gs *GameState) practised(e vocab.Entry, src vocab.Source, found bool) bool {
+	if !gs.wordsOnly && len(src.Lessons) == 0 {
+		return true
+	}
+	return found && src.Has(e)
+}
+
+// playableWords returns the entries that may fall: introduced words that
+// are practised (see practised) and whose units fit the mode (see
+// unitFits), sorted by reading. None while the introduced words could not
+// be loaded. The result is cached until invalidatePlayable; do not modify
+// it. Must be called under lock.
 func (gs *GameState) playableWords() []vocab.Entry {
 	if gs.words == nil || gs.introducedLoadFailed {
 		return nil
 	}
 	if !gs.playableOK {
+		src, found := gs.source()
 		var out []vocab.Entry
 		for kana := range gs.introduced {
-			if e, ok := gs.words.Lookup(kana); ok && gs.unitsKnown(e.Units) {
+			if e, ok := gs.words.Lookup(kana); ok && gs.practised(e, src, found) && gs.unitsFit(e.Units) {
 				out = append(out, e)
 			}
 		}
@@ -233,7 +274,8 @@ func (gs *GameState) playableWords() []vocab.Entry {
 
 // invalidatePlayable marks the playable cache stale. Call it whenever a kana
 // may have become learned or stopped being learned, or the active scripts,
-// the introduced words or the index changed. Must be called under lock.
+// the introduced words, the index, the mode, the source or its lesson
+// filter changed. Must be called under lock.
 func (gs *GameState) invalidatePlayable() {
 	gs.playableOK = false
 }
@@ -306,19 +348,25 @@ func (gs *GameState) sourceLeft(src vocab.Source) int {
 }
 
 // introducedCounts counts the introduced readings in the word index, those
-// of them that are learned and those that wait for a kana to be learned
-// before they can fall. Must be called under lock.
+// of them that are learned and, in mixed mode, the practised ones that wait
+// for a kana to be learned before they can fall; words-only mode does not
+// wait for kana. Must be called under lock.
 func (gs *GameState) introducedCounts() (introduced, learnedN, waiting int) {
+	src, found := gs.source()
 	for kana := range gs.introduced {
-		if _, ok := gs.words.Lookup(kana); !ok {
+		e, ok := gs.words.Lookup(kana)
+		if !ok {
 			continue
 		}
 		introduced++
 		if gs.wordLearned(kana) {
 			learnedN++
 		}
+		if !gs.wordsOnly && gs.practised(e, src, found) && !gs.unitsKnown(e.Units) {
+			waiting++
+		}
 	}
-	return introduced, learnedN, introduced - len(gs.playableWords())
+	return introduced, learnedN, waiting
 }
 
 // wordsSummary is the settings' Words tab line: "Introduced: 25 · learned:
@@ -356,7 +404,7 @@ func (gs *GameState) wordsStatus() WordsStatus {
 		return ws
 	}
 	ws.Introduced, ws.Learned, ws.Waiting = gs.introducedCounts()
-	if found && !ws.LoadFailed && len(vocab.NextPackage(gs.words, src, gs.introduced, 1, gs.unitKnown)) == 0 {
+	if found && !ws.LoadFailed && len(vocab.NextPackage(gs.words, src, gs.introduced, 1, gs.unitFits)) == 0 {
 		ws.Next = wordsFinished
 		if gs.sourceLeft(src) > 0 {
 			ws.Next = wordsNeedKana

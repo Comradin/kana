@@ -25,6 +25,7 @@ type wordSettings struct {
 	source      string // jlptSource or listSourcePrefix + a list name
 	level       int    // JLPT level packages come down to, 1–5
 	packageSize int    // 3, 5 or 10
+	wordsOnly   bool   // only words fall
 }
 
 // readingsOf returns the readings of entries, in order.
@@ -38,13 +39,13 @@ func readingsOf(entries []vocab.Entry) []string {
 
 // newestPackageDone reports whether the newest package is learned well
 // enough for the next one: at least ceil(0.8 × p) of its p readings that
-// are playable now are learned. With none playable (a script switched off,
+// can fall now are learned. With none playable (a script switched off,
 // a list gone) it counts as done. Must be called under lock.
 func (gs *GameState) newestPackageDone() bool {
 	playable, learnedN := 0, 0
 	for _, kana := range gs.newestPackage {
 		e, ok := gs.words.Lookup(kana)
-		if !ok || !gs.unitsKnown(e.Units) {
+		if !ok || !gs.unitsFit(e.Units) {
 			continue
 		}
 		playable++
@@ -72,7 +73,7 @@ func (gs *GameState) packageDue() (pkg []vocab.Entry, levelOffer bool) {
 	if !found {
 		return nil, false
 	}
-	if pkg := vocab.NextPackage(gs.words, src, gs.introduced, gs.packageSize, gs.unitKnown); len(pkg) > 0 {
+	if pkg := vocab.NextPackage(gs.words, src, gs.introduced, gs.packageSize, gs.unitFits); len(pkg) > 0 {
 		return pkg, false
 	}
 	offer := src.List == "" && gs.wordsErr == "" && gs.wordLevel > 1 && !gs.levelOfferDeclined && gs.sourceLeft(src) == 0
@@ -229,7 +230,7 @@ func (gs *GameState) ReplacementWord() (vocab.Entry, bool) {
 	if len(pending) == 0 {
 		return vocab.Entry{}, false
 	}
-	next := vocab.NextPackageWhere(gs.words, src, skip, 1, gs.unitKnown, samePackage(gs.words, src, pending))
+	next := vocab.NextPackageWhere(gs.words, src, skip, 1, gs.unitFits, samePackage(gs.words, src, pending))
 	if len(next) == 0 {
 		return vocab.Entry{}, false
 	}
@@ -280,8 +281,8 @@ func (gs *GameState) DeclineLevelOffer() {
 
 // applyWordSettings applies the settings dialog's Words tab. A new source
 // clears the newest package, so its first package can come at once; words
-// already introduced keep falling. The caller re-checks packages
-// (applySettings does).
+// already introduced keep falling; switching words-only mode keeps it. The
+// caller re-checks packages (applySettings does).
 func (gs *GameState) applyWordSettings(ws wordSettings) {
 	gs.mu.Lock()
 	defer gs.mu.Unlock()
@@ -307,6 +308,16 @@ func (gs *GameState) applyWordSettings(ws wordSettings) {
 		changed = true
 		if gs.store != nil {
 			_ = gs.store.SavePackageSize(ws.packageSize)
+		}
+	}
+	if ws.wordsOnly != gs.wordsOnly {
+		gs.wordsOnly = ws.wordsOnly
+		if gs.introPending() {
+			gs.paused = true // the kana intros that waited are shown now
+		}
+		changed = true
+		if gs.store != nil {
+			_ = gs.store.SaveWordsOnly(ws.wordsOnly)
 		}
 	}
 	if changed {
