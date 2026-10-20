@@ -473,8 +473,9 @@ func (f *settingsForm) chosenLessons() []string {
 }
 
 // selectedLessons is the lesson filter to save for the selected source:
-// the checks for a list that shows them, the list's filter as it is for
-// one that does not (a missing list keeps its filter), nil for JLPT.
+// the checks for a list that shows them, nil (all lessons) for a list
+// without lessons, the list's filter as it is for a missing list, nil for
+// JLPT.
 func (f *settingsForm) selectedLessons() []string {
 	name, ok := strings.CutPrefix(f.wordSource(), listSourcePrefix)
 	switch {
@@ -482,6 +483,9 @@ func (f *settingsForm) selectedLessons() []string {
 		return nil
 	case name == f.lessonList:
 		return f.chosenLessons()
+	}
+	if _, exists := f.listLessons[name]; exists {
+		return nil
 	}
 	return f.lessonFilters[name]
 }
@@ -493,6 +497,16 @@ func lessonLabel(l string) string {
 		return "No lesson"
 	}
 	return l
+}
+
+// setMeaningLangs replaces the meaning select's languages and keeps its
+// selection. Must run on the Fyne thread.
+func (f *settingsForm) setMeaningLangs(langs []string) {
+	current := f.meaningLang()
+	labels, values := meaningLangOptions(langs, current)
+	f.meaningValues = values
+	f.meaningSelect.SetOptions(labels)
+	f.meaningSelect.SetSelectedIndex(slices.Index(values, current))
 }
 
 // meaningLang is the meaning language the Words tab has selected; "" =

@@ -580,3 +580,25 @@ func TestLessonBoxHiddenForAListWithoutLessons(t *testing.T) {
 		t.Fatal("a list without lessons shows no lesson box")
 	}
 }
+
+func TestNoLessonBoxSavesAllLessonsForAnExistingList(t *testing.T) {
+	test.NewApp()
+	gs := settingsGame() // its list has no lessons
+	gs.lessonFilters = map[string][]string{"minna-no-nihongo": {"2"}}
+	f := newSettingsForm(gs.settingsState(), nil)
+	if got := f.words().lessons; got != nil {
+		t.Fatalf("lessons = %v; a filter the list cannot show must be dropped", got)
+	}
+	f.apply(gs)
+	if _, ok := gs.lessonFilters["minna-no-nihongo"]; ok {
+		t.Fatalf("filter %v kept", gs.lessonFilters["minna-no-nihongo"])
+	}
+
+	gs = settingsGame()
+	gs.wordSource = listSourcePrefix + "gone"
+	gs.lessonFilters = map[string][]string{"gone": {"2"}}
+	f = newSettingsForm(gs.settingsState(), nil)
+	if got := f.words().lessons; !equalIDs(got, []string{"2"}) {
+		t.Fatalf("a missing list keeps its filter: %v", got)
+	}
+}
