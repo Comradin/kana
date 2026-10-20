@@ -144,7 +144,18 @@ func importChosen(gs *GameState, f *settingsForm, fileName string, data []byte, 
 		}
 		st := gs.settingsState()
 		f.listLessons = st.lessons
+		// The imported list's filter in this dialog predates it: take the
+		// stored one, and drop the checks shown for a replaced list.
+		if f.lessonList == name {
+			f.lessonList = ""
+		}
+		if ls, ok := st.lessonFilters[name]; ok {
+			f.lessonFilters[name] = ls
+		} else {
+			delete(f.lessonFilters, name)
+		}
 		f.setLists(st.lists, name)
+		f.setMeaningLangs(st.languages)
 		// The summary may have said the chosen list was missing.
 		f.summary.SetText(st.summary)
 	}, win)

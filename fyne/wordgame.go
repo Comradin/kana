@@ -328,17 +328,35 @@ func (gs *GameState) pickWord(always bool) (vocab.Entry, bool) {
 	return gs.words.Lookup(kana)
 }
 
-// source returns where new words come from, with the list's lesson filter,
-// and whether that source exists: a chosen list that was not found does
-// not. Must be called under lock.
+// source returns where new words come from, with the list's effective
+// lesson filter, and whether that source exists: a chosen list that was not
+// found does not. Must be called under lock.
 func (gs *GameState) source() (vocab.Source, bool) {
 	if name, ok := strings.CutPrefix(gs.wordSource, listSourcePrefix); ok {
 		if slices.Contains(gs.listNames, name) {
-			return vocab.Source{List: name, Lessons: gs.lessonFilters[name]}, true
+			return vocab.Source{List: name, Lessons: gs.effectiveLessons(name, gs.lessonFilters[name])}, true
 		}
 		return vocab.Source{List: name}, false
 	}
 	return vocab.Source{Level: gs.wordLevel}, true
+}
+
+// effectiveLessons is the part of a lesson filter for a list that still
+// exists in it ("" when the list has words without a lesson), in filter
+// order; nil (all lessons) when nothing of it remains. Must be called under
+// lock.
+func (gs *GameState) effectiveLessons(list string, filter []string) []string {
+	if gs.words == nil || len(filter) == 0 {
+		return nil
+	}
+	lessons, noLesson := gs.words.Lessons(list)
+	var out []string
+	for _, l := range filter {
+		if (l == "" && noLesson) || (l != "" && slices.Contains(lessons, l)) {
+			out = append(out, l)
+		}
+	}
+	return out
 }
 
 // sourceSize counts the source's entries, introduced or not. Must be called

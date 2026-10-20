@@ -173,12 +173,8 @@ func TestWordsOnlyStatusSaysWhyKanaFall(t *testing.T) {
 	gs.lessonFilters = map[string][]string{"minna": {"7"}}
 	gs.invalidatePlayable()
 	line := func() string { return formatWordsLine(gs.wordsStatus()) }
-	if got := line(); got != "Words only: no words in the chosen lessons" {
-		t.Fatalf("gone lesson: %q", got)
-	}
-	gs.spawnKana()
-	if len(gs.tiles) != 1 || gs.tiles[0].word != nil {
-		t.Fatal("no word can fall: a kana must fall")
+	if got := line(); got != "Words: minna finished" {
+		t.Fatalf("gone lesson: %q, want the usual line (a lesson gone is ignored)", got)
 	}
 	gs.lessonFilters = nil
 	gs.invalidatePlayable()
@@ -188,6 +184,10 @@ func TestWordsOnlyStatusSaysWhyKanaFall(t *testing.T) {
 	withList(gs, "minna", lw("minna", "アイ", "1"))
 	if got := line(); got != "Words only: no word fits the active scripts" {
 		t.Fatalf("katakana word, katakana off: %q", got)
+	}
+	gs.spawnKana()
+	if len(gs.tiles) != 1 || gs.tiles[0].word != nil {
+		t.Fatal("no word can fall: a kana must fall")
 	}
 	gs.wordSource = listSourcePrefix + "gone"
 	gs.wordsDir = "/data/kana/words"

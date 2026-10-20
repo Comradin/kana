@@ -187,6 +187,40 @@ func TestImportDoesNotChangeTheSource(t *testing.T) {
 	}
 }
 
+func TestImportRefreshesMeaningLanguagesAndLessonFilter(t *testing.T) {
+	test.NewApp()
+	defer test.NewApp()
+	dir := isolateWordsDir(t)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	st := openTestStore(t)
+	_ = st.SaveSelectedRows([]string{"vowels"})
+	_ = st.SaveLessonFilter("mine", []string{"2"}) // left from an earlier list of that name
+	gs := NewGameState(st)
+	w := test.NewWindow(nil)
+	defer w.Close()
+	w.Resize(fyne.NewSize(1000, 760))
+	f := newSettingsForm(gs.settingsState(), nil)
+	before := f.meaningSelect.Selected
+	if slices.Contains(f.meaningValues, "eo") {
+		t.Fatal("no word has Esperanto meanings yet")
+	}
+	f.lessonFilters["mine"] = []string{"1"} // stale
+
+	importChosen(gs, f, "mine.csv", []byte("kana;meaning_eo;lesson\nあお;blua;1\nいえ;domo;2\n"), w)
+	test.Tap(buttonIn(w.Canvas().Overlays().Top(), "Import"))
+	if i := slices.Index(f.meaningValues, "eo"); i < 0 || len(f.meaningSelect.Options) != len(f.meaningValues) {
+		t.Fatalf("meaning options %v (values %v) lack the imported language", f.meaningSelect.Options, f.meaningValues)
+	}
+	if f.meaningSelect.Selected != before {
+		t.Fatalf("selection %q, want %q kept", f.meaningSelect.Selected, before)
+	}
+	if !equalIDs(checkedLessons(f), []string{"2"}) || !equalIDs(f.words().lessons, []string{"2"}) {
+		t.Fatalf("checked %v; want the stored filter of the imported list", checkedLessons(f))
+	}
+}
+
 // labelContains reports whether a label or rich text under o contains s.
 func labelContains(o fyne.CanvasObject, s string) bool {
 	for _, obj := range test.LaidOutObjects(o) {

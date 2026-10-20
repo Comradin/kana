@@ -301,10 +301,14 @@ func (gs *GameState) applyWordSettings(ws wordSettings) {
 		gs.saveNewestPackage()
 	}
 	if name, ok := strings.CutPrefix(ws.source, listSourcePrefix); ok && !slices.Equal(ws.lessons, gs.lessonFilters[name]) {
+		// Only a change in the lessons that count restarts the rhythm; a
+		// stale lesson or another order does not.
+		if !sameLessons(gs.effectiveLessons(name, ws.lessons), gs.effectiveLessons(name, gs.lessonFilters[name])) {
+			gs.newestPackage = nil
+			gs.saveNewestPackage()
+			changed = true
+		}
 		gs.setLessonFilter(name, ws.lessons)
-		gs.newestPackage = nil
-		gs.saveNewestPackage()
-		changed = true
 	}
 	if ws.level >= 1 && ws.level <= 5 && ws.level != gs.wordLevel {
 		gs.wordLevel = ws.level
@@ -341,6 +345,15 @@ func (gs *GameState) applyWordSettings(ws wordSettings) {
 		gs.invalidatePlayable()
 		gs.dropInactiveTiles()
 	}
+}
+
+// sameLessons reports whether two lesson filters hold the same lessons, in
+// any order.
+func sameLessons(a, b []string) bool {
+	a, b = slices.Clone(a), slices.Clone(b)
+	slices.Sort(a)
+	slices.Sort(b)
+	return slices.Equal(a, b)
 }
 
 // setLessonFilter sets and saves a list's lesson filter; nil or empty means

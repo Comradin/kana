@@ -130,3 +130,60 @@ func TestLessonFilterIsStoredPerList(t *testing.T) {
 		t.Fatalf("loaded: minna %v, other %v", src.Lessons, other.Lessons)
 	}
 }
+
+func TestSourceUsesOnlyLessonsThatStillExist(t *testing.T) {
+	cases := []struct {
+		name   string
+		words  []vocab.Word
+		stored []string
+		want   []string
+	}{
+		{"lesson column removed", []vocab.Word{lw("minna", "あい", ""), lw("minna", "あお", "")}, []string{"2"}, nil},
+		{"one lesson gone", []vocab.Word{lw("minna", "あい", "1"), lw("minna", "あお", "2")}, []string{"9", "2"}, []string{"2"}},
+		{"no lesson still exists", []vocab.Word{lw("minna", "あい", "1"), lw("minna", "あお", "")}, []string{""}, []string{""}},
+		{"no lesson gone", []vocab.Word{lw("minna", "あい", "1"), lw("minna", "あお", "2")}, []string{""}, nil},
+	}
+	for _, c := range cases {
+		gs := newTestState()
+		gs.wordsOnly = true
+		withList(gs, "minna", c.words...)
+		gs.lessonFilters = map[string][]string{"minna": c.stored}
+		gs.mu.Lock()
+		src, ok := gs.source()
+		gs.mu.Unlock()
+		if !ok || !slices.Equal(src.Lessons, c.want) {
+			t.Errorf("%s: lessons %v, want %v", c.name, src.Lessons, c.want)
+		}
+	}
+
+	gs := newTestState()
+	gs.wordsOnly = true
+	withList(gs, "minna", lw("minna", "あい", ""), lw("minna", "あお", ""))
+	gs.lessonFilters = map[string][]string{"minna": {"2"}}
+	if got := playableKana(gs); !equalIDs(got, []string{"あい", "あお"}) {
+		t.Fatalf("a filter of lessons gone falls back to all lessons: %v", got)
+	}
+}
+
+func TestStaleOrReorderedFilterKeepsThePackageRhythm(t *testing.T) {
+	for _, c := range []struct {
+		name          string
+		stored, given []string
+	}{
+		{"stale lesson", []string{"2", "9"}, []string{"2"}},
+		{"other order", []string{"2", "1"}, []string{"1", "2"}},
+		{"all lessons gone", []string{"9"}, nil},
+	} {
+		gs := newTestState()
+		withList(gs, "minna", lw("minna", "あい", "1"), lw("minna", "あお", "2"), lw("minna", "あう", "3"))
+		gs.lessonFilters = map[string][]string{"minna": c.stored}
+		gs.newestPackage = []string{"あい"}
+		gs.applyWordSettings(wordSettings{source: listSourcePrefix + "minna", level: 5, packageSize: 5, lessons: c.given})
+		if !equalIDs(gs.newestPackage, []string{"あい"}) {
+			t.Errorf("%s: the same effective filter must keep the newest package", c.name)
+		}
+		if !slices.Equal(gs.lessonFilters["minna"], c.given) {
+			t.Errorf("%s: filter %v, want what the dialog gave: %v", c.name, gs.lessonFilters["minna"], c.given)
+		}
+	}
+}
