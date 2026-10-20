@@ -29,6 +29,7 @@ type wordSettings struct {
 	packageSize int      // 3, 5 or 10
 	wordsOnly   bool     // only words fall
 	lessons     []string // the lesson filter of a list source; nil = all lessons
+	meaningLang string   // "" = System
 }
 
 // readingsOf returns the readings of entries, in order.
@@ -327,6 +328,13 @@ func (gs *GameState) applyWordSettings(ws wordSettings) {
 		changed = true
 		if gs.store != nil {
 			_ = gs.store.SaveWordsOnly(ws.wordsOnly)
+		}
+	}
+	if ws.meaningLang != gs.meaningSetting {
+		gs.meaningSetting = ws.meaningLang
+		gs.meaningLang = resolveMeaningLang(ws.meaningLang, systemLanguage())
+		if gs.store != nil {
+			_ = gs.store.SaveMeaningLang(ws.meaningLang)
 		}
 	}
 	if changed {

@@ -73,6 +73,7 @@ type GameState struct {
 	wordProgressLoadFailed bool                      // stored word progress unreadable: never overwrite it
 	wordLevel              int                       // JLPT packages come from N5 down to this level
 	meaningLang            string                    // language meanings are shown in
+	meaningSetting         string                    // the stored meaning language; "" = System (see resolveMeaningLang)
 	words                  *vocab.Index              // every word reading; nil = no words
 	wordsErr               string                    // bundled list failed to load
 	listNames              []string                  // the private lists found, sorted by name
@@ -273,6 +274,7 @@ func NewGameState(st *store.Store) *GameState {
 	}
 
 	gs.meaningLang = resolveMeaningLang(storedLang, systemLanguage())
+	gs.meaningSetting = storedLang
 	gs.loadWords()
 	// The automatic source is resolved once and saved, so a list added
 	// later does not switch the source silently. A source that could not

@@ -91,6 +91,16 @@ func TestFormatWordsLine(t *testing.T) {
 		{"list finished", WordsStatus{Next: wordsFinished, Introduced: 40, Source: "minna no nihongo"}, "Words: minna no nihongo finished"},
 		{"level finished", WordsStatus{Next: wordsFinished, Source: "JLPT N5", Level: 5}, "Words: JLPT N5 finished"},
 		{"JLPT finished", WordsStatus{Next: wordsFinished, Source: "JLPT N1", Level: 1}, "Words: JLPT finished"},
+		{"words only, counts", WordsStatus{WordsOnly: true, Introduced: 3, Learned: 1, Source: "minna"}, "Words: 3 introduced · 1 learned · minna"},
+		{"words only, load failed", WordsStatus{WordsOnly: true, KanaFallback: true, LoadFailed: true}, "Words only: could not load progress"},
+		{"words only, bundled error", WordsStatus{WordsOnly: true, KanaFallback: true, Err: "broken data", Level: 5}, "Words only: words unavailable: broken data"},
+		{"words only, missing list", WordsStatus{WordsOnly: true, KanaFallback: true, Missing: true, Dir: "~/w", Source: "minna"}, "Words only: add a list to ~/w or choose JLPT"},
+		{"words only, missing list, no folder", WordsStatus{WordsOnly: true, KanaFallback: true, Missing: true, Source: "minna"}, "Words only: add a word list or choose JLPT"},
+		{"words only, empty lessons", WordsStatus{WordsOnly: true, KanaFallback: true, Empty: true, Filtered: true, Source: "minna"}, "Words only: no words in the chosen lessons"},
+		{"words only, empty source", WordsStatus{WordsOnly: true, KanaFallback: true, Empty: true, Source: "minna"}, "Words only: no words in minna"},
+		{"words only, scripts", WordsStatus{WordsOnly: true, KanaFallback: true, Introduced: 2, Source: "minna"}, "Words only: no word fits the active scripts"},
+		{"words only, new words need a script", WordsStatus{WordsOnly: true, Next: wordsNeedKana, Introduced: 3, Source: "minna"}, "Words only: new words need a script that is off"},
+		{"mixed, empty lessons", WordsStatus{Empty: true, Filtered: true, Next: wordsFinished, Source: "minna"}, "Words: no words in the chosen lessons"},
 	}
 	for _, c := range cases {
 		if got := formatWordsLine(c.ws); got != c.want {
