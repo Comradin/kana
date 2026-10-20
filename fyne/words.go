@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -60,6 +61,41 @@ func resolveMeaningLang(stored, system string) string {
 		}
 	}
 	return "en"
+}
+
+// languageNames are meaning languages by their own names.
+var languageNames = map[string]string{
+	"cs": "Čeština", "da": "Dansk", "de": "Deutsch", "en": "English", "es": "Español",
+	"fi": "Suomi", "fr": "Français", "hu": "Magyar", "it": "Italiano", "ja": "日本語",
+	"ko": "한국어", "nl": "Nederlands", "no": "Norsk", "pl": "Polski", "pt": "Português",
+	"ru": "Русский", "sl": "Slovenščina", "sv": "Svenska", "tr": "Türkçe", "uk": "Українська",
+	"zh": "中文",
+}
+
+// languageName names a meaning language in itself; an unknown code is
+// shown as is.
+func languageName(code string) string {
+	if n, ok := languageNames[code]; ok {
+		return n
+	}
+	return code
+}
+
+// meaningLangOptions are the "Meanings in" select's labels and values:
+// "System" (value "") first, then the languages by code, each by its own
+// name. A stored language the words no longer have stays as an option.
+func meaningLangOptions(langs []string, stored string) (labels, values []string) {
+	all := slices.Clone(langs)
+	if stored != "" && !slices.Contains(all, stored) {
+		all = append(all, stored)
+		slices.Sort(all)
+	}
+	labels, values = []string{"System"}, []string{""}
+	for _, l := range all {
+		labels = append(labels, languageName(l))
+		values = append(values, l)
+	}
+	return labels, values
 }
 
 // missedWordsText lists each missed word once, sorted, as
@@ -192,13 +228,21 @@ type WordsStatus struct {
 	Learned    int       // introduced readings at level 5
 	Waiting    int       // introduced readings that cannot fall: a kana is not learned
 	Next       wordsNext // whether new words can come from the source
+
+	WordsOnly    bool // words-only mode is on
+	KanaFallback bool // words-only mode, but no word can fall and no package can come: kana fall
+	Filtered     bool // a lesson filter limits the source
+	Empty        bool // the source with its lesson filter has no word at all
 }
 
 // formatWordsLine is the status panel's words line: counts, or a hint when
-// nothing can be introduced.
+// nothing can be introduced. In words-only mode a problem starts with
+// "Words only:".
 func formatWordsLine(ws WordsStatus) string {
 	var s string
 	switch {
+	case ws.KanaFallback:
+		s = "Words only: " + wordsOnlyReason(ws)
 	case ws.LoadFailed:
 		s = "Words unavailable: could not load progress"
 	case ws.Err != "":
@@ -207,6 +251,10 @@ func formatWordsLine(ws WordsStatus) string {
 		s = "Words: add a list to " + ws.Dir + " or choose JLPT"
 	case ws.Missing:
 		s = "Words: add a word list or choose JLPT"
+	case ws.Empty && ws.Filtered:
+		s = "Words: no words in the chosen lessons"
+	case ws.Next == wordsNeedKana && ws.WordsOnly:
+		s = "Words only: new words need a script that is off"
 	case ws.Next == wordsNeedKana:
 		s = "Words: learn more kana for new words"
 	case ws.Next == wordsFinished && ws.Level == 1:
@@ -219,6 +267,25 @@ func formatWordsLine(ws WordsStatus) string {
 		s = fmt.Sprintf("Words: %d introduced · %d learned · %s", ws.Introduced, ws.Learned, ws.Source)
 	}
 	return truncateRunes(s, maxWordsLineRunes)
+}
+
+// wordsOnlyReason says why no word can fall in words-only mode.
+func wordsOnlyReason(ws WordsStatus) string {
+	switch {
+	case ws.LoadFailed:
+		return "could not load progress"
+	case ws.Err != "":
+		return "words unavailable: " + ws.Err
+	case ws.Missing && ws.Dir != "":
+		return "add a list to " + ws.Dir + " or choose JLPT"
+	case ws.Missing:
+		return "add a word list or choose JLPT"
+	case ws.Empty && ws.Filtered:
+		return "no words in the chosen lessons"
+	case ws.Empty:
+		return "no words in " + ws.Source
+	}
+	return "no word fits the active scripts"
 }
 
 // displayDir shortens a folder inside home to "~/…" for display.

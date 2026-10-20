@@ -341,6 +341,21 @@ func (gs *GameState) source() (vocab.Source, bool) {
 	return vocab.Source{Level: gs.wordLevel}, true
 }
 
+// sourceSize counts the source's entries, introduced or not. Must be called
+// under lock.
+func (gs *GameState) sourceSize(src vocab.Source) int {
+	if gs.words == nil {
+		return 0
+	}
+	n := 0
+	for _, e := range gs.words.Entries() {
+		if src.Has(e) {
+			n++
+		}
+	}
+	return n
+}
+
 // sourceLeft counts the source's entries that are not introduced yet (for
 // JLPT: bundled entries with JLPT >= Level). Must be called under lock.
 func (gs *GameState) sourceLeft(src vocab.Source) int {
@@ -401,7 +416,8 @@ func (gs *GameState) wordsSummary() string {
 // under lock.
 func (gs *GameState) wordsStatus() WordsStatus {
 	src, found := gs.source()
-	ws := WordsStatus{LoadFailed: gs.introducedLoadFailed, Source: sourceLabel(src), Missing: !found}
+	ws := WordsStatus{LoadFailed: gs.introducedLoadFailed, Source: sourceLabel(src), Missing: !found,
+		WordsOnly: gs.wordsOnly, Filtered: len(src.Lessons) > 0}
 	if src.List == "" {
 		ws.Err, ws.Level = gs.wordsErr, src.Level
 	}
@@ -410,15 +426,22 @@ func (gs *GameState) wordsStatus() WordsStatus {
 		ws.Dir = displayDir(gs.wordsDir, home)
 	}
 	if gs.words == nil {
+		ws.KanaFallback = gs.wordsOnly
 		return ws
 	}
 	ws.Introduced, ws.Learned, ws.Waiting = gs.introducedCounts()
-	if found && !ws.LoadFailed && len(vocab.NextPackage(gs.words, src, gs.introduced, 1, gs.unitFits)) == 0 {
-		ws.Next = wordsFinished
-		if gs.sourceLeft(src) > 0 {
-			ws.Next = wordsNeedKana
+	canCome := false
+	if found && !ws.LoadFailed {
+		ws.Empty = gs.sourceSize(src) == 0
+		canCome = len(vocab.NextPackage(gs.words, src, gs.introduced, 1, gs.unitFits)) > 0
+		if !canCome {
+			ws.Next = wordsFinished
+			if gs.sourceLeft(src) > 0 {
+				ws.Next = wordsNeedKana
+			}
 		}
 	}
+	ws.KanaFallback = gs.wordsOnly && len(gs.playableWords()) == 0 && !canCome
 	return ws
 }
 
