@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -224,7 +225,7 @@ func TestSettingsFormCarriesValues(t *testing.T) {
 	if f.wordLevel.Disabled() {
 		t.Fatal("the level must be enabled for JLPT")
 	}
-	if got := f.words(); got != (wordSettings{source: jlptSource, level: 4, packageSize: 10}) {
+	if got := f.words(); !reflect.DeepEqual(got, wordSettings{source: jlptSource, level: 4, packageSize: 10}) {
 		t.Fatalf("words() = %+v", got)
 	}
 	if buttonIn(f.wordsTab.Content, "Import word list…") == nil {

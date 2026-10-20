@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"sort"
 	"strings"
 
@@ -114,9 +115,10 @@ func (gs *GameState) loadWords() {
 }
 
 // loadLists reads the private lists and rebuilds the word index on the
-// bundled one (an empty index if that failed to load). An unreadable folder
-// gives no private lists and sets listsLoadFailed. Must be called under lock
-// (or before the game starts).
+// bundled one (an empty index if that failed to load), and the stored
+// lesson filters of the lists found. An unreadable folder gives no private
+// lists and sets listsLoadFailed. Must be called under lock (or before the
+// game starts).
 func (gs *GameState) loadLists() {
 	base := vocab.NewIndex(nil, nil)
 	if gs.wordsErr == "" {
@@ -133,6 +135,14 @@ func (gs *GameState) loadLists() {
 	gs.listNames = nil
 	for _, l := range lists {
 		gs.listNames = append(gs.listNames, l.Name)
+	}
+	gs.lessonFilters = map[string][]string{}
+	if gs.store != nil {
+		for _, name := range gs.listNames {
+			if lessons, err := gs.store.LessonFilter(name); err == nil && len(lessons) > 0 {
+				gs.lessonFilters[name] = lessons
+			}
+		}
 	}
 	gs.words = base.WithLists(lists)
 	gs.invalidatePlayable()
@@ -305,27 +315,26 @@ func (gs *GameState) wordCandidates(playable []vocab.Entry) []string {
 }
 
 // pickWord decides with gs.rnd whether this spawn is a word (wordShare) and,
-// if so, picks one with memory.Pick over the word memory. With always set
-// it skips the wordShare draw and picks a word whenever one is playable.
-// With no playable word it returns false without drawing from gs.rnd. Must
-// be called under lock.
+// if so, picks one with the focus pick or memory.Pick over the word memory.
+// With always set it skips the wordShare draw and picks a word whenever one
+// is playable. With no playable word it returns false without drawing from
+// gs.rnd. Must be called under lock.
 func (gs *GameState) pickWord(always bool) (vocab.Entry, bool) {
 	playable := gs.playableWords()
 	if len(playable) == 0 || (!always && gs.rnd() >= wordShare(len(playable))) {
 		return vocab.Entry{}, false
 	}
-	kana := memory.Pick(gs.wordCandidates(playable), gs.wordMemory, gs.now(), gs.rnd)
+	kana := gs.pickReading(gs.wordCandidates(playable))
 	return gs.words.Lookup(kana)
 }
 
-// source returns where new words come from and whether that source exists:
-// a chosen list that was not found does not. Must be called under lock.
+// source returns where new words come from, with the list's lesson filter,
+// and whether that source exists: a chosen list that was not found does
+// not. Must be called under lock.
 func (gs *GameState) source() (vocab.Source, bool) {
 	if name, ok := strings.CutPrefix(gs.wordSource, listSourcePrefix); ok {
-		for _, l := range gs.listNames {
-			if l == name {
-				return vocab.Source{List: name}, true
-			}
+		if slices.Contains(gs.listNames, name) {
+			return vocab.Source{List: name, Lessons: gs.lessonFilters[name]}, true
 		}
 		return vocab.Source{List: name}, false
 	}

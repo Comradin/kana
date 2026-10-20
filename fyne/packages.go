@@ -1,6 +1,8 @@
 package main
 
 import (
+	"slices"
+	"strings"
 	"time"
 
 	"kana/memory"
@@ -22,10 +24,11 @@ func validPackageSize(n int) bool {
 
 // wordSettings are the settings dialog's Words tab values.
 type wordSettings struct {
-	source      string // jlptSource or listSourcePrefix + a list name
-	level       int    // JLPT level packages come down to, 1–5
-	packageSize int    // 3, 5 or 10
-	wordsOnly   bool   // only words fall
+	source      string   // jlptSource or listSourcePrefix + a list name
+	level       int      // JLPT level packages come down to, 1–5
+	packageSize int      // 3, 5 or 10
+	wordsOnly   bool     // only words fall
+	lessons     []string // the lesson filter of a list source; nil = all lessons
 }
 
 // readingsOf returns the readings of entries, in order.
@@ -243,8 +246,8 @@ func (gs *GameState) ReplacementWord() (vocab.Entry, bool) {
 // levels its words span.
 func samePackage(ix *vocab.Index, src vocab.Source, pending []vocab.Entry) func(vocab.Entry) bool {
 	if src.List != "" {
-		lesson := ix.Lesson(pending[0], src.List)
-		return func(e vocab.Entry) bool { return ix.Lesson(e, src.List) == lesson }
+		lesson := ix.LessonIn(pending[0], src)
+		return func(e vocab.Entry) bool { return ix.LessonIn(e, src) == lesson }
 	}
 	lo, hi := pending[0].JLPT, pending[0].JLPT
 	for _, e := range pending[1:] {
@@ -279,10 +282,10 @@ func (gs *GameState) DeclineLevelOffer() {
 	gs.settle()
 }
 
-// applyWordSettings applies the settings dialog's Words tab. A new source
-// clears the newest package, so its first package can come at once; words
-// already introduced keep falling; switching words-only mode keeps it. The
-// caller re-checks packages (applySettings does).
+// applyWordSettings applies the settings dialog's Words tab. A new source or
+// lesson filter clears the newest package, so its first package can come at
+// once; words already introduced keep falling; switching words-only mode
+// keeps it. The caller re-checks packages (applySettings does).
 func (gs *GameState) applyWordSettings(ws wordSettings) {
 	gs.mu.Lock()
 	defer gs.mu.Unlock()
@@ -295,6 +298,12 @@ func (gs *GameState) applyWordSettings(ws wordSettings) {
 			_ = gs.store.SaveWordSource(ws.source)
 		}
 		gs.saveNewestPackage()
+	}
+	if name, ok := strings.CutPrefix(ws.source, listSourcePrefix); ok && !slices.Equal(ws.lessons, gs.lessonFilters[name]) {
+		gs.setLessonFilter(name, ws.lessons)
+		gs.newestPackage = nil
+		gs.saveNewestPackage()
+		changed = true
 	}
 	if ws.level >= 1 && ws.level <= 5 && ws.level != gs.wordLevel {
 		gs.wordLevel = ws.level
@@ -323,5 +332,21 @@ func (gs *GameState) applyWordSettings(ws wordSettings) {
 	if changed {
 		gs.invalidatePlayable()
 		gs.dropInactiveTiles()
+	}
+}
+
+// setLessonFilter sets and saves a list's lesson filter; nil or empty means
+// all lessons. Must be called under lock.
+func (gs *GameState) setLessonFilter(list string, lessons []string) {
+	if gs.lessonFilters == nil {
+		gs.lessonFilters = map[string][]string{}
+	}
+	if len(lessons) == 0 {
+		delete(gs.lessonFilters, list)
+	} else {
+		gs.lessonFilters[list] = slices.Clone(lessons)
+	}
+	if gs.store != nil {
+		_ = gs.store.SaveLessonFilter(list, lessons)
 	}
 }
