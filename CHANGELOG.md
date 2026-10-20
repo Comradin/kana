@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.1](https://github.com/Comradin/kana/compare/v0.4.0...v0.4.1) (2026-10-20)
+
+
+### Bug Fixes
+
+* **fyne:** accept a word's meaning as its answer ([853ec96](https://github.com/Comradin/kana/commit/853ec96db3a05072dcb42886e3e8671ce3a56fde))
+* **fyne:** count words waiting for kana, raise the word share ([4fe8052](https://github.com/Comradin/kana/commit/4fe805252fcb96e6fe9e4a5dba2a267ba9887d40))
+
 ## [0.4.0](https://github.com/Comradin/kana/compare/v0.3.0...v0.4.0) (2026-10-20)
 
 
