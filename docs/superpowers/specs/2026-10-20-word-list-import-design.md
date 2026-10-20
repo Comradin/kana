@@ -19,12 +19,13 @@ list** by **import**.
 | Name | "Import", not "upload". Button: "Import word list…". |
 | Copy or reference | The game copies the source file into the words folder. Later edits to the source file are not picked up; importing again replaces the list. |
 | Where | A button in the settings' Words tab, below the source select. No drag and drop for now. |
-| File dialog | Fyne's open dialog, starting in the home directory, showing `.csv`, `.tsv`, `.json` and the spreadsheet formats `.xlsx`, `.xls`, `.ods` (only so their hint can be shown). |
+| File dialog | Fyne's open dialog, starting in the home directory, showing `.csv`, `.tsv`, `.txt`, `.json` and the spreadsheet formats `.xlsx`, `.xls`, `.ods` (only so their hint can be shown). |
 | Check first | The file is read with the list parser and a preview is shown; the learner confirms with Import or cancels. |
 | Rejected | Not UTF-8 (after the UTF-16 conversion below), spreadsheet formats, no `kana` column, no words, a kana column of only `?`, larger than 5 MB, a name starting with `.`, the reserved name `jmdict`. Each with an English hint. |
+| `.txt` | Excel saves "Unicode Text" as a tab-separated `.txt`; it is imported and stored as `.tsv`. |
 | Encoding | UTF-8 with or without BOM as is; UTF-16 with BOM (Excel "Unicode Text") is converted to UTF-8. Shift-JIS and ANSI are rejected with the hint to save as "CSV UTF-8". |
 | Name of the list | The file name without extension, as `LoadDir` names lists. Not editable (renaming belongs to list management, stage 4b). |
-| Name exists | If a word list with the same name exists (any of the three extensions, ignoring case), the preview says so and its button reads Replace. Replace removes the old file(s) of that name and writes the new one, so the list keeps its name and the learner's selection. No automatic " 2" suffix. |
+| Name exists | If a word list with the same name exists (any of the three extensions, ignoring case), the preview says so and its button reads Replace. Replace removes the old file(s) of that name and writes the new one under the existing name (its case kept), so the list keeps its name and the learner's selection. No automatic " 2" suffix. |
 | Progress | Replacing never deletes progress: levels, stats and memory are keyed by reading. Words missing from the new version keep their state and come back with it if they return. |
 | Afterwards | The lists are reloaded at once; the new list appears in the source select and is preselected. The source change takes effect with the settings' OK like any other setting. |
 | Cancel | The import is final when Import/Replace is clicked; cancelling the settings afterwards keeps the word list and drops only the preselection. |
@@ -59,9 +60,9 @@ Hints:
   `Candidate{Name, Ext string; List List; Data []byte}` where `Data` is the
   UTF-8 bytes to write. Errors are a type with the reason and the hint, so the
   UI can show both. Pure: no file system access, easy to test.
-- `Exists(dir, name string) bool`: a list file of that name is in dir.
-- `Import(dir string, c Candidate) error`: creates dir if needed, writes
-  `<name><ext>` through a temporary file and a rename, then removes other files
+- `Existing(dir, name string) (string, bool)`: the name of a list file in dir named like name, ignoring case.
+- `Import(dir string, c Candidate) (string, error)`: creates dir if needed, writes
+  `<name><ext>` (an existing list's name wins) and returns the name, through a temporary file and a rename, then removes other files
   of the same name (other extension or case). A failure leaves the old list in
   place.
 
