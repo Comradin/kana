@@ -216,3 +216,32 @@ func TestEntryRankFromBundledWordsOnly(t *testing.T) {
 		t.Errorf("private-only いぬ rank = %d, want 0", e.Rank)
 	}
 }
+
+func TestIndexLessons(t *testing.T) {
+	ix := NewIndex(nil, []List{
+		lessonList([2]string{"いぬ", "10"}, [2]string{"ねこ", "2"}, [2]string{"あめ", ""}, [2]string{"き", "1"}),
+		{Name: "named", Words: []Word{
+			word("いぬ", 0, "named", "Tiere", "de", "Hund"),
+			word("みず", 0, "named", "Wetter", "de", "Wasser"),
+		}},
+	})
+	if lessons, none := ix.Lessons("minna"); !reflect.DeepEqual(lessons, []string{"1", "2", "10"}) || !none {
+		t.Fatalf("minna: %v, no lesson %v; want [1 2 10] in number order and words without a lesson", lessons, none)
+	}
+	if lessons, none := ix.Lessons("named"); !reflect.DeepEqual(lessons, []string{"Tiere", "Wetter"}) || none {
+		t.Fatalf("named: %v, no lesson %v", lessons, none)
+	}
+	if lessons, none := ix.Lessons("gone"); lessons != nil || none {
+		t.Fatalf("unknown list: %v, %v", lessons, none)
+	}
+}
+
+func TestIndexLanguages(t *testing.T) {
+	if got := testIndex().Languages(); !reflect.DeepEqual(got, []string{"de", "en"}) {
+		t.Fatalf("Languages = %v, want [de en]", got)
+	}
+	ix := NewIndex([]Word{word("ねこ", 5, BundledSource, "", "", "cat")}, nil)
+	if got := ix.Languages(); len(got) != 0 {
+		t.Fatalf("meanings without a language count as none, got %v", got)
+	}
+}

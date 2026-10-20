@@ -221,3 +221,70 @@ func TestNextPackageWhereKeepsOnlyMatchingEntries(t *testing.T) {
 		t.Fatalf("a nil keep must equal NextPackage, got %v", got)
 	}
 }
+
+func TestSourceHasChosenLessons(t *testing.T) {
+	ix := NewIndex(nil, []List{lessonList(
+		[2]string{"き", "1"}, [2]string{"ねこ", "2"}, [2]string{"あめ", ""}, [2]string{"き", "3"},
+	)})
+	cases := []struct {
+		lessons []string
+		kana    string
+		want    bool
+	}{
+		{nil, "き", true},
+		{nil, "あめ", true},
+		{[]string{"3"}, "き", true}, // き is in lessons 1 and 3
+		{[]string{"2"}, "き", false},
+		{[]string{"2"}, "ねこ", true},
+		{[]string{"2"}, "あめ", false},
+		{[]string{""}, "あめ", true}, // "No lesson"
+		{[]string{""}, "ねこ", false},
+		{[]string{"9"}, "ねこ", false}, // a lesson that is gone matches nothing
+	}
+	for _, c := range cases {
+		e, _ := ix.Lookup(c.kana)
+		if got := (Source{List: "minna", Lessons: c.lessons}).Has(e); got != c.want {
+			t.Errorf("lessons %q: Has(%s) = %v, want %v", c.lessons, c.kana, got, c.want)
+		}
+	}
+	jlpt := testIndex()
+	e, _ := jlpt.Lookup("ねこ")
+	if !(Source{Level: 5, Lessons: []string{"2"}}).Has(e) {
+		t.Fatal("JLPT ignores lessons")
+	}
+}
+
+func TestNextPackageWithinChosenLessons(t *testing.T) {
+	ix := NewIndex(nil, []List{lessonList(
+		[2]string{"き", "1"}, [2]string{"ねこ", "2"}, [2]string{"いぬ", "1"},
+		[2]string{"みず", "3"}, [2]string{"いぬ", "3"}, [2]string{"あめ", ""},
+	)})
+	pkg := func(lessons ...string) []string {
+		return kanaOf(NextPackage(ix, Source{List: "minna", Lessons: lessons}, nil, 5, knowAll))
+	}
+	if got := pkg("3"); !reflect.DeepEqual(got, []string{"いぬ", "みず"}) {
+		t.Fatalf("lesson 3 = %v, want [いぬ みず]: いぬ is in lessons 1 and 3", got)
+	}
+	for _, lessons := range [][]string{{"2", "3"}, {"3", "2"}} {
+		if got := pkg(lessons...); !reflect.DeepEqual(got, []string{"ねこ"}) {
+			t.Fatalf("lessons %v = %v, want [ねこ]: the earliest chosen lesson, and いぬ counts for lesson 3 here", lessons, got)
+		}
+	}
+	if got := pkg(""); !reflect.DeepEqual(got, []string{"あめ"}) {
+		t.Fatalf("No lesson = %v, want [あめ]", got)
+	}
+	if got := pkg("9"); got != nil {
+		t.Fatalf("a gone lesson = %v, want none", got)
+	}
+	got := allPackages(ix, Source{List: "minna", Lessons: []string{"1", "3"}}, 10, knowAll)
+	if !reflect.DeepEqual(got, []string{"き", "いぬ", "みず"}) {
+		t.Fatalf("lessons 1 and 3 = %v, want [き いぬ] then [みず]", got)
+	}
+	e, _ := ix.Lookup("いぬ")
+	if l := ix.LessonIn(e, Source{List: "minna", Lessons: []string{"3"}}); l != "3" {
+		t.Fatalf("LessonIn(いぬ, lesson 3) = %q", l)
+	}
+	if l := ix.LessonIn(e, Source{List: "minna"}); l != "1" {
+		t.Fatalf("LessonIn(いぬ, all) = %q, want its first lesson 1", l)
+	}
+}
