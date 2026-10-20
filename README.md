@@ -27,8 +27,11 @@ Kana is a Fyne v2 desktop app (`kana-desktop`).
   lists (by lesson, then file order; see [Private word lists](#private-word-lists)) or from the
   bundled JLPT words (N5 first, the most common words first); once a JLPT level is fully
   introduced, the game offers the next one. Type the whole reading (`sensei`, `kitte`,
-  `koohii`, `ko-hi-`; spaces are ignored, so `shitsurei desu ga` works); a hit shows the
-  meaning, a missed word shows its romaji and meaning. One spawn in a hundred is a word per
+  `koohii`, `ko-hi-`; spaces are ignored, so `shitsurei desu ga` works) or its meaning in the
+  meaning language or in English (`Regenschirm` or `umbrella` for かさ; case, text in
+  parentheses, a leading `to` or article and `ae`/`oe`/`ue`/`ss` for umlauts do not matter);
+  a hit shows the meaning (and the romaji when answered by meaning), a missed word shows its
+  romaji and meaning. One spawn in a hundred is a word per
   playable word, at most 10 %; longer words fall more slowly (up to twice the time).
 - **Learning path**: start with あいうえお, unlock two rows at a time; each automatically unlocked row is introduced before it is asked, and the game pauses while new rows are introduced
 - **Two scripts**: hiragana and katakana progress independently; switch scripts in the settings. After the basic hiragana you are offered katakana once.
@@ -264,6 +267,7 @@ Word data for the vocabulary trainer, independent of the game and the store:
 - `vocab.go`: `Word`, `Meanings` (per language, with fallback for display), `List`
 - `csvlist.go`, `jsonlist.go`, `dir.go`: private word lists (CSV/TSV/JSON, with header aliases) and `LoadDir`
 - `import.go`: `Inspect` and `Import`, checking and storing a word list for the settings' import
+- `meaning.go`: `MeaningMatches`, answering a word by its meaning
 - `index.go`: `NewIndex` (one entry per reading across all sources, with each list entry's first
   row) and `Playable` (words made only of known kana, filtered by JLPT level, list and lesson)
 - `package.go`: `Source` and `NextPackage` (the next words to introduce from a list or JLPT, in

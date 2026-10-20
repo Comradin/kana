@@ -633,6 +633,28 @@ func TestWordHitRecordsWordProgressOnly(t *testing.T) {
 	}
 }
 
+func TestWordAnsweredByMeaning(t *testing.T) {
+	kasa := vocab.Word{Kana: "かさ", JLPT: 5, Meanings: vocab.Meanings{"de": {"Regenschirm"}, "en": {"umbrella"}}}
+	cases := []struct{ input, feedback string }{
+		{"Regenschirm", "かさ · kasa — Regenschirm"},
+		{"umbrella", "かさ · kasa — Regenschirm"},
+		{"kasa", "かさ — Regenschirm"},
+	}
+	for _, c := range cases {
+		gs := newTestState()
+		gs.meaningLang = "de"
+		withWords(gs, kasa)
+		gs.tiles = []*KanaTile{wordTileAt(gs, "かさ", 0)}
+		gs.checkAnswer(c.input)
+		if len(gs.tiles) != 0 || gs.wordSessionStats["かさ"].CorrectCount != 1 {
+			t.Fatalf("%q: tiles %d, stats %+v; want a hit like a reading hit", c.input, len(gs.tiles), gs.wordSessionStats["かさ"])
+		}
+		if got := gs.feedback[0].text.Text; got != c.feedback {
+			t.Fatalf("%q: feedback %q, want %q", c.input, got, c.feedback)
+		}
+	}
+}
+
 func TestLowerTileWinsAcrossKinds(t *testing.T) {
 	for _, wordLower := range []bool{true, false} {
 		gs := newTestState()
