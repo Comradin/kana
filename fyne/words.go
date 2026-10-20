@@ -112,12 +112,17 @@ func meaningSnippet(m vocab.Meanings, lang string) string {
 	return truncateRunes(strings.Join(items, "; "), maxMeaningRunes)
 }
 
-// hitFeedbackText is shown after a word hit: "はい — yes".
-func hitFeedbackText(e vocab.Entry, lang string) string {
-	if m := meaningSnippet(e.Meanings, lang); m != "" {
-		return e.Kana + " — " + m
+// hitFeedbackText is shown after a word hit: "はい — yes", or with the
+// reading, "はい · hai — yes", when the word was answered by its meaning.
+func hitFeedbackText(e vocab.Entry, lang string, byMeaning bool) string {
+	s := e.Kana
+	if byMeaning {
+		s += " · " + kanacore.Romaji(e.Kana)
 	}
-	return e.Kana
+	if m := meaningSnippet(e.Meanings, lang); m != "" {
+		s += " — " + m
+	}
+	return s
 }
 
 // missFeedbackText is shown after a missed word, with the solution:

@@ -62,7 +62,7 @@ func newInputBar(gs *GameState, statsPanel *StatsPanel, gameCanvas *GameCanvas, 
 		}
 	}
 	ib.entry = newRomajiEntry(ib.togglePause)
-	ib.entry.SetPlaceHolder("type romaji…")
+	ib.entry.SetPlaceHolder("type romaji or a word's meaning…")
 
 	ib.entry.OnSubmitted = func(text string) {
 		// checkAnswer acquires its own lock and calls canvas.Refresh internally

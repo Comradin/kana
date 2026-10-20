@@ -59,14 +59,14 @@ func TestMeaningSnippet(t *testing.T) {
 
 func TestFeedbackTexts(t *testing.T) {
 	hai := vocab.Entry{Kana: "はい", Meanings: vocab.Meanings{"en": {"yes"}}}
-	if got := hitFeedbackText(hai, "en"); got != "はい — yes" {
+	if got := hitFeedbackText(hai, "en", false); got != "はい — yes" {
 		t.Errorf("hit = %q", got)
 	}
 	if got := missFeedbackText(hai, "en"); got != "はい · hai — yes" {
 		t.Errorf("miss = %q", got)
 	}
 	bare := vocab.Entry{Kana: "はい"}
-	if got := hitFeedbackText(bare, "en"); got != "はい" {
+	if got := hitFeedbackText(bare, "en", false); got != "はい" {
 		t.Errorf("hit without meanings = %q", got)
 	}
 	if got := missFeedbackText(bare, "en"); got != "はい · hai" {
