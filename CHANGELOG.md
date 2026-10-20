@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.5.0](https://github.com/Comradin/kana/compare/v0.4.1...v0.5.0) (2026-10-20)
+
+
+### New
+
+* **fyne:** add tiles, lessons, meaning language and focus settings ([5b79f8b](https://github.com/Comradin/kana/commit/5b79f8b97752b2b93094067dccd6b24486152c96))
+* **fyne:** add words-only mode in which the kana path rests ([ccfc058](https://github.com/Comradin/kana/commit/ccfc05828660a148fbc1c0d8998b5278908a314e))
+* **fyne:** choose the meaning language and explain words-only status ([6243d7a](https://github.com/Comradin/kana/commit/6243d7a7db0dc360cc5975322d6b5dab9980c4a7))
+* **fyne:** focus on weak items and filter a list's lessons ([9b321aa](https://github.com/Comradin/kana/commit/9b321aa978406d401e3bef5bb5d8b29644792bfc))
+* **store:** store words-only mode, focus and lesson filters ([8fa7777](https://github.com/Comradin/kana/commit/8fa777793c5b2cc01fcd7fb83d48bd1bc4a5b436))
+* **vocab:** choose lessons of a list and list its lessons and languages ([40a27f1](https://github.com/Comradin/kana/commit/40a27f1b27129af515225200d725251fbe47beca))
+
+
+### Improvements and fixes
+
+* **fyne:** ignore lessons a list no longer has in its lesson filter ([73a5ba3](https://github.com/Comradin/kana/commit/73a5ba37f0130ce0b77f944399e56b65c277aec1))
+
 ## [0.4.1](https://github.com/Comradin/kana/compare/v0.4.0...v0.4.1) (2026-10-20)
 
 **Answer words by their meaning.** A falling word now also accepts its meaning: type `Regenschirm` or `umbrella` instead of `kasa`. Your meaning language and English both count. Capitals, text in parentheses, a leading "to" or article, and umlauts written as `ae`, `oe`, `ue`, `ss` don't matter; typos do. After a hit by meaning the reading is shown as well, so you pick it up along the way.
