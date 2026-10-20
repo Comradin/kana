@@ -3,9 +3,13 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 
+	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/test"
+	"fyne.io/fyne/v2/widget"
 	"kana/vocab"
 )
 
@@ -69,4 +73,125 @@ func TestImportListReloadsAndKeepsProgress(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dir, "mine.csv")); !os.IsNotExist(err) {
 		t.Fatal("the old file must be gone")
 	}
+}
+
+func TestImportPreviewLines(t *testing.T) {
+	c, err := vocab.Inspect("minna-no-nihongo.csv", []byte(
+		"kana;meaning_de;meaning_en;lesson\nせんせい;Lehrer;teacher;1\nがくせい;Student;student;1\nえき;Bahnhof;station;2\nいえ;Haus;house;2\nabc;x;x;3\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := importPreviewLines(c, "de", true)
+	want := []string{
+		"Word list: minna no nihongo",
+		"Replaces the word list of the same name; your progress is kept.",
+		"4 words · 2 lessons · meanings: de, en",
+		"1 row skipped:",
+		"• line 6: abc is not kana",
+		"First words:",
+		"せんせい · Lehrer · lesson 1",
+		"がくせい · Student · lesson 1",
+		"えき · Bahnhof · lesson 2",
+	}
+	if !equalIDs(got, want) {
+		t.Fatalf("lines:\n%q\nwant\n%q", got, want)
+	}
+
+	c, _ = vocab.Inspect("a.csv", []byte("kana;meaning\nせんせい;teacher\n"))
+	if got := importPreviewLines(c, "en", false); !equalIDs(got, []string{
+		"Word list: a", "1 word", "First words:", "せんせい · teacher",
+	}) {
+		t.Fatalf("plain list: %q", got)
+	}
+}
+
+func TestImportChosenShowsPreviewAndImports(t *testing.T) {
+	test.NewApp()
+	defer test.NewApp()
+	isolateWordsDir(t)
+	gs := NewGameState(openTestStore(t))
+	w := test.NewWindow(nil)
+	defer w.Close()
+	w.Resize(fyne.NewSize(1000, 760))
+	f := newSettingsForm(gs.settingsState(), nil)
+
+	importChosen(gs, f, "mine.csv", []byte("kana;meaning\nあお;blue\n"), w)
+	preview := w.Canvas().Overlays().Top()
+	if preview == nil || buttonIn(preview, "Import") == nil {
+		t.Fatal("no preview with an Import button")
+	}
+	test.Tap(buttonIn(preview, "Import"))
+	if !equalIDs(gs.listNames, []string{"mine"}) {
+		t.Fatalf("lists = %v", gs.listNames)
+	}
+	if f.wordSource() != "list:mine" || !slices.Contains(f.sourceSelect.Options, "mine") {
+		t.Fatalf("source %q, options %v; want the new list preselected", f.wordSource(), f.sourceSelect.Options)
+	}
+
+	importChosen(gs, f, "MINE.csv", []byte("kana;meaning\nいえ;house\n"), w)
+	if buttonIn(w.Canvas().Overlays().Top(), "Replace") == nil {
+		t.Fatal("an existing name must offer Replace")
+	}
+	test.Tap(buttonIn(w.Canvas().Overlays().Top(), "Replace"))
+	if !equalIDs(gs.listNames, []string{"mine"}) || f.wordSource() != "list:mine" {
+		t.Fatalf("lists %v, source %q; the replaced list keeps its name", gs.listNames, f.wordSource())
+	}
+}
+
+func TestImportChosenRejectsWithHint(t *testing.T) {
+	test.NewApp()
+	defer test.NewApp()
+	isolateWordsDir(t)
+	gs := NewGameState(openTestStore(t))
+	w := test.NewWindow(nil)
+	defer w.Close()
+	w.Resize(fyne.NewSize(1000, 760))
+	f := newSettingsForm(gs.settingsState(), nil)
+	importChosen(gs, f, "list.xlsx", []byte("PK"), w)
+	top := w.Canvas().Overlays().Top()
+	if top == nil || !labelContains(top, "This is a spreadsheet file.") || !labelContains(top, "CSV UTF-8") {
+		t.Fatal("a rejected file must show the reason and the hint")
+	}
+	if len(gs.listNames) != 0 {
+		t.Fatal("nothing may be imported")
+	}
+}
+
+func TestImportDoesNotChangeTheSource(t *testing.T) {
+	test.NewApp()
+	defer test.NewApp()
+	isolateWordsDir(t)
+	st := openTestStore(t)
+	_ = st.SaveSelectedRows([]string{"vowels"})
+	gs := NewGameState(st)
+	before, _ := st.WordSource()
+	w := test.NewWindow(nil)
+	defer w.Close()
+	w.Resize(fyne.NewSize(1000, 760))
+	f := newSettingsForm(gs.settingsState(), nil)
+	importChosen(gs, f, "mine.csv", []byte("kana;meaning\nあお;blue\n"), w)
+	test.Tap(buttonIn(w.Canvas().Overlays().Top(), "Import"))
+	if after, _ := st.WordSource(); gs.wordSource != before || after != before {
+		t.Fatalf("source %q, stored %q; want %q until the settings are saved", gs.wordSource, after, before)
+	}
+	if !equalIDs(gs.listNames, []string{"mine"}) {
+		t.Fatalf("lists = %v", gs.listNames)
+	}
+}
+
+// labelContains reports whether a label or rich text under o contains s.
+func labelContains(o fyne.CanvasObject, s string) bool {
+	for _, obj := range test.LaidOutObjects(o) {
+		switch v := obj.(type) {
+		case *widget.Label:
+			if strings.Contains(v.Text, s) {
+				return true
+			}
+		case *widget.RichText:
+			if strings.Contains(v.String(), s) {
+				return true
+			}
+		}
+	}
+	return false
 }

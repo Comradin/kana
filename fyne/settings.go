@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"maps"
+	"os"
 	"slices"
 	"strconv"
 	"strings"
@@ -31,13 +32,19 @@ type settingsState struct {
 	wordLevel   int
 	packageSize int
 	summary     string // the Words tab's summary line
+	wordsDir    string // the word list folder for display; "" if unknown
 	kanaFont    string // the kana font's id
 }
 
 // settingsState copies the current settings for the dialog.
 func (gs *GameState) settingsState() settingsState {
+	home, _ := os.UserHomeDir()
 	gs.mu.Lock()
 	defer gs.mu.Unlock()
+	var dir string
+	if gs.wordsDir != "" {
+		dir = displayDir(gs.wordsDir, home)
+	}
 	return settingsState{
 		selected:    maps.Clone(gs.selectedRows),
 		active:      maps.Clone(gs.activeScripts),
@@ -50,6 +57,7 @@ func (gs *GameState) settingsState() settingsState {
 		wordLevel:   gs.wordLevel,
 		packageSize: gs.packageSize,
 		summary:     gs.wordsSummary(),
+		wordsDir:    dir,
 		kanaFont:    gs.kanaFont.id,
 	}
 }
@@ -66,9 +74,11 @@ type settingsForm struct {
 
 	sourceSelect *widget.Select
 	sourceValues []string // the word source of each sourceSelect option
+	storedSource string   // the stored word source, kept as an option while missing
 	wordLevel    *widget.RadioGroup
 	packageSize  *widget.RadioGroup
 	summary      *widget.Label
+	folder       *widget.Label // where the word lists are kept
 
 	difficulty *widget.RadioGroup
 	points     *widget.Select
@@ -76,7 +86,8 @@ type settingsForm struct {
 	kanaFont   *widget.RadioGroup
 	limit      int // the score limit the dialog started with
 
-	onReset func(kanacore.Script) // a reset button was clicked; may be nil
+	onReset  func(kanacore.Script) // a reset button was clicked; may be nil
+	onImport func()                // the import button was clicked; may be nil
 }
 
 // newSettingsForm builds the tabs from st; onReset is called with the script
@@ -147,21 +158,39 @@ func scriptLabel(s kanacore.Script) string {
 	return string(s)
 }
 
-// newWordsTab holds where new words come from, the JLPT level (for JLPT
-// only), the package size and a summary of the current source.
+// sourceOptions are the source select's labels and word sources: the lists
+// by name, a missing stored list (it stays selected until the learner picks
+// another), then JLPT.
+func sourceOptions(lists []string, stored string) (labels, values []string) {
+	for _, name := range lists {
+		labels = append(labels, prettyListName(name))
+		values = append(values, listSourcePrefix+name)
+	}
+	if name, ok := strings.CutPrefix(stored, listSourcePrefix); ok && !slices.Contains(lists, name) {
+		labels = append(labels, prettyListName(name))
+		values = append(values, stored)
+	}
+	return append(labels, "JLPT"), append(values, jlptSource)
+}
+
+// setLists replaces the source select's lists and selects the list named
+// selected.
+func (f *settingsForm) setLists(lists []string, selected string) {
+	labels, values := sourceOptions(lists, f.storedSource)
+	f.sourceValues = values
+	f.sourceSelect.SetOptions(labels)
+	if i := slices.Index(values, listSourcePrefix+selected); i >= 0 {
+		f.sourceSelect.SetSelectedIndex(i)
+	}
+}
+
+// newWordsTab holds where new words come from, the import button, the JLPT
+// level (for JLPT only), the package size, a summary of the current source
+// and the word list folder.
 func (f *settingsForm) newWordsTab(st settingsState) fyne.CanvasObject {
-	var labels []string
-	for _, name := range st.lists {
-		labels = append(labels, prettyListName(name))
-		f.sourceValues = append(f.sourceValues, listSourcePrefix+name)
-	}
-	if name, ok := strings.CutPrefix(st.wordSource, listSourcePrefix); ok && !slices.Contains(st.lists, name) {
-		// A missing list stays selected until the learner picks another.
-		labels = append(labels, prettyListName(name))
-		f.sourceValues = append(f.sourceValues, st.wordSource)
-	}
-	labels = append(labels, "JLPT")
-	f.sourceValues = append(f.sourceValues, jlptSource)
+	f.storedSource = st.wordSource
+	labels, values := sourceOptions(st.lists, st.wordSource)
+	f.sourceValues = values
 
 	f.wordLevel = widget.NewRadioGroup([]string{"N5", "N4", "N3", "N2", "N1"}, nil)
 	f.wordLevel.Horizontal = true
@@ -190,16 +219,28 @@ func (f *settingsForm) newWordsTab(st settingsState) fyne.CanvasObject {
 	f.packageSize.Required = true
 	f.packageSize.SetSelected(strconv.Itoa(st.packageSize))
 
+	importButton := widget.NewButton("Import word list…", func() {
+		if f.onImport != nil {
+			f.onImport()
+		}
+	})
+	f.folder = widget.NewLabel("")
+	if st.wordsDir != "" {
+		f.folder.SetText("Word lists are kept in " + st.wordsDir)
+	}
+
 	f.summary = widget.NewLabel(st.summary)
 	return container.NewVBox(
 		widget.NewLabelWithStyle("New words from", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 		f.sourceSelect,
+		importButton,
 		widget.NewLabel("JLPT level"),
 		f.wordLevel,
 		widget.NewLabel("Words per package"),
 		f.packageSize,
 		widget.NewSeparator(),
 		f.summary,
+		f.folder,
 	)
 }
 
@@ -336,6 +377,7 @@ func showSettingsDialog(gs *GameState, statsPanel *StatsPanel, gameCanvas *GameC
 		c.Show()
 	}
 	form := newSettingsForm(gs.settingsState(), onReset)
+	form.onImport = func() { showImportDialog(gs, form, win) }
 	gs.SetSettingsOpen(true)
 	gameCanvas.Refresh()
 
