@@ -263,6 +263,7 @@ Word data for the vocabulary trainer, independent of the game and the store:
 
 - `vocab.go`: `Word`, `Meanings` (per language, with fallback for display), `List`
 - `csvlist.go`, `jsonlist.go`, `dir.go`: private word lists (CSV/TSV/JSON, with header aliases) and `LoadDir`
+- `import.go`: `Inspect` and `Import`, checking and storing a word list for the settings' import
 - `index.go`: `NewIndex` (one entry per reading across all sources, with each list entry's first
   row) and `Playable` (words made only of known kana, filtered by JLPT level, list and lesson)
 - `package.go`: `Source` and `NextPackage` (the next words to introduce from a list or JLPT, in
@@ -371,13 +372,21 @@ The game credits these sources on the settings' Sources tab.
 
 ### Private word lists
 
-Your own lists (for example from a textbook) go in the `words` folder next to `kana.db`:
-`$XDG_DATA_HOME/kana/words/`, or `~/.local/share/kana/words/`. They are read from there only
-and never belong in the repository. The folder is read when the app starts. Choose a list as
-the source of new words in the settings (Words tab); its words are introduced lesson by lesson
-(numeric lessons in number order, others in the order they first appear), then in file order,
-with words without a lesson last. If the chosen list is missing, the status panel says where
-to add it.
+Add your own lists (for example from a textbook) with **Settings → Words → Import word
+list…**. The game checks the file, shows a preview (words, lessons, meaning languages, skipped
+rows, the first words) and copies it into the `words` folder next to `kana.db`:
+`$XDG_DATA_HOME/kana/words/`, or `~/.local/share/kana/words/` (created at the first start; the
+Words tab shows where). Importing a file with the name of an existing list replaces that list;
+your progress is kept. The file must be UTF-8 ("CSV UTF-8" in spreadsheet programs) or UTF-16
+with a byte order mark (Excel's "Unicode Text", a `.txt` file, stored as `.tsv`); `.xlsx` and
+`.ods` sheets must be saved as CSV first; at most 5 MB. Files can also be copied into the folder
+by hand; they are read when the app starts. Lists are read from there only and never belong in
+the repository.
+
+Choose a list as the source of new words in the settings (Words tab; an imported list is
+preselected); its words are introduced lesson by lesson (numeric lessons in number order,
+others in the order they first appear), then in file order, with words without a lesson last.
+If the chosen list is missing, the status panel says where to add it.
 
 - **CSV/TSV** (`*.csv`, `*.tsv`): a header row; the separator (tab, semicolon or comma) is
   taken from it. Columns: `kana` (required), `meaning` (any language), `meaning_de`,
