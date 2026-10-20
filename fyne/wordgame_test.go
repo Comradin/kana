@@ -921,8 +921,9 @@ func TestSnapshotWordsStatus(t *testing.T) {
 	setWordLevel(gs, "あい", learnedLevel)
 	gs.wordSessionStats["あい"] = store.WordStats{Kana: "あい", CorrectCount: 1}
 	snap := gs.snapshot()
-	if snap.Words != (WordsStatus{Introduced: 3, Learned: 1, Source: "JLPT N5", Level: 5, Next: wordsFinished}) {
-		t.Fatalf("Words = %+v, want 3 introduced, 1 learned, JLPT N5 finished", snap.Words)
+	// いえ waits for え.
+	if snap.Words != (WordsStatus{Introduced: 3, Learned: 1, Waiting: 1, Source: "JLPT N5", Level: 5, Next: wordsFinished}) {
+		t.Fatalf("Words = %+v, want 3 introduced, 1 learned, 1 waiting, JLPT N5 finished", snap.Words)
 	}
 	if snap.WordCorrect != 1 {
 		t.Fatalf("WordCorrect = %d, want the session's 1", snap.WordCorrect)

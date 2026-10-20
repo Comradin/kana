@@ -82,6 +82,7 @@ func TestFormatWordsLine(t *testing.T) {
 	}{
 		{"JLPT counts", WordsStatus{Introduced: 25, Learned: 18, Source: "JLPT N5", Level: 5}, "Words: 25 introduced · 18 learned · JLPT N5"},
 		{"list counts", WordsStatus{Introduced: 3, Learned: 1, Source: "minna no nihongo"}, "Words: 3 introduced · 1 learned · minna no nihongo"},
+		{"waiting for kana", WordsStatus{Introduced: 18, Learned: 5, Waiting: 15, Source: "minna no nihongo"}, "Words: 18 introduced · 5 learned · 15 waiting for kana · minna no nihongo"},
 		{"load failed", WordsStatus{LoadFailed: true, Err: "broken data", Introduced: 3}, "Words unavailable: could not load progress"},
 		{"bundled error", WordsStatus{Err: "broken data", Introduced: 3, Level: 5}, "Words unavailable: broken data"},
 		{"missing list", WordsStatus{Missing: true, Dir: "~/.local/share/kana/words", Source: "minna"}, "Words: add a list to ~/.local/share/kana/words or choose JLPT"},

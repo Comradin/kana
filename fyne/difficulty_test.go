@@ -65,7 +65,7 @@ func TestFormatStatusAndMissReason(t *testing.T) {
 }
 
 func TestWordShare(t *testing.T) {
-	cases := map[int]float64{0: 0, 5: 0.05, 10: 0.1, 30: 0.1, 500: 0.1}
+	cases := map[int]float64{0: 0, 1: 0.05, 3: 0.05, 5: 0.05, 7: 0.07, 10: 0.1, 30: 0.1, 500: 0.1}
 	for n, want := range cases {
 		if got := wordShare(n); math.Abs(got-want) > 1e-9 {
 			t.Errorf("wordShare(%d) = %v, want %v", n, got, want)
