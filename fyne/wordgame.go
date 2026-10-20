@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"sort"
@@ -94,17 +95,31 @@ func (gs *GameState) mergeWordStats() {
 	gs.wordSessionDirty = false
 }
 
+// wordsDirPerm is the permission of the word list folder.
+const wordsDirPerm = 0o755
+
 // loadWords builds the word index: the private lists merged into the
 // bundled index, which is built once per process. A bundled load error is
-// kept for the status panel; kana play is unaffected. An unreadable list
-// folder gives no private lists (stage 4 shows list problems) and sets
-// listsLoadFailed. Called from NewGameState before the game starts, so no
-// lock is needed.
+// kept for the status panel; kana play is unaffected. The word list folder
+// is created if it is missing. Called from NewGameState before the game
+// starts, so no lock is needed.
 func (gs *GameState) loadWords() {
-	base := vocab.NewIndex(nil, nil)
 	if _, err := bundledWords(); err != nil {
 		gs.wordsErr = err.Error()
-	} else {
+	}
+	if dir, err := wordsDir(); err == nil {
+		_ = os.MkdirAll(dir, wordsDirPerm) // an error shows as listsLoadFailed
+	}
+	gs.loadLists()
+}
+
+// loadLists reads the private lists and rebuilds the word index on the
+// bundled one (an empty index if that failed to load). An unreadable folder
+// gives no private lists and sets listsLoadFailed. Must be called under lock
+// (or before the game starts).
+func (gs *GameState) loadLists() {
+	base := vocab.NewIndex(nil, nil)
+	if gs.wordsErr == "" {
 		base = bundledIndex()
 	}
 	var lists []vocab.List
@@ -121,6 +136,57 @@ func (gs *GameState) loadWords() {
 	}
 	gs.words = base.WithLists(lists)
 	gs.invalidatePlayable()
+}
+
+// ReloadLists reads the word list folder again. The word source is left as
+// it is.
+func (gs *GameState) ReloadLists() {
+	gs.mu.Lock()
+	defer gs.mu.Unlock()
+	gs.loadLists()
+}
+
+// ListNames returns the private word lists found, sorted by name.
+func (gs *GameState) ListNames() []string {
+	gs.mu.Lock()
+	defer gs.mu.Unlock()
+	return append([]string(nil), gs.listNames...)
+}
+
+// MeaningLang returns the language meanings are shown in.
+func (gs *GameState) MeaningLang() string {
+	gs.mu.Lock()
+	defer gs.mu.Unlock()
+	return gs.meaningLang
+}
+
+// HasList reports whether a word list of that name exists (ignoring case
+// and extension).
+func (gs *GameState) HasList(name string) bool {
+	gs.mu.Lock()
+	dir := gs.wordsDir
+	gs.mu.Unlock()
+	if dir == "" {
+		return false
+	}
+	_, ok := vocab.Existing(dir, name)
+	return ok
+}
+
+// ImportList stores c in the word list folder, reloads the lists and
+// returns the word list's name (an existing list keeps its name).
+func (gs *GameState) ImportList(c vocab.Candidate) (string, error) {
+	gs.mu.Lock()
+	defer gs.mu.Unlock()
+	if gs.wordsDir == "" {
+		return "", errors.New("no folder for word lists")
+	}
+	name, err := vocab.Import(gs.wordsDir, c)
+	if err != nil {
+		return "", err
+	}
+	gs.loadLists()
+	return name, nil
 }
 
 // unitKnown reports whether a word unit is known in mixed mode: the kana is
