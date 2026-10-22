@@ -44,7 +44,7 @@ The spec leaves these open or calls them indicative; check them before Task 2.
 14. **Missed words** become `[]vocab.Entry` (in `GameState.missedWords` and `StatsSnapshot.MissedWords`), so the game-over list can show `～さん (san)`; they are still unique by reading and sorted by reading.
 15. **Scrolling skipped rows:** one helper `linesBody(lines)` builds both the Details dialog and the import preview from their line lists; a run of more than 8 lines starting with `• ` goes into a vertical scroll area 200 px high, the lines around it (counts, hint, first words) stay in view. `importPreviewLines` and `skippedRowsLines` keep returning plain strings (their tests stay).
 16. **`-words` after the notation:** `<shown> · <romaji of the reading> · also <alt> (<romaji>), … · lesson N`. Other readings are printed in kana with their romaji, because two variants often share the romaji (`あめりか`/`アメリカ` are both `amerika`).
-17. **The particle は is not read as "wa"** (spec ambiguity). The spec says `こちらは～さんです` is answered `kochirawasandesu`, but `kanacore` spells は only `ha`, and teaching は = `wa` everywhere would break kana practice. This plan leaves matching as it is: the word is answered `kochirahasandesu`, and the tests use that. Particle handling, if wanted, is a separate change.
+17. **Particles (user decision, option a).** Superseded the earlier "は is not read as wa": a word whose field uses a placeholder, an optional part, punctuation or a space is a *phrase* (`notation.phrase`, `Word.Phrase`, `Entry.Phrase`, OR-merged across sources); in a phrase the hiragana units は and へ also take `wa` and `e`. Variants alone do not make a phrase. を takes `o` as an alternative spelling everywhere (kana row entry), canonical romaji stays `wo`. See Task 6b. Tests written in Tasks 2–6 that expect `kochirahasandesu` stay valid (both are accepted).
 18. **GLOSSARY** already has all terms (spec commit); no GLOSSARY task. `CLAUDE.md` is not in the repository and is not touched (you may want to add `cmd/listcheck/` to its structure list).
 19. **The bundled list and `cmd/vocabgen` are unchanged**; bundled entries have no `Alts` and no `Display`.
 
@@ -1355,6 +1355,26 @@ git commit -m "feat(fyne): accept every reading of a word with optional parts or
 
 ---
 
+### Task 6b: particles in phrases, を as `o`
+
+**Files:**
+- Modify: `kanacore/kana_rows.go` (を entry), `kanacore/words.go` (`ReadingMatches` gains a particle variant), `vocab/notation.go` (`phrase`), `vocab/vocab.go` (`Word.Phrase`), `vocab/csvlist.go`, `vocab/jsonlist.go` (copy it), `vocab/index.go` (`Entry.Phrase`, OR-merge in `add`, `ReadingMatches` passes it on)
+- Test: `kanacore/words_test.go`, `kanacore/kana_test.go`, `vocab/notation_test.go`, `vocab/index_test.go`, `fyne/wordgame_test.go`
+
+- [ ] **Step 1: Failing tests.**
+  - kanacore: `PhraseReadingMatches("こちらはさんです", "kochirawasandesu")` and `"kochirahasandesu"` true; `PhraseReadingMatches("にほんへ", "nihone")` true; `ReadingMatches("はな", "wana")` false; `PhraseReadingMatches("ハナ", "wana")` false (katakana ハ/ヘ are not particles); `ReadingMatches("をかし", "okashi")` and `"wokashi"` true; the を kana-row test expects alternatives `[]string{"o"}`.
+  - vocab: `parseNotation` sets `phrase` for placeholder, brackets, punctuation and space cases, not for `せんせい`, `あめりか // アメリカ` or `ねこ // ねこ`; a variant with a placeholder (`～くん // ～クン`) is a phrase. Update the expected `notation` values in `TestParseNotation` accordingly. Index: an entry is a phrase if any source row is; `Entry.ReadingMatches` accepts `wa` for は only when `Phrase`.
+  - fyne: `こちらは～さんです` from a list is answered by `kochirawasandesu` (not by meaning).
+- [ ] **Step 2: Run** the new tests and see them fail.
+- [ ] **Step 3: Implement.**
+  - `kana_rows.go`: `entry("を", "wo", "o")`.
+  - `words.go`: rename the matcher body into `readingMatches(word, input string, particles bool) bool`; `ReadingMatches` calls it with false, new exported `PhraseReadingMatches` (doc: "…like ReadingMatches; は may also be wa and へ e, as particles in a phrase") with true. In the default case, when `particles` and `u == "は"` also try `"wa"`, when `u == "へ"` also try `"e"`.
+  - `notation.go`: `phrase bool` in `notation`, true when the field (any variant) had a placeholder, a bracket, punctuation or a space. `vocab.go`: `Word.Phrase bool` with a doc comment. Readers copy it. `index.go`: `Entry.Phrase bool`; in `add`, `e.Phrase = e.Phrase || w.Phrase`; `ReadingMatches` uses `kanacore.PhraseReadingMatches` for every reading when `e.Phrase`.
+- [ ] **Step 4: Run** `go test ./kanacore/ ./vocab/ ./fyne/ -timeout 600s`, `gofmt -l .`, `go vet ./...`.
+- [ ] **Step 5: Commit** `feat: accept particle readings in phrases and o for を`
+
+---
+
 ### Task 7: `fyne` — long runs of skipped rows scroll
 
 **Files:**
@@ -1608,6 +1628,8 @@ git commit -m "feat(listcheck): print shown forms and other readings with -words
   - Text in brackets, `（…）` or `(…)`, is optional: `（どうぞ）よろしく（おねがいします）` is answered with the full form `douzoyoroshikuonegaishimasu` or the short form `yoroshiku`, nothing in between. Brackets must pair and must not nest.
   - Punctuation (`？ ！ 。 、 ・ ? ! . ,`) and spaces are shown, not typed: `おげんきですか？` is `ogenkidesuka`.
   - `//` separates two writings of one word: `あめりか // アメリカ`. The tile shows the last one, which also decides the script (`アメリカ` needs katakana switched on); every writing's reading counts.
+
+  - In an entry that uses any of the above except `//` alone (a phrase), は may also be typed `wa` and へ `e`, as particles are spoken: `こちらは～さんです` takes `kochirawasandesu`. Everywhere, を takes `o` as well as `wo`.
 
   The tile, the feedback, the word package intro, the import preview and the game-over list show a word as the list writes it, with the romaji of its full form. Progress belongs to the reading, the kana without the notation: `～さん` in two lists, or `～さん` in a list and `さん` in the JLPT list, is one word, shown as the first list writes it.
 
