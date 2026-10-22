@@ -89,6 +89,8 @@ func TestFormatWordsLine(t *testing.T) {
 		{"missing list, no folder", WordsStatus{Missing: true, Source: "minna"}, "Words: add a word list or choose JLPT"},
 		{"needs kana", WordsStatus{Next: wordsNeedKana, Introduced: 5, Source: "JLPT N5", Level: 5}, "Words: learn more kana for new words"},
 		{"list finished", WordsStatus{Next: wordsFinished, Introduced: 40, Source: "minna no nihongo"}, "Words: minna no nihongo finished"},
+		{"skipped rows", WordsStatus{Introduced: 3, Learned: 1, Source: "minna", Skipped: 2}, "Words: 3 introduced · 1 learned · minna · 2 rows skipped"},
+		{"skipped rows, finished", WordsStatus{Next: wordsFinished, Source: "minna", Skipped: 1}, "Words: minna finished · 1 row skipped"},
 		{"level finished", WordsStatus{Next: wordsFinished, Source: "JLPT N5", Level: 5}, "Words: JLPT N5 finished"},
 		{"JLPT finished", WordsStatus{Next: wordsFinished, Source: "JLPT N1", Level: 1}, "Words: JLPT finished"},
 		{"words only, counts", WordsStatus{WordsOnly: true, Introduced: 3, Learned: 1, Source: "minna"}, "Words: 3 introduced · 1 learned · minna"},
