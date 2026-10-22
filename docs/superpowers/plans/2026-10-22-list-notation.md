@@ -47,6 +47,9 @@ The spec leaves these open or calls them indicative; check them before Task 2.
 17. **Particles (user decision, option a).** Superseded the earlier "は is not read as wa": a word whose field uses a placeholder, an optional part, punctuation or a space is a *phrase* (`notation.phrase`, `Word.Phrase`, `Entry.Phrase`, OR-merged across sources); in a phrase the hiragana units は and へ also take `wa` and `e`. Variants alone do not make a phrase. を takes `o` as an alternative spelling everywhere (kana row entry), canonical romaji stays `wo`. See Task 6b. Tests written in Tasks 2–6 that expect `kochirahasandesu` stay valid (both are accepted).
 18. **GLOSSARY** already has all terms (spec commit); no GLOSSARY task. `CLAUDE.md` is not in the repository and is not touched (you may want to add `cmd/listcheck/` to its structure list).
 19. **The bundled list and `cmd/vocabgen` are unchanged**; bundled entries have no `Alts` and no `Display`.
+20. In a phrase every は/へ, not only particles, takes wa/e (the game cannot tell particles apart); as the reading key ignores punctuation, a phrase row can make a bundled word with the same reading lenient too. Accepted.
+21. The miss romaji stays the reading's (`ha`): showing `wa` would also turn はじめまして into wajimemashite.
+22. **A short form that is no word on its own** (`いっ（て）`, `（コ）ーヒー`, `（き）ゃ`: っ, ー or a small kana at its edge) does not skip the row: the full form is checked first, and only a full form that fails `kanacore.KanaUnits` gives "… is not kana". A short form that fails is dropped as a reading, like an empty short form, and only the full form counts.
 
 ---
 

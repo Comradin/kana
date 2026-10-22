@@ -50,6 +50,11 @@ func TestListCountsAndSkippedLines(t *testing.T) {
 	if got := skippedRowsLines(li); !equalIDs(got, []string{"• line 6: abc is not kana", skippedRowsHint}) {
 		t.Fatalf("skippedRowsLines = %q", got)
 	}
+	cut := listInfo{skipped: 103, problems: []string{"line 2: x is not kana", "line 3: y is not kana"}}
+	want := []string{"• line 2: x is not kana", "• line 3: y is not kana", "… and 101 more rows skipped", skippedRowsHint}
+	if got := skippedRowsLines(cut); !equalIDs(got, want) {
+		t.Fatalf("skippedRowsLines with messages cut off = %q, want %q", got, want)
+	}
 }
 
 func TestListsDialogRows(t *testing.T) {

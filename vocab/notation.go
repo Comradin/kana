@@ -46,9 +46,9 @@ func isCloseBracket(r rune) bool { return r == '）' || r == ')' }
 // the short form count), and "//" separates variants, of which the last is
 // shown and gives the reading. A field whose variants use any of this
 // except "//" is a phrase. It returns the notation, or why the row is
-// skipped: "empty kana", or the field as written followed by "is not kana",
-// "has unpaired brackets" or "has an empty variant". Every accepted reading
-// must pass kanacore.KanaUnits.
+// skipped: "empty kana", or the field as written followed by "is not kana"
+// (a full form fails kanacore.KanaUnits), "has unpaired brackets" or "has an
+// empty variant". A short form that fails kanacore.KanaUnits is no reading.
 func parseNotation(field string) (notation, string) {
 	var n notation
 	var readings []string
@@ -68,12 +68,15 @@ func parseNotation(field string) (notation, string) {
 			}
 			return notation{}, field + " has an empty variant"
 		}
+		if !isKana(full) {
+			return notation{}, field + " is not kana"
+		}
 		for _, r := range []string{full, short} {
-			if r == "" {
-				continue // all of the variant is optional: only the full form counts
-			}
-			if _, ok := kanacore.KanaUnits(r); !ok {
-				return notation{}, field + " is not kana"
+			// An empty short form (all of the variant is optional) or one
+			// that is no word on its own (いっ of いっ（て）): only the full
+			// form counts.
+			if r == "" || (r != full && !isKana(r)) {
+				continue
 			}
 			if !contains(readings, r) {
 				readings = append(readings, r)
@@ -125,4 +128,10 @@ func variantForms(v string) (full, short string, ok bool) {
 		return "", "", false
 	}
 	return f.String(), s.String(), true
+}
+
+// isKana reports whether s passes kanacore.KanaUnits.
+func isKana(s string) bool {
+	_, ok := kanacore.KanaUnits(s)
+	return ok
 }

@@ -36,6 +36,12 @@ func TestParseNotation(t *testing.T) {
 		{"～くん // ～クン", notation{reading: "クン", display: "～クン", alts: []string{"くん"}, phrase: true}},
 		{"（どうぞ）よろしく // よろしく", notation{reading: "よろしく", alts: []string{"どうぞよろしく"}, phrase: true}},
 		{"ねこ // ねこ", notation{reading: "ねこ"}},
+		// a short form that is no word on its own: only the full form counts
+		{"いっ（て）", notation{reading: "いって", display: "いっ（て）", phrase: true}},
+		{"（コ）ーヒー", notation{reading: "コーヒー", display: "（コ）ーヒー", phrase: true}},
+		{"（き）ゃ", notation{reading: "きゃ", display: "（き）ゃ", phrase: true}},
+		{"ん（い）ー", notation{reading: "んいー", display: "ん（い）ー", phrase: true}},
+		{"いっ（て） // いって", notation{reading: "いって", phrase: true}},
 	}
 	for _, c := range cases {
 		got, reason := parseNotation(c.field)
@@ -58,7 +64,9 @@ func TestParseNotationSkips(t *testing.T) {
 		"sensei":     "sensei is not kana",
 		"せんせい // 先生": "せんせい // 先生 is not kana",
 		"先生 // せんせい": "先生 // せんせい is not kana",
-		"ん（い）ー":      "ん（い）ー is not kana", // the short form んー cannot be typed
+		"（先）生":       "（先）生 is not kana",
+		"せん（生）":      "せん（生） is not kana", // the short form せん is kana, the full form is not
+		"っ（て）":       "っ（て） is not kana",
 		"あめりか //":    "あめりか // has an empty variant",
 		"// アメリカ":    "// アメリカ has an empty variant",
 	}

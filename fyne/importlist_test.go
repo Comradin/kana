@@ -295,3 +295,18 @@ func TestImportPreviewScrollsManySkippedRows(t *testing.T) {
 		t.Fatal("the count and the first words stay in view")
 	}
 }
+
+func TestImportPreviewCountsMessagesCutOff(t *testing.T) {
+	c, err := vocab.Inspect("many.csv", []byte("kana;meaning\nあお;blue\n"+strings.Repeat("x;y\n", 103)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := importPreviewLines(c, "en", nil)
+	i := slices.Index(got, "103 rows skipped:")
+	if i < 0 || len(got) < i+103 {
+		t.Fatalf("lines %q", got)
+	}
+	if got[i+100] != "• line 102: x is not kana" || got[i+101] != "… and 3 more rows skipped" || got[i+102] != "First words:" {
+		t.Fatalf("lines after the messages: %q", got[i+100:])
+	}
+}

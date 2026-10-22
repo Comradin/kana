@@ -119,3 +119,31 @@ func TestCheckWordsWithNotation(t *testing.T) {
 		t.Fatalf("output:\n%s\nwant:\n%s", out.String(), want)
 	}
 }
+
+func TestCheckFileWithoutWordsListsEverySkippedRow(t *testing.T) {
+	path := writeFile(t, "bad.csv", "kana;meaning\nあめりか //;America\n"+strings.Repeat("せん（せい;teacher\n", 120))
+	var out bytes.Buffer
+	if checkFile(&out, path, false) {
+		t.Fatalf("a file without words cannot be imported:\n%s", out.String())
+	}
+	lines := strings.Split(strings.TrimSuffix(out.String(), "\n"), "\n")
+	if want := path + ": cannot import: The file has no words. line 2: あめりか // has an empty variant"; lines[0] != want {
+		t.Fatalf("first line %q, want %q", lines[0], want)
+	}
+	if len(lines) != 123 || lines[1] != "Skipped rows:" {
+		t.Fatalf("%d lines; want a heading and all 121 messages:\n%s", len(lines), out.String())
+	}
+	if lines[2] != "  line 2: あめりか // has an empty variant" || lines[122] != "  line 122: せん（せい has unpaired brackets" {
+		t.Fatalf("messages %q … %q", lines[2], lines[122])
+	}
+
+	path = writeFile(t, "nokana.csv", "kana;meaning\nsensei;teacher\n")
+	out.Reset()
+	checkFile(&out, path, false)
+	want := path + ": cannot import: The file contains no kana.\n" +
+		"  Save the file as \"CSV UTF-8\" in your spreadsheet program and import it again.\n" +
+		"Skipped rows:\n  line 2: sensei is not kana\n"
+	if out.String() != want {
+		t.Fatalf("output %q, want %q; the hint comes before the skipped rows", out.String(), want)
+	}
+}

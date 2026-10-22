@@ -40,14 +40,24 @@ func listCounts(li listInfo) string {
 	return strings.Join(parts, " · ")
 }
 
-// skippedRowsLines are the skipped rows' details: a line per message, then
-// how to fix the file.
+// skippedRowsLines are the skipped rows' details: a line per message, how
+// many rows have no message, then how to fix the file.
 func skippedRowsLines(li listInfo) []string {
-	lines := make([]string, 0, len(li.problems)+1)
-	for _, p := range li.problems {
+	lines := make([]string, 0, len(li.problems)+2)
+	lines = appendSkippedRows(lines, li.problems, li.skipped)
+	return append(lines, skippedRowsHint)
+}
+
+// appendSkippedRows appends a line per message and, when skipped rows are
+// more than the messages kept, a line saying how many more there are.
+func appendSkippedRows(lines, problems []string, skipped int) []string {
+	for _, p := range problems {
 		lines = append(lines, skippedRowBullet+p)
 	}
-	return append(lines, skippedRowsHint)
+	if more := skipped - len(problems); more > 0 {
+		lines = append(lines, "… and "+plural(more, "more row")+" skipped")
+	}
+	return lines
 }
 
 // linesBody shows lines as wrapped labels. A run of more than

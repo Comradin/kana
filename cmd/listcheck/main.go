@@ -6,9 +6,9 @@
 // For each file it prints the word list's name with its number of words and
 // skipped rows, with -words every word (shown form, romaji, other accepted
 // readings, lesson), then every skipped row's message (all of them; the
-// game keeps the first 100), or why the file cannot be imported and what to
-// do about it. The exit status is 1 when a file cannot
-// be read or imported, 2 for a usage error.
+// game keeps the first 100), or why the file cannot be imported, what to do
+// about it and every skipped row's message. The exit status is 1 when a file
+// cannot be read or imported, 2 for a usage error.
 package main
 
 import (
@@ -61,8 +61,9 @@ func run(args []string, stdout, stderr io.Writer) int {
 }
 
 // checkFile checks one file as the import does and reports on it to w: the
-// word list's name and counts, with words every word, then every message.
-// It returns false when the file cannot be read or imported.
+// word list's name and counts, with words every word, then every message;
+// for a file that cannot be imported why, the hint and every message. It
+// returns false when the file cannot be read or imported.
 func checkFile(w io.Writer, path string, words bool) bool {
 	data, err := readFile(path)
 	if err != nil {
@@ -77,8 +78,11 @@ func checkFile(w io.Writer, path string, words bool) bool {
 	if err != nil {
 		fmt.Fprintf(w, "%s: cannot import: %v\n", path, err)
 		var ie *vocab.ImportError
-		if errors.As(err, &ie) && ie.Hint != "" {
-			fmt.Fprintf(w, "  %s\n", ie.Hint)
+		if errors.As(err, &ie) {
+			if ie.Hint != "" {
+				fmt.Fprintf(w, "  %s\n", ie.Hint)
+			}
+			printProblems(w, ie.List.Problems)
 		}
 		return false
 	}
@@ -91,13 +95,19 @@ func checkFile(w io.Writer, path string, words bool) bool {
 			fmt.Fprintf(w, "  %s\n", wordLine(word))
 		}
 	}
-	if len(l.Problems) > 0 {
-		fmt.Fprintln(w, "Skipped rows:")
-		for _, p := range l.Problems {
-			fmt.Fprintf(w, "  %s\n", p)
-		}
-	}
+	printProblems(w, l.Problems)
 	return true
+}
+
+// printProblems prints every skipped row's message under a heading, if any.
+func printProblems(w io.Writer, problems []string) {
+	if len(problems) == 0 {
+		return
+	}
+	fmt.Fprintln(w, "Skipped rows:")
+	for _, p := range problems {
+		fmt.Fprintf(w, "  %s\n", p)
+	}
 }
 
 // readFile reads at most one byte more than an import accepts, so that
