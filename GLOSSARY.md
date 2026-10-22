@@ -16,6 +16,18 @@ _Avoid_: original, upload
 Turning a source file into a word list: the game checks it and keeps its own copy.
 _Avoid_: upload, add list
 
+**Skipped row**:
+A line of a word list the game could not read, with the reason why; the rest of the list still plays.
+_Avoid_: problem, error, invalid row
+
+**Delete a word list**:
+Removing a word list from the game for good; the learner's progress on its words stays.
+_Avoid_: remove, uninstall
+
+**Rename a word list**:
+Giving a word list a new name; its lesson choice and its place as the source of new words go with it.
+_Avoid_: move
+
 ## Practice
 
 **Learning level**:
