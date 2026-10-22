@@ -278,7 +278,8 @@ Word data for the vocabulary trainer, independent of the game and the store:
 
 - `vocab.go`: `Word`, `Meanings` (per language, with fallback for display), `List`
 - `csvlist.go`, `jsonlist.go`, `dir.go`: private word lists (CSV/TSV/JSON, with header aliases) and `LoadDir`
-- `import.go`: `Inspect` and `Import`, checking and storing a word list for the settings' import
+- `import.go`: `Inspect` and `Import`, checking and storing a word list for the settings' import;
+  `InspectAll` keeps every skipped row's message for the check command
 - `manage.go`: `DeleteList`, `CheckListName` and `RenameList` for the word list dialog
 - `meaning.go`: `MeaningMatches`, answering a word by its meaning
 - `index.go`: `NewIndex` (one entry per reading across all sources, with each list entry's first
@@ -292,6 +293,11 @@ Word data for the vocabulary trainer, independent of the game and the store:
 
 A maintainer tool that builds `vocab/data/words.json.gz` from JMdict and the JLPT lists
 (see [Word data](#word-data)).
+
+### List Checker (`cmd/listcheck/`)
+
+A command that checks word list files as the import does, without importing them, and prints
+every skipped row (see [Private word lists](#private-word-lists)).
 
 ### Spaced Repetition (`memory/`)
 
@@ -406,7 +412,7 @@ open. Lists are read from there only and never belong in the repository.
 
 **Settings → Words → Manage word lists…** lists every word list with its number of words and
 lessons. A list with rows the game could not read says "N rows skipped"; **Details** shows the
-lines and why (at most ten), so you can correct your source file and import it again.
+lines and why (at most 100), so you can correct your source file and import it again.
 **Rename** renames the list's file (the extension stays); its lesson choice and its place as the
 source of new words go with it. The new name must not contain `/ \ < > : " | ? *`, start with
 ".", be `jmdict` or a name Windows keeps for devices (CON, PRN, AUX, NUL, COM1–9, LPT1–9), on
@@ -414,6 +420,14 @@ every system, so the folder can move between computers. **Delete** removes the f
 on its words is kept, and if it was the source of new words, JLPT takes its place. Both act at
 once, not on Save. **Open folder** opens the words folder in your file manager. The status
 panel's words line adds "· N rows skipped" when the chosen list has skipped rows.
+
+**Checking a file without importing it:** in a clone of this repository,
+`go run ./cmd/listcheck FILE...` reads each file as the import does and changes nothing. For each
+file it prints the word list's name, its number of words and skipped rows, then the message of
+every skipped row (all of them, where the game keeps the first 100), or why the file cannot be
+imported and what to do about it. With `-words` it also lists every word with its romaji and
+lesson. The output can be passed on as it is, for example to whoever keeps the list; the exit
+status is 1 when a file cannot be imported.
 
 Choose a list as the source of new words in the settings (Words tab; an imported list is
 preselected); its words are introduced lesson by lesson (numeric lessons in number order,
