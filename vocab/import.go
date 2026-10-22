@@ -31,9 +31,11 @@ const (
 )
 
 // ImportError is why a source file cannot be imported, with a hint on what
-// to do about it (may be empty).
+// to do about it (may be empty). For a file without words, List is what was
+// read, with its skipped rows' messages.
 type ImportError struct {
 	Reason, Hint string
+	List         List
 }
 
 func (e *ImportError) Error() string { return e.Reason }
@@ -66,24 +68,24 @@ func inspect(fileName string, data []byte, limit int) (Candidate, error) {
 	ext := strings.ToLower(filepath.Ext(fileName))
 	base := strings.TrimSuffix(fileName, filepath.Ext(fileName))
 	if spreadsheetExts[ext] {
-		return Candidate{}, &ImportError{"This is a spreadsheet file.", hintSpreadsheet}
+		return Candidate{}, &ImportError{Reason: "This is a spreadsheet file.", Hint: hintSpreadsheet}
 	}
 	stored, ok := importExts[ext]
 	if !ok {
-		return Candidate{}, &ImportError{"Only .csv, .tsv, .txt and .json files can be imported.", ""}
+		return Candidate{}, &ImportError{Reason: "Only .csv, .tsv, .txt and .json files can be imported."}
 	}
 	if base == "" || strings.HasPrefix(base, ".") {
-		return Candidate{}, &ImportError{`The file name must not start with ".".`, hintRename}
+		return Candidate{}, &ImportError{Reason: `The file name must not start with ".".`, Hint: hintRename}
 	}
 	if strings.EqualFold(base, BundledSource) {
-		return Candidate{}, &ImportError{"The name jmdict is reserved for the bundled word list.", hintRename}
+		return Candidate{}, &ImportError{Reason: "The name jmdict is reserved for the bundled word list.", Hint: hintRename}
 	}
 	if len(data) > MaxImportSize {
-		return Candidate{}, &ImportError{"The file is larger than 5 MB.", ""}
+		return Candidate{}, &ImportError{Reason: "The file is larger than 5 MB."}
 	}
 	text, err := toUTF8(data)
 	if err != nil {
-		return Candidate{}, &ImportError{"The file is not saved as UTF-8.", hintUTF8}
+		return Candidate{}, &ImportError{Reason: "The file is not saved as UTF-8.", Hint: hintUTF8}
 	}
 	var l List
 	if stored == ".json" {
@@ -97,22 +99,23 @@ func inspect(fileName string, data []byte, limit int) (Candidate, error) {
 	return Candidate{Name: base, Ext: stored, List: l, Data: text}, nil
 }
 
-// noWords explains a list without words.
+// noWords explains a list without words. Unless the file is empty or has no
+// kana column, the error keeps the list for its skipped rows' messages.
 func noWords(l List, text []byte) error {
 	if len(bytes.TrimSpace(text)) == 0 {
-		return &ImportError{"The file is empty.", ""}
+		return &ImportError{Reason: "The file is empty."}
 	}
 	if len(l.Problems) > 0 && l.Problems[0] == problemNoKanaColumn {
-		return &ImportError{`The file has no "kana" column.`, hintHeader}
+		return &ImportError{Reason: `The file has no "kana" column.`, Hint: hintHeader}
 	}
 	if !hasKana(text) {
-		return &ImportError{"The file contains no kana.", hintUTF8}
+		return &ImportError{Reason: "The file contains no kana.", Hint: hintUTF8, List: l}
 	}
 	reason := "The file has no words."
 	if len(l.Problems) > 0 {
 		reason += " " + l.Problems[0]
 	}
-	return &ImportError{reason, ""}
+	return &ImportError{Reason: reason, List: l}
 }
 
 // toUTF8 returns data as UTF-8: UTF-16 with a byte order mark is converted

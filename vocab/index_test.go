@@ -290,6 +290,19 @@ func TestIndexMergesAlts(t *testing.T) {
 	if e, _ := base.Lookup("アメリカ"); !reflect.DeepEqual(e.Alts, []string{"あめりか"}) {
 		t.Fatalf("base alts = %v; WithLists must not change the base index", e.Alts)
 	}
+
+	// Three alts appended one by one leave the base entry's Alts spare
+	// capacity: two indexes from the same base must not share it.
+	three := List{Name: "a", Words: []Word{{Kana: "アメリカ", Alts: []string{"あめりか", "めりけん", "べいこく"}, Meanings: Meanings{}}}}
+	base = NewIndex(nil, []List{three})
+	x := base.WithLists([]List{{Name: "x", Words: []Word{{Kana: "アメリカ", Alts: []string{"あめりかがっしゅうこく"}, Meanings: Meanings{}}}}})
+	base.WithLists([]List{{Name: "y", Words: []Word{{Kana: "アメリカ", Alts: []string{"あめりけん"}, Meanings: Meanings{}}}}})
+	if e, _ := x.Lookup("アメリカ"); !reflect.DeepEqual(e.Alts, []string{"あめりか", "めりけん", "べいこく", "あめりかがっしゅうこく"}) {
+		t.Fatalf("alts = %v; another WithLists of the same base changed them", e.Alts)
+	}
+	if e, _ := base.Lookup("アメリカ"); !reflect.DeepEqual(e.Alts, three.Words[0].Alts) {
+		t.Fatalf("base alts = %v; WithLists must not change the base index", e.Alts)
+	}
 }
 
 func TestEntryReadingMatches(t *testing.T) {

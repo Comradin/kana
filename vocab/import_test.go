@@ -254,3 +254,30 @@ func TestInspectReadsNotation(t *testing.T) {
 		t.Fatalf("c %+v, err %v; rows in notation are words, not skipped rows", c.List, err)
 	}
 }
+
+func TestInspectAllWithoutWordsKeepsTheList(t *testing.T) {
+	data := []byte("kana;meaning\n" + strings.Repeat("せん（せい;teacher\n", 150))
+	_, err := InspectAll("bad.csv", data)
+	ie := importErr(t, err)
+	if want := "The file has no words. line 2: せん（せい has unpaired brackets"; ie.Reason != want {
+		t.Fatalf("reason %q, want %q", ie.Reason, want)
+	}
+	if len(ie.List.Problems) != 150 || ie.List.Skipped != 150 {
+		t.Fatalf("%d messages, %d skipped; want all 150 rows", len(ie.List.Problems), ie.List.Skipped)
+	}
+	_, err = Inspect("bad.csv", data)
+	if ie := importErr(t, err); len(ie.List.Problems) != 100 {
+		t.Fatalf("Inspect: %d messages; want the first 100", len(ie.List.Problems))
+	}
+
+	_, err = InspectAll("nokana.csv", []byte("kana;meaning\nsensei;teacher\n"))
+	if ie := importErr(t, err); ie.Hint != hintUTF8 || !slices.Equal(ie.List.Problems, []string{"line 2: sensei is not kana"}) {
+		t.Fatalf("no kana: hint %q, messages %q", ie.Hint, ie.List.Problems)
+	}
+	for name, data := range map[string]string{"empty.csv": " \n", "nokanacolumn.csv": "meaning\nteacher\n"} {
+		_, err = InspectAll(name, []byte(data))
+		if ie := importErr(t, err); len(ie.List.Problems) != 0 || ie.List.Skipped != 0 {
+			t.Fatalf("%s: messages %q; no rows to report", name, ie.List.Problems)
+		}
+	}
+}

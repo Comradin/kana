@@ -281,7 +281,8 @@ Word data for the vocabulary trainer, independent of the game and the store:
 - `notation.go`: the notation of a kana field (placeholders, optional parts, punctuation,
   variants): reading, shown form and other accepted readings, or why the row is skipped
 - `import.go`: `Inspect` and `Import`, checking and storing a word list for the settings' import;
-  `InspectAll` keeps every skipped row's message for the check command
+  `InspectAll` keeps every skipped row's message for the check command (for a file without
+  words in the `ImportError`'s `List`)
 - `manage.go`: `DeleteList`, `CheckListName` and `RenameList` for the word list dialog
 - `meaning.go`: `MeaningMatches`, answering a word by its meaning
 - `index.go`: `NewIndex` (one entry per reading across all sources, with each list entry's first
@@ -427,7 +428,8 @@ panel's words line adds "· N rows skipped" when the chosen list has skipped row
 `go run ./cmd/listcheck FILE...` reads each file as the import does and changes nothing. For each
 file it prints the word list's name, its number of words and skipped rows, then the message of
 every skipped row (all of them, where the game keeps the first 100), or why the file cannot be
-imported and what to do about it. With `-words` it also lists every word as shown, with the
+imported and what to do about it, followed by every skipped row also then (a file whose rows
+are all skipped). With `-words` it also lists every word as shown, with the
 romaji of its reading, its other accepted readings (an optional part left out, another variant)
 and its lesson. The output can be passed on as it is, for example to whoever keeps the list; the exit
 status is 1 when a file cannot be imported.
@@ -485,7 +487,9 @@ the JLPT list, is one word, shown as the first list writes it.
 
 Rows are skipped and reported when their kana field is empty after the notation, contains
 anything other than kana (kanji, Latin letters; a variant that is not kana skips the whole
-row), or has unpaired or nested brackets.
+row), has unpaired or nested brackets, or has an empty variant (`アメリカ //`). A short form
+that is no word on its own (`いっ（て）`: っ, ー or a small kana at its edge) is not skipped;
+only its full form counts.
 
 ## Fonts
 

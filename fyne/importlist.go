@@ -56,9 +56,7 @@ func importPreviewLines(c vocab.Candidate, lang string, files []string) []string
 	lines = append(lines, strings.Join(counts, " · "))
 	if c.List.Skipped > 0 {
 		lines = append(lines, plural(c.List.Skipped, "row")+" skipped:")
-		for _, p := range c.List.Problems {
-			lines = append(lines, skippedRowBullet+p)
-		}
+		lines = appendSkippedRows(lines, c.List.Problems, c.List.Skipped)
 	}
 	lines = append(lines, "First words:")
 	for _, w := range c.List.Words[:min(importPreviewWords, len(c.List.Words))] {
