@@ -19,6 +19,27 @@ import (
 // extension is added: "a (csv)". Names that still collide get " 2", " 3" …
 // in directory order.
 func LoadDir(dir string) ([]List, error) {
+	files, err := scanDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	var lists []List
+	for _, f := range files {
+		lists = append(lists, loadFile(f.name, f.path, f.ext))
+	}
+	sort.Slice(lists, func(i, j int) bool { return lists[i].Name < lists[j].Name })
+	return lists, nil
+}
+
+// listEntry is a word list file found by scanDir: the name LoadDir gives its
+// list, its path, its file name without extension and its lower-case
+// extension.
+type listEntry struct{ name, path, base, ext string }
+
+// scanDir finds the word list files in dir and names their lists as LoadDir
+// does, in directory order, without reading them. A missing directory gives
+// none and no error.
+func scanDir(dir string) ([]listEntry, error) {
 	entries, err := os.ReadDir(dir)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, nil
@@ -26,8 +47,7 @@ func LoadDir(dir string) ([]List, error) {
 	if err != nil {
 		return nil, err
 	}
-	type file struct{ path, base, ext string }
-	var files []file
+	var files []listEntry
 	count := map[string]int{}
 	for _, e := range entries {
 		// Dot files are hidden: ".csv" would be a list without a name and
@@ -40,12 +60,11 @@ func LoadDir(dir string) ([]List, error) {
 			continue
 		}
 		base := strings.TrimSuffix(e.Name(), filepath.Ext(e.Name()))
-		files = append(files, file{filepath.Join(dir, e.Name()), base, ext})
+		files = append(files, listEntry{path: filepath.Join(dir, e.Name()), base: base, ext: ext})
 		count[strings.ToLower(base)]++
 	}
 	used := map[string]bool{}
-	var lists []List
-	for _, f := range files {
+	for i, f := range files {
 		key := strings.ToLower(f.base)
 		name := f.base
 		if count[key] > 1 || key == BundledSource {
@@ -59,23 +78,28 @@ func LoadDir(dir string) ([]List, error) {
 			name += " " + strconv.Itoa(n)
 		}
 		used[name] = true
-		lists = append(lists, loadFile(name, f.path, f.ext))
+		files[i].name = name
 	}
-	sort.Slice(lists, func(i, j int) bool { return lists[i].Name < lists[j].Name })
-	return lists, nil
+	return files, nil
 }
 
 // loadFile reads one list file; an open error becomes the list's problem.
+// The list remembers its path.
 func loadFile(name, path, ext string) List {
+	var l List
 	fh, err := os.Open(path)
-	if err != nil {
-		l := List{Name: name}
+	switch {
+	case err != nil:
+		l = List{Name: name}
 		l.problem(err.Error())
-		return l
+	case ext == ".json":
+		l = readJSON(name, fh)
+	default:
+		l = readCSV(name, fh)
 	}
-	defer fh.Close()
-	if ext == ".json" {
-		return readJSON(name, fh)
+	if fh != nil {
+		fh.Close()
 	}
-	return readCSV(name, fh)
+	l.Path = path
+	return l
 }

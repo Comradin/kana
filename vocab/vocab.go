@@ -25,6 +25,7 @@ type Word struct {
 // List is one private word list file.
 type List struct {
 	Name     string
+	Path     string // the list's file; "" for a list not read from a folder
 	Words    []Word
 	Problems []string // at most maxProblems messages
 	Skipped  int      // rows skipped, including those without a message

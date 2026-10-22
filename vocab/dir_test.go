@@ -68,6 +68,12 @@ func TestLoadDir(t *testing.T) {
 	if len(m.Words) != 2 {
 		t.Fatalf("every row is kept within a list: %+v", m.Words)
 	}
+	if m.Path != filepath.Join(dir, "minna.csv") {
+		t.Fatalf("Path = %q, want the list's file", m.Path)
+	}
+	if a := byName["a (json)"]; a.Path != filepath.Join(dir, "a.json") {
+		t.Fatalf("a (json) Path = %q: each list knows its own file", a.Path)
+	}
 	ix := NewIndex(nil, lists)
 	e, ok := ix.Lookup("せんせい")
 	if !ok || !reflect.DeepEqual(e.Meanings[""], []string{"Lehrer", "Lehrerin"}) {
