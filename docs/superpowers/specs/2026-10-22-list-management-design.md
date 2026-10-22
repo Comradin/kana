@@ -22,7 +22,7 @@ filter**.
 | Skipped rows | "Details" shows the list's messages (at most 10, as loaded) and one sentence on how to fix the file. The status panel's words line adds " · N rows skipped" when the chosen source has skipped rows. The source select shows no mark. The UI never says "problem". |
 | Reload | Automatic each time the settings dialog opens; no button. Files copied or edited by hand come in then. |
 | Open folder | Opens the word list folder in the system file manager (`OpenURL` with a `file://` URL). If that fails, a dialog shows the path to copy. The line "Word lists are kept in …" stays. |
-| Delete | After a confirmation ("Delete minna? Its file is removed; your progress on its words is kept."), the list's file is removed for good (no trash: the learner's source file stays where it was imported from). Progress (keyed by reading) stays. The list's stored lesson filter is removed. If it was the chosen source, JLPT becomes the source. Introduced words of the list fall afterwards only if JLPT has the same reading. Resetting word progress is a separate issue. |
+| Delete | After a confirmation ("Delete minna? Its file is removed; your progress on its words is kept."), the list's file is removed for good (no trash: the learner's source file stays where it was imported from). Progress (keyed by reading) stays. The list's stored lesson filter is removed. If it was the chosen source, JLPT becomes the source. Introduced words of the list fall afterwards only if JLPT or another list has the same reading. Resetting word progress is a separate issue. |
 | Rename | The list's name is its file name without the extension; renaming renames the file and keeps the extension. Valid: not empty after trimming, no `/` or `\`, not `jmdict` (any case), not the name of another list (ignoring case). A change of case only is allowed (done via a temporary name). The lesson filter, the chosen source and the newest package follow the new name. |
 | Duplicate names | Files sharing a name are loaded as "minna (csv)", "minna (json)"; each list has exactly one file. Delete and rename act on that one file; renaming "minna (json)" to "minna2" makes `minna2.json`. |
 | When they take effect | Delete and rename act at once in the management dialog, not on the settings' Save (Cancel cannot bring a file back). Afterwards the settings dialog refreshes its source select and lessons, as after an import. |
@@ -38,8 +38,9 @@ filter**.
 - After delete or rename the lists are reloaded, as after an import.
 - Rename into a name that only differs in case from the list's own name is
   not a collision.
-- Errors from the file system (permissions, file gone) are shown in a
-  dialog; the lists are reloaded either way.
+- Errors from the file system (permissions; for rename also a file that is
+  gone) are shown in a dialog; the lists are reloaded either way. Deleting
+  a file that is already gone counts as deleted.
 - Reload on opening the settings happens under the game lock before the
   dialog reads its state; it invalidates the playable words.
 
