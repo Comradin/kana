@@ -11,6 +11,7 @@ import (
 	"fyne.io/fyne/v2/widget"
 	"kana/kanacore"
 	"kana/store"
+	"kana/vocab"
 )
 
 func buildWindow(a fyne.App, st *store.Store) fyne.Window {
@@ -224,7 +225,7 @@ func restartRound(gs *GameState, statsPanel *StatsPanel, gameCanvas *GameCanvas,
 // missed characters and the missed words, each under its heading. Only when
 // nothing was missed does it say "None!"; when only words were missed the
 // characters heading is left out.
-func missedLines(kanas []kanacore.Kana, words []string) []string {
+func missedLines(kanas []kanacore.Kana, words []vocab.Entry) []string {
 	wordsText := missedWordsText(words)
 	if len(kanas) == 0 && wordsText == "" {
 		return []string{"Characters missed:", "None!"}

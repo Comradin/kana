@@ -265,3 +265,14 @@ func TestImportChosenWithoutFormCallsThen(t *testing.T) {
 		t.Fatalf("after Import: then called %d times, lists %v", calls, gs.listNames)
 	}
 }
+
+func TestImportPreviewShowsTheShownForm(t *testing.T) {
+	c, err := vocab.Inspect("course.csv", []byte("kana;meaning\n～さん;Mr./Ms.\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"Word list: course", "1 word", "First words:", "～さん · Mr./Ms."}
+	if got := importPreviewLines(c, "en", nil); !equalIDs(got, want) {
+		t.Fatalf("lines %q, want %q", got, want)
+	}
+}

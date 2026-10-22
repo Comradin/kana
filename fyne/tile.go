@@ -71,11 +71,11 @@ func newKanaTile(k kanacore.Kana, kf fontChoice) *KanaTile {
 }
 
 // newWordTile builds a word tile in the kana font kf: a sage face with a
-// border, as wide as the word plus padding, so even a one-unit word (か)
-// does not look like a kana tile. A word wider than maxW (the field width)
+// border, as wide as the word's shown form plus padding, so even a one-unit
+// word (か) does not look like a kana tile. A word wider than maxW (the field width)
 // gets a smaller font, down to minWordTextSize, so the tile fits.
 func newWordTile(e vocab.Entry, maxW float32, kf fontChoice) *KanaTile {
-	text := canvas.NewText(e.Kana, kanaTextColor)
+	text := canvas.NewText(e.Shown(), kanaTextColor)
 	text.TextSize = wordTextSize
 	setKanaFont(text, kf)
 	size := text.MinSize()

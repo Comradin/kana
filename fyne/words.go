@@ -98,25 +98,25 @@ func meaningLangOptions(langs []string, stored string) (labels, values []string)
 	return labels, values
 }
 
-// missedWordsText lists each missed word once, sorted, as
-// "せんせい (sensei)", three per line so the game-over dialog stays narrow.
-// "" when no word was missed.
-func missedWordsText(words []string) string {
+// missedWordsText lists each missed word once, sorted by reading, in its
+// shown form with the romaji of its reading, as "～さん (san)", three per
+// line so the game-over dialog stays narrow. "" when no word was missed.
+func missedWordsText(words []vocab.Entry) string {
 	seen := map[string]bool{}
-	var uniq []string
-	for _, w := range words {
-		if !seen[w] {
-			seen[w] = true
-			uniq = append(uniq, w)
+	var uniq []vocab.Entry
+	for _, e := range words {
+		if !seen[e.Kana] {
+			seen[e.Kana] = true
+			uniq = append(uniq, e)
 		}
 	}
-	sort.Strings(uniq)
+	sort.Slice(uniq, func(i, j int) bool { return uniq[i].Kana < uniq[j].Kana })
 	var lines []string
 	for i := 0; i < len(uniq); i += 3 {
 		end := min(i+3, len(uniq))
 		parts := make([]string, 0, 3)
-		for _, w := range uniq[i:end] {
-			parts = append(parts, fmt.Sprintf("%s (%s)", w, kanacore.Romaji(w)))
+		for _, e := range uniq[i:end] {
+			parts = append(parts, fmt.Sprintf("%s (%s)", e.Shown(), kanacore.Romaji(e.Kana)))
 		}
 		lines = append(lines, strings.Join(parts, ", "))
 	}
@@ -148,10 +148,11 @@ func meaningSnippet(m vocab.Meanings, lang string) string {
 	return truncateRunes(strings.Join(items, "; "), maxMeaningRunes)
 }
 
-// hitFeedbackText is shown after a word hit: "はい — yes", or with the
-// reading, "はい · hai — yes", when the word was answered by its meaning.
+// hitFeedbackText is shown after a word hit, the word in its shown form:
+// "はい — yes", or with the romaji of its reading, "はい · hai — yes", when
+// the word was answered by its meaning.
 func hitFeedbackText(e vocab.Entry, lang string, byMeaning bool) string {
-	s := e.Kana
+	s := e.Shown()
 	if byMeaning {
 		s += " · " + kanacore.Romaji(e.Kana)
 	}
@@ -161,10 +162,10 @@ func hitFeedbackText(e vocab.Entry, lang string, byMeaning bool) string {
 	return s
 }
 
-// missFeedbackText is shown after a missed word, with the solution:
-// "はい · hai — yes".
+// missFeedbackText is shown after a missed word, with the solution: the
+// shown form and the romaji of the reading, "～さん · san — Mr./Ms.".
 func missFeedbackText(e vocab.Entry, lang string) string {
-	s := e.Kana + " · " + kanacore.Romaji(e.Kana)
+	s := e.Shown() + " · " + kanacore.Romaji(e.Kana)
 	if m := meaningSnippet(e.Meanings, lang); m != "" {
 		s += " — " + m
 	}

@@ -29,10 +29,17 @@ func TestMissedWordsText(t *testing.T) {
 	if got := missedWordsText(nil); got != "" {
 		t.Fatalf("no words = %q", got)
 	}
-	got := missedWordsText([]string{"せんせい", "きって", "せんせい", "コーヒー", "まっちゃ"})
+	var words []vocab.Entry
+	for _, k := range []string{"せんせい", "きって", "せんせい", "コーヒー", "まっちゃ"} {
+		words = append(words, vocab.Entry{Kana: k})
+	}
 	want := "きって (kitte), せんせい (sensei), まっちゃ (matcha)\nコーヒー (koohii)"
-	if got != want {
+	if got := missedWordsText(words); got != want {
 		t.Fatalf("missedWordsText = %q, want %q", got, want)
+	}
+	san := vocab.Entry{Kana: "さん", Display: "～さん"}
+	if got := missedWordsText([]vocab.Entry{san, san}); got != "～さん (san)" {
+		t.Fatalf("shown form = %q, want ～さん (san)", got)
 	}
 }
 
@@ -71,6 +78,16 @@ func TestFeedbackTexts(t *testing.T) {
 	}
 	if got := missFeedbackText(bare, "en"); got != "はい · hai" {
 		t.Errorf("miss without meanings = %q", got)
+	}
+	san := vocab.Entry{Kana: "さん", Display: "～さん", Meanings: vocab.Meanings{"en": {"Mr./Ms."}}}
+	if got := hitFeedbackText(san, "en", false); got != "～さん — Mr./Ms." {
+		t.Errorf("hit with notation = %q", got)
+	}
+	if got := hitFeedbackText(san, "en", true); got != "～さん · san — Mr./Ms." {
+		t.Errorf("hit by meaning with notation = %q", got)
+	}
+	if got := missFeedbackText(san, "en"); got != "～さん · san — Mr./Ms." {
+		t.Errorf("miss with notation = %q", got)
 	}
 }
 

@@ -107,3 +107,11 @@ func TestWordTileShrinksToFitField(t *testing.T) {
 		t.Fatalf("font not shrunk: %v", tile.text.TextSize)
 	}
 }
+
+func TestWordTileShowsTheShownForm(t *testing.T) {
+	test.NewApp()
+	tile := newWordTile(vocab.Entry{Kana: "さん", Display: "～さん"}, 400, fontChoice{})
+	if tile.text.Text != "～さん" || tile.word.Kana != "さん" {
+		t.Fatalf("text %q, word %q; want ～さん on the tile, さん as its reading", tile.text.Text, tile.word.Kana)
+	}
+}

@@ -85,7 +85,8 @@ func packageTitle(ix *vocab.Index, src vocab.Source, entries []vocab.Entry) stri
 }
 
 // packageView is the word package intro's content: one row per word with
-// its kana, romaji, meaning and an "Already known" check. Ticking a word
+// its shown form, the romaji of its reading, its meaning and an "Already
+// known" check. Ticking a word
 // strikes it through and asks once for a replacement, which gets a row of
 // its own; unticking keeps the replacement.
 type packageView struct {
@@ -114,7 +115,7 @@ func newPackageView(entries []vocab.Entry, lang string, kf fontChoice, replace f
 
 func (v *packageView) addRow(e vocab.Entry) {
 	row := &packageRow{entry: e}
-	row.kana = canvas.NewText(e.Kana, kanaTextColor)
+	row.kana = canvas.NewText(e.Shown(), kanaTextColor)
 	row.kana.TextSize = packageKanaSize
 	fitKanaText(row.kana, v.font, packageKanaW, packageKanaMinSize)
 	row.strike = canvas.NewRectangle(kanaTextColor)
