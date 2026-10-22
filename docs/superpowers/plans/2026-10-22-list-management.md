@@ -40,6 +40,8 @@ The spec leaves these open or calls them indicative; check them before Task 1.
 20. **`importChosen`** gains a `then func()` (may be nil) called once its preview or error dialog is closed, whatever the answer, and accepts a nil form. `showImportError` gains the same `then`.
 21. **One refresh path in the form:** `listsChanged(st, selected)` (lists, lessons, meaning languages, summary, stored source, open word list dialog), with `listImported`, `listDeleted`, `listRenamed` in front. `setLists` now takes a word source value; one that is not offered selects JLPT. After a rename, the form's lesson checks (also unsaved edits) and its selection follow the new name; after a delete, a selection of the deleted list becomes JLPT and its checks are dropped. A failed delete or rename still refreshes (the folder may have changed).
 22. **GLOSSARY** already has the terms (spec commit); no GLOSSARY task. README gets one task.
+23. **Accepted gap — duplicate-name siblings:** deleting or renaming one list of a pair such as "minna (csv)" / "minna (json)" makes the other reload as "minna"; its stored lesson filter and its place as the source (keyed by the old name) are not carried over, so the source shows as missing until chosen again. Rare; not handled.
+24. **gofmt:** Task 6 adds longer `settingsForm` fields; run `gofmt -w fyne/settings.go` after editing so `onReset` and its neighbours stay aligned.
 
 ---
 
@@ -1454,8 +1456,7 @@ func TestListsDialogRename(t *testing.T) {
 	_ = gs.store.SaveLessonFilter("mine", []string{"2"})
 	gs.ReloadLists()
 	f.listsChanged(gs.settingsState(), f.wordSource())
-	f.lessonFilters["mine"] = []string{"2"}
-	f.showLessons()
+	f.lessonChecks["1"].SetChecked(false) // an unsaved edit: only lesson 2
 	lists := w.Canvas().Overlays().Top()
 
 	var rename *widget.Button // the first row's: mine
