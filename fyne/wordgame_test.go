@@ -699,7 +699,7 @@ func TestWordMiss(t *testing.T) {
 	if gs.tempoStep != 1 {
 		t.Fatalf("tempoStep = %d, want 1", gs.tempoStep)
 	}
-	if !equalIDs(gs.missedWords, []string{"あい"}) || len(gs.missedKanas) != 0 || len(gs.sessionStats) != 0 {
+	if !equalIDs(readingsOf(gs.missedWords), []string{"あい"}) || len(gs.missedKanas) != 0 || len(gs.sessionStats) != 0 {
 		t.Fatalf("missedWords %v, missedKanas %v", gs.missedWords, gs.missedKanas)
 	}
 }
@@ -719,8 +719,8 @@ func TestWordMissesCountTowardsLimit(t *testing.T) {
 
 func TestSnapshotCarriesMissedWordsAndResetClears(t *testing.T) {
 	gs := newTestState()
-	gs.missedWords = []string{"あい"}
-	if snap := gs.snapshot(); !equalIDs(snap.MissedWords, []string{"あい"}) {
+	gs.missedWords = []vocab.Entry{{Kana: "あい"}}
+	if snap := gs.snapshot(); !equalIDs(readingsOf(snap.MissedWords), []string{"あい"}) {
 		t.Fatalf("snapshot MissedWords = %v", snap.MissedWords)
 	}
 	gs.Reset()
@@ -1028,4 +1028,32 @@ func isolateWordsDir(t *testing.T) string {
 	data := t.TempDir()
 	t.Setenv("XDG_DATA_HOME", data)
 	return filepath.Join(data, "kana", "words")
+}
+
+func TestPlaceholderWordIsShownAsWritten(t *testing.T) {
+	san := vocab.Word{Kana: "さん", Display: "～さん", Source: "course", Meanings: vocab.Meanings{"en": {"Mr./Ms."}}}
+
+	gs := newTestState()
+	withList(gs, "course", san)
+	tile := wordTileAt(gs, "さん", 0)
+	if tile.text.Text != "～さん" {
+		t.Fatalf("tile shows %q, want ～さん", tile.text.Text)
+	}
+	gs.tiles = []*KanaTile{tile}
+	gs.checkAnswer("san")
+	if len(gs.tiles) != 0 || gs.feedback[0].text.Text != "～さん — Mr./Ms." {
+		t.Fatalf("tiles %d, feedback %q; want ～さん answered by san", len(gs.tiles), gs.feedback[0].text.Text)
+	}
+
+	gs = newTestState()
+	gs.canvasH = 600
+	withList(gs, "course", san)
+	gs.tiles = []*KanaTile{wordTileAt(gs, "さん", 599)}
+	gs.tick()
+	if got := gs.feedback[0].text.Text; got != "～さん · san — Mr./Ms." {
+		t.Fatalf("miss feedback %q", got)
+	}
+	if got := missedWordsText(gs.snapshot().MissedWords); got != "～さん (san)" {
+		t.Fatalf("game-over list %q, want the shown form", got)
+	}
 }

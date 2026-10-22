@@ -63,7 +63,7 @@ func importPreviewLines(c vocab.Candidate, lang string, files []string) []string
 	}
 	lines = append(lines, "First words:")
 	for _, w := range c.List.Words[:min(importPreviewWords, len(c.List.Words))] {
-		parts := []string{w.Kana}
+		parts := []string{w.Shown()}
 		if m := meaningSnippet(w.Meanings, lang); m != "" {
 			parts = append(parts, m)
 		}

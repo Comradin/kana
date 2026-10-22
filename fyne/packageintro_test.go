@@ -229,3 +229,18 @@ func TestEnterClosesTheIntroDialogs(t *testing.T) {
 		t.Fatalf("Enter must finish the package: pending %v, showing %v", gs.pendingPackage, dialogShowing)
 	}
 }
+
+func TestPackageViewShowsTheShownForm(t *testing.T) {
+	test.NewApp()
+	san := vocab.Entry{Kana: "さん", Display: "～さん", Meanings: vocab.Meanings{"en": {"Mr./Ms."}}}
+	v := newPackageView([]vocab.Entry{san}, "en", fontChoice{}, func() (vocab.Entry, bool) { return vocab.Entry{}, false })
+	if got := v.rows[0].kana.Text; got != "～さん" {
+		t.Fatalf("kana column %q, want ～さん", got)
+	}
+	if !labelContains(v.list, "san") {
+		t.Fatal("the romaji is that of the reading: san")
+	}
+	if got := v.known(); len(got) != 0 {
+		t.Fatalf("known = %v", got)
+	}
+}

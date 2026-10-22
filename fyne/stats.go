@@ -14,6 +14,7 @@ import (
 	"fyne.io/fyne/v2/widget"
 	"kana/kanacore"
 	"kana/store"
+	"kana/vocab"
 )
 
 // Learning-path line: script label, one segment per step, then the count.
@@ -45,7 +46,7 @@ type StatsSnapshot struct {
 	SessionStats  map[string]store.KanaStats
 	SelectedRows  map[string]bool
 	MissedKanas   []kanacore.Kana
-	MissedWords   []string // readings of missed words, in order
+	MissedWords   []vocab.Entry // missed words, in order
 	Score         int
 	ScoreLimit    int
 	Missed        int

@@ -5,6 +5,7 @@ import (
 
 	"fyne.io/fyne/v2/test"
 	"kana/kanacore"
+	"kana/vocab"
 )
 
 // TestEntryHasFocusAfterBuild lets a returning learner start typing at once,
@@ -29,13 +30,14 @@ func TestMissedLines(t *testing.T) {
 	cases := []struct {
 		name  string
 		kanas []kanacore.Kana
-		words []string
+		words []vocab.Entry
 		want  []string
 	}{
 		{"nothing", nil, nil, []string{"Characters missed:", "None!"}},
 		{"kana only", []kanacore.Kana{ka, ka}, nil, []string{"Characters missed:", "か (ka)"}},
-		{"words only", nil, []string{"あい"}, []string{"Words missed:", "あい (ai)"}},
-		{"both", []kanacore.Kana{ka}, []string{"あい"}, []string{"Characters missed:", "か (ka)", "Words missed:", "あい (ai)"}},
+		{"words only", nil, []vocab.Entry{{Kana: "あい"}}, []string{"Words missed:", "あい (ai)"}},
+		{"both", []kanacore.Kana{ka}, []vocab.Entry{{Kana: "あい"}}, []string{"Characters missed:", "か (ka)", "Words missed:", "あい (ai)"}},
+		{"shown form", nil, []vocab.Entry{{Kana: "さん", Display: "～さん"}}, []string{"Words missed:", "～さん (san)"}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

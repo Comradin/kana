@@ -41,8 +41,8 @@ type GameState struct {
 	over         bool
 	overReason   string
 	missedKanas  []kanacore.Kana
-	missedWords  []string  // readings of missed words, in order
-	lastFallen   *KanaTile // the tile that fell through last, for a late Enter
+	missedWords  []vocab.Entry // missed words, in order
+	lastFallen   *KanaTile     // the tile that fell through last, for a late Enter
 	lastFallenAt time.Time
 	feedback     []*feedbackLabel // word hit/miss labels, oldest first
 
@@ -569,7 +569,7 @@ func (gs *GameState) tick() {
 			gs.lastFallen, gs.lastFallenAt = tile, gs.now()
 			if tile.word != nil {
 				gs.recordWordMiss(tile.word.Kana)
-				gs.missedWords = append(gs.missedWords, tile.word.Kana)
+				gs.missedWords = append(gs.missedWords, *tile.word)
 				gs.addFeedback(feedbackMiss, missFeedbackText(*tile.word, gs.meaningLang), tile.pos)
 			} else {
 				gs.recordMiss(tile.kana.Char)
@@ -1500,7 +1500,7 @@ func (gs *GameState) snapshot() StatsSnapshot {
 		SessionStats:  sessionCopy,
 		SelectedRows:  rowsCopy,
 		MissedKanas:   append([]kanacore.Kana{}, gs.missedKanas...),
-		MissedWords:   append([]string{}, gs.missedWords...),
+		MissedWords:   append([]vocab.Entry(nil), gs.missedWords...),
 		Score:         gs.score,
 		ScoreLimit:    gs.scoreLimit,
 		Missed:        gs.missed,
