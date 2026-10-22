@@ -276,3 +276,22 @@ func TestImportPreviewShowsTheShownForm(t *testing.T) {
 		t.Fatalf("lines %q, want %q", got, want)
 	}
 }
+
+func TestImportPreviewScrollsManySkippedRows(t *testing.T) {
+	test.NewApp()
+	defer test.NewApp()
+	isolateWordsDir(t)
+	gs := NewGameState(openTestStore(t))
+	w := test.NewWindow(nil)
+	defer w.Close()
+	w.Resize(fyne.NewSize(1000, 760))
+	data := "kana;meaning\nあお;blue\n" + strings.Repeat("x;y\n", 30)
+	importChosen(gs, nil, "many.csv", []byte(data), w, nil)
+	preview := w.Canvas().Overlays().Top()
+	if preview == nil || scrollIn(preview) == nil {
+		t.Fatal("30 skipped rows must scroll in the preview")
+	}
+	if !labelContains(preview, "30 rows skipped:") || !labelContains(preview, "First words:") {
+		t.Fatal("the count and the first words stay in view")
+	}
+}

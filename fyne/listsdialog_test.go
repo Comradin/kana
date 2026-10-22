@@ -2,12 +2,14 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"net/url"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/test"
 	"fyne.io/fyne/v2/widget"
 	"kana/vocab"
@@ -193,5 +195,63 @@ func TestOpenFolderShowsPathWhenItFails(t *testing.T) {
 	openWordsFolder(dir, w)
 	if top := w.Canvas().Overlays().Top(); top == nil || !labelContains(top, dir) {
 		t.Fatal("a failure must show the path")
+	}
+}
+
+// scrollIn finds the first scroll area in a dialog's objects.
+func scrollIn(o fyne.CanvasObject) *container.Scroll {
+	for _, obj := range test.LaidOutObjects(o) {
+		if s, ok := obj.(*container.Scroll); ok {
+			return s
+		}
+	}
+	return nil
+}
+
+// skippedLines returns n skipped-row lines as the dialogs show them.
+func skippedLines(n int) []string {
+	var out []string
+	for i := 0; i < n; i++ {
+		out = append(out, fmt.Sprintf("%sline %d: x is not kana", skippedRowBullet, i+2))
+	}
+	return out
+}
+
+func TestLinesBodyScrollsLongRunsOfSkippedRows(t *testing.T) {
+	test.NewApp()
+	lines := append(append([]string{"Word list: a", "9 rows skipped:"}, skippedLines(9)...), "First words:")
+	body := linesBody(lines)
+	if len(body.Objects) != 4 {
+		t.Fatalf("%d objects, want two labels, a scroll area, a label", len(body.Objects))
+	}
+	scroll, ok := body.Objects[2].(*container.Scroll)
+	if !ok || len(scroll.Content.(*fyne.Container).Objects) != 9 {
+		t.Fatalf("object 2 is %T; want a scroll area with the 9 messages", body.Objects[2])
+	}
+	short := linesBody(append([]string{"8 rows skipped:"}, skippedLines(8)...))
+	for _, o := range short.Objects {
+		if _, ok := o.(*widget.Label); !ok {
+			t.Fatalf("8 messages need no scroll area, got a %T", o)
+		}
+	}
+}
+
+func TestDetailsScrollWithManySkippedRows(t *testing.T) {
+	test.NewApp()
+	defer test.NewApp()
+	w := test.NewWindow(nil)
+	defer w.Close()
+	w.Resize(fyne.NewSize(1000, 760))
+	li := listInfo{name: "many", words: 1, skipped: 150}
+	for i := 0; i < 100; i++ {
+		li.problems = append(li.problems, fmt.Sprintf("line %d: x is not kana", i+2))
+	}
+	showSkippedRows(li, w)
+	top := w.Canvas().Overlays().Top()
+	if scrollIn(top) == nil {
+		t.Fatal("100 messages must scroll")
+	}
+	if !labelContains(top, skippedRowsHint) {
+		t.Fatal("the hint stays below the scroll area")
 	}
 }

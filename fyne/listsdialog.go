@@ -15,6 +15,18 @@ import (
 // skippedRowsHint ends the skipped rows' details.
 const skippedRowsHint = "Correct these lines in your source file and import it again; the rest of the list plays meanwhile."
 
+// skippedRowBullet starts each skipped row's message in the details and the
+// import preview.
+const skippedRowBullet = "• "
+
+// A run of more skipped-row messages than skippedRowsScrollAfter scrolls in
+// an area skippedRowsScrollH high, so a dialog with 100 of them stays on
+// screen.
+const (
+	skippedRowsScrollAfter         = 8
+	skippedRowsScrollH     float32 = 200
+)
+
 // listCounts is a list's line in the word list dialog: "4 words · 2
 // lessons · 1 row skipped", without the parts that are 0.
 func listCounts(li listInfo) string {
@@ -33,9 +45,47 @@ func listCounts(li listInfo) string {
 func skippedRowsLines(li listInfo) []string {
 	lines := make([]string, 0, len(li.problems)+1)
 	for _, p := range li.problems {
-		lines = append(lines, "• "+p)
+		lines = append(lines, skippedRowBullet+p)
 	}
 	return append(lines, skippedRowsHint)
+}
+
+// linesBody shows lines as wrapped labels. A run of more than
+// skippedRowsScrollAfter skipped-row messages (lines starting with
+// skippedRowBullet) sits in a scroll area of its own; the lines around it
+// stay in view.
+func linesBody(lines []string) *fyne.Container {
+	body := container.NewVBox()
+	for i := 0; i < len(lines); {
+		end := i
+		for end < len(lines) && strings.HasPrefix(lines[end], skippedRowBullet) {
+			end++
+		}
+		if end-i > skippedRowsScrollAfter {
+			rows := container.NewVBox()
+			for _, line := range lines[i:end] {
+				rows.Add(wrappedLabel(line))
+			}
+			scroll := container.NewVScroll(rows)
+			scroll.SetMinSize(fyne.NewSize(0, skippedRowsScrollH))
+			body.Add(scroll)
+			i = end
+			continue
+		}
+		end = max(end, i+1)
+		for _, line := range lines[i:end] {
+			body.Add(wrappedLabel(line))
+		}
+		i = end
+	}
+	return body
+}
+
+// wrappedLabel is a label that wraps at word boundaries.
+func wrappedLabel(text string) *widget.Label {
+	label := widget.NewLabel(text)
+	label.Wrapping = fyne.TextWrapWord
+	return label
 }
 
 // listsDialog is the word list dialog over the settings dialog's form f.
@@ -101,15 +151,11 @@ func (ld *listsDialog) row(li listInfo) fyne.CanvasObject {
 	return container.NewBorder(nil, nil, nil, buttons, text)
 }
 
-// showSkippedRows shows a list's skipped rows and how to fix the file.
+// showSkippedRows shows a list's skipped rows, scrolling when there are
+// many, and how to fix the file. Must run on the Fyne thread.
 func showSkippedRows(li listInfo, win fyne.Window) {
-	body := container.NewVBox()
-	for _, line := range skippedRowsLines(li) {
-		label := widget.NewLabel(line)
-		label.Wrapping = fyne.TextWrapWord
-		body.Add(label)
-	}
-	d := dialog.NewCustom(prettyListName(li.name)+": "+plural(li.skipped, "row")+" skipped", "OK", body, win)
+	d := dialog.NewCustom(prettyListName(li.name)+": "+plural(li.skipped, "row")+" skipped", "OK",
+		linesBody(skippedRowsLines(li)), win)
 	d.Resize(fyne.NewSize(480, 0))
 	d.Show()
 }

@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/storage"
 	"fyne.io/fyne/v2/widget"
@@ -58,7 +57,7 @@ func importPreviewLines(c vocab.Candidate, lang string, files []string) []string
 	if c.List.Skipped > 0 {
 		lines = append(lines, plural(c.List.Skipped, "row")+" skipped:")
 		for _, p := range c.List.Problems {
-			lines = append(lines, "• "+p)
+			lines = append(lines, skippedRowBullet+p)
 		}
 	}
 	lines = append(lines, "First words:")
@@ -129,12 +128,7 @@ func importChosen(gs *GameState, f *settingsForm, fileName string, data []byte, 
 		return
 	}
 	files := gs.ListFiles(c.Name)
-	body := container.NewVBox()
-	for _, line := range importPreviewLines(c, gs.MeaningLang(), files) {
-		label := widget.NewLabel(line)
-		label.Wrapping = fyne.TextWrapWord
-		body.Add(label)
-	}
+	body := linesBody(importPreviewLines(c, gs.MeaningLang(), files))
 	confirm := "Import"
 	if len(files) > 0 {
 		confirm = "Replace"
