@@ -118,6 +118,7 @@ type GameState struct {
 
 	userPaused   bool // the learner paused with the button or Esc
 	settingsOpen bool // the settings dialog is open
+	importOpen   bool // a dropped file's import preview is open
 
 	store *store.Store
 
@@ -1220,10 +1221,11 @@ func (gs *GameState) announceRows(ids []string) {
 }
 
 // settle enforces the pause invariant: the game is paused only while a dialog
-// is pending, the learner has paused or the settings dialog is open. It is the
-// only place that unpauses. Must be called under lock.
+// is pending, the learner has paused, the settings dialog or a dropped
+// file's import is open. It is the only place that unpauses. Must be called
+// under lock.
 func (gs *GameState) settle() {
-	if gs.paused && !gs.dialogPending() && !gs.userPaused && !gs.settingsOpen {
+	if gs.paused && !gs.dialogPending() && !gs.userPaused && !gs.settingsOpen && !gs.importOpen {
 		gs.paused = false
 	}
 }
@@ -1267,6 +1269,22 @@ func (gs *GameState) SetSettingsOpen(open bool) {
 	gs.mu.Lock()
 	defer gs.mu.Unlock()
 	gs.settingsOpen = open
+	if open {
+		gs.paused = true
+	} else {
+		gs.settle()
+	}
+	gs.buildSnapshot()
+}
+
+// SetImportOpen pauses while dropped files are imported and releases that
+// pause afterwards; another reason (the settings) may still hold it. Reset
+// leaves it alone: the preview is modal, nothing restarts the round under
+// it.
+func (gs *GameState) SetImportOpen(open bool) {
+	gs.mu.Lock()
+	defer gs.mu.Unlock()
+	gs.importOpen = open
 	if open {
 		gs.paused = true
 	} else {
@@ -1427,12 +1445,12 @@ func (gs *GameState) FinishIntro() {
 }
 
 // buildSnapshot rebuilds the atomic snapshot of canvas objects: tiles, then
-// feedback labels on top. While the learner has paused or the settings
-// dialog is open, nothing is published, so the pause cannot be used to
-// study the tiles; the canvas shows the hint for a user pause only. Must be
-// called under lock.
+// feedback labels on top. While the learner has paused, or the settings
+// dialog or a dropped file's import is open, nothing is published, so the
+// pause cannot be used to study the tiles; the canvas shows the hint for a
+// user pause only. Must be called under lock.
 func (gs *GameState) buildSnapshot() {
-	hide := gs.userPaused || gs.settingsOpen
+	hide := gs.userPaused || gs.settingsOpen || gs.importOpen
 	gs.showPauseHint.Store(gs.userPaused)
 	if hide {
 		gs.objectSnapshot.Store([]fyne.CanvasObject{})
