@@ -180,9 +180,9 @@ func TestReadCSVNotation(t *testing.T) {
 		"あめりか // 米国;x;2\n"
 	l := readCSV("course", strings.NewReader(in), maxProblems)
 	want := []Word{
-		{Kana: "さん", Display: "～さん", Meanings: Meanings{"": {"Mr./Ms."}}, Source: "course", Lesson: "1"},
+		{Kana: "さん", Display: "～さん", Phrase: true, Meanings: Meanings{"": {"Mr./Ms."}}, Source: "course", Lesson: "1"},
 		{Kana: "どうぞよろしくおねがいします", Display: "（どうぞ）よろしく（おねがいします）", Alts: []string{"よろしく"},
-			Meanings: Meanings{"": {"nice to meet you"}}, Source: "course", Lesson: "1"},
+			Phrase: true, Meanings: Meanings{"": {"nice to meet you"}}, Source: "course", Lesson: "1"},
 		{Kana: "アメリカ", Alts: []string{"あめりか"}, Meanings: Meanings{"": {"America"}}, Source: "course", Lesson: "2"},
 	}
 	if !reflect.DeepEqual(l.Words, want) {

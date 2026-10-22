@@ -310,3 +310,39 @@ func TestEntryReadingMatches(t *testing.T) {
 		t.Fatal("every variant's reading must match")
 	}
 }
+
+func TestIndexMergesPhrase(t *testing.T) {
+	phrase := Word{Kana: "さん", Display: "～さん", Phrase: true, Meanings: Meanings{}}
+	plain := Word{Kana: "さん", Meanings: Meanings{}}
+	for name, lists := range map[string][]List{
+		"phrase first": {{Name: "a", Words: []Word{phrase}}, {Name: "b", Words: []Word{plain}}},
+		"phrase later": {{Name: "a", Words: []Word{plain}}, {Name: "b", Words: []Word{phrase}}},
+	} {
+		if e, _ := NewIndex(nil, lists).Lookup("さん"); !e.Phrase {
+			t.Errorf("%s: an entry is a phrase if any of its rows is", name)
+		}
+		base := NewIndex(nil, lists[:1])
+		if e, _ := base.WithLists(lists[1:]).Lookup("さん"); !e.Phrase {
+			t.Errorf("%s, WithLists: an entry is a phrase if any of its rows is", name)
+		}
+	}
+	if e, _ := NewIndex(nil, []List{{Name: "a", Words: []Word{plain}}}).Lookup("さん"); e.Phrase {
+		t.Error("a plain row is no phrase")
+	}
+}
+
+func TestEntryReadingMatchesParticles(t *testing.T) {
+	phrase := Entry{Kana: "こちらはさんです", Phrase: true}
+	for _, in := range []string{"kochirawasandesu", "kochirahasandesu"} {
+		if !phrase.ReadingMatches(in) {
+			t.Errorf("phrase: ReadingMatches(%q) = false, want true", in)
+		}
+	}
+	short := Entry{Kana: "にほんへいきます", Alts: []string{"にほんへ"}, Phrase: true}
+	if !short.ReadingMatches("nihone") {
+		t.Error("the particle reading applies to other readings too")
+	}
+	if (Entry{Kana: "はな"}).ReadingMatches("wana") {
+		t.Error("outside a phrase は is ha")
+	}
+}

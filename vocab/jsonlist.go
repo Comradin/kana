@@ -37,7 +37,7 @@ func readJSON(name string, r io.Reader, limit int) List {
 			l.skip(fmt.Sprintf("entry %d: %s", i+1, reason))
 			continue
 		}
-		w := Word{Kana: n.reading, Display: n.display, Alts: n.alts, Meanings: Meanings{}, Source: name,
+		w := Word{Kana: n.reading, Display: n.display, Alts: n.alts, Phrase: n.phrase, Meanings: Meanings{}, Source: name,
 			Lesson: scalar(jw.Lesson), JLPT: parseLevel(scalar(jw.JLPT))}
 		addJSONMeaning(w.Meanings, "", jw.Meaning)
 		l.Words = append(l.Words, w)

@@ -1,6 +1,9 @@
 package kanacore
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+)
 
 func TestHiraganaGetRomaji(t *testing.T) {
 	romaji, ok := Hiragana().GetRomaji("か")
@@ -58,7 +61,7 @@ func TestMatchesBasic(t *testing.T) {
 		{"ん", "n", true},
 		{"ん", "nn", true},
 		{"を", "wo", true},
-		{"を", "o", false},
+		{"を", "o", true},
 		{"か", "ki", false},
 		{"か", "", false},
 		{"x", "ka", false},
@@ -234,7 +237,7 @@ func TestKatakanaTable(t *testing.T) {
 		{"チ", "chi", []string{"ti"}},
 		{"ツ", "tsu", []string{"tu"}},
 		{"フ", "fu", []string{"hu"}},
-		{"ヲ", "wo", nil},
+		{"ヲ", "wo", []string{"o"}},
 		{"ン", "n", []string{"nn"}},
 		{"ガ", "ga", nil},
 		{"ヂ", "ji", []string{"di"}},
@@ -393,5 +396,16 @@ func TestGroupsFor(t *testing.T) {
 	}
 	if len(GroupsFor(ScriptHiragana)) != 5 {
 		t.Fatalf("hiragana groups = %d, want 5", len(GroupsFor(ScriptHiragana)))
+	}
+}
+
+// TestWoTakesO accepts o for を, as it is spoken; wo stays its romaji.
+func TestWoTakesO(t *testing.T) {
+	for _, row := range HiraganaRows {
+		for _, e := range row.Entries {
+			if e.Char == "を" && (e.Romaji != "wo" || !reflect.DeepEqual(e.Alt, []string{"o"})) {
+				t.Fatalf("を = %q, alternatives %v; want wo, [o]", e.Romaji, e.Alt)
+			}
+		}
 	}
 }

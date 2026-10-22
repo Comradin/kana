@@ -16,6 +16,7 @@ type notation struct {
 	reading string   // the last variant's full form
 	display string   // the last variant as written; "" when it is the reading
 	alts    []string // the other variants' and forms' readings, unique, in field order
+	phrase  bool     // a variant has a placeholder, a bracket, punctuation or a space
 }
 
 // isPlaceholder reports whether r stands for something the learner fills
@@ -25,6 +26,12 @@ func isPlaceholder(r rune) bool { return r == '～' || r == '〜' || r == '~' }
 // isShownOnly reports whether r is punctuation or a space: shown, not typed.
 func isShownOnly(r rune) bool {
 	return unicode.IsSpace(r) || strings.ContainsRune("？！。、・?!.,", r)
+}
+
+// isPhraseMark reports whether r makes a field a phrase: a placeholder,
+// punctuation, a space or a bracket.
+func isPhraseMark(r rune) bool {
+	return isPlaceholder(r) || isShownOnly(r) || isOpenBracket(r) || isCloseBracket(r)
 }
 
 // isOpenBracket reports whether r opens an optional part.
@@ -37,7 +44,8 @@ func isCloseBracket(r rune) bool { return r == '）' || r == ')' }
 // parseNotation reads a trimmed kana field: placeholders, punctuation and
 // spaces are shown but not typed, text in brackets is optional (the full and
 // the short form count), and "//" separates variants, of which the last is
-// shown and gives the reading. It returns the notation, or why the row is
+// shown and gives the reading. A field whose variants use any of this
+// except "//" is a phrase. It returns the notation, or why the row is
 // skipped: "empty kana", or the field as written followed by "is not kana",
 // "has unpaired brackets" or "has an empty variant". Every accepted reading
 // must pass kanacore.KanaUnits.
@@ -47,6 +55,9 @@ func parseNotation(field string) (notation, string) {
 	variants := strings.Split(field, variantSep)
 	for i, v := range variants {
 		v = strings.TrimSpace(v)
+		if strings.IndexFunc(v, isPhraseMark) >= 0 {
+			n.phrase = true
+		}
 		full, short, ok := variantForms(v)
 		if !ok {
 			return notation{}, field + " has unpaired brackets"

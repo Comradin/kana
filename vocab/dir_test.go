@@ -161,7 +161,7 @@ func TestReadJSONProblemLimit(t *testing.T) {
 func TestReadJSONNotation(t *testing.T) {
 	in := `[{"kana":"～さん","meaning":"Mr./Ms."},{"kana":"(どうぞ)よろしく","meaning":"x"},{"kana":"（どう（ぞ））","meaning":"x"}]`
 	l := readJSON("x", strings.NewReader(in), maxProblems)
-	if len(l.Words) != 2 || l.Words[0].Kana != "さん" || l.Words[0].Display != "～さん" {
+	if len(l.Words) != 2 || l.Words[0].Kana != "さん" || l.Words[0].Display != "～さん" || !l.Words[0].Phrase {
 		t.Fatalf("words = %+v", l.Words)
 	}
 	if w := l.Words[1]; w.Kana != "どうぞよろしく" || !reflect.DeepEqual(w.Alts, []string{"よろしく"}) {
