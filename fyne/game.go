@@ -77,6 +77,7 @@ type GameState struct {
 	words                  *vocab.Index              // every word reading; nil = no words
 	wordsErr               string                    // bundled list failed to load
 	listNames              []string                  // the private lists found, sorted by name
+	lists                  []listInfo                // the private lists found, sorted by name: counts, skipped rows, file
 	listsLoadFailed        bool                      // the list folder could not be read: listNames may be incomplete
 	wordsDir               string                    // the private list folder; "" if unknown
 	playable               []vocab.Entry             // cached playableWords result

@@ -228,6 +228,7 @@ type WordsStatus struct {
 	Learned    int       // introduced readings at level 5
 	Waiting    int       // introduced readings that cannot fall: a kana is not learned
 	Next       wordsNext // whether new words can come from the source
+	Skipped    int       // rows skipped in the chosen list; 0 for JLPT or a missing list
 
 	WordsOnly    bool // words-only mode is on
 	KanaFallback bool // words-only mode, but no word can fall and no package can come: kana fall
@@ -265,6 +266,9 @@ func formatWordsLine(ws WordsStatus) string {
 		s = fmt.Sprintf("Words: %d introduced · %d learned · %d waiting for kana · %s", ws.Introduced, ws.Learned, ws.Waiting, ws.Source)
 	default:
 		s = fmt.Sprintf("Words: %d introduced · %d learned · %s", ws.Introduced, ws.Learned, ws.Source)
+	}
+	if ws.Skipped > 0 {
+		s += " · " + plural(ws.Skipped, "row") + " skipped"
 	}
 	return truncateRunes(s, maxWordsLineRunes)
 }

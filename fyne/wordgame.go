@@ -132,9 +132,10 @@ func (gs *GameState) loadLists() {
 		lists, loadErr = vocab.LoadDir(dir)
 		gs.listsLoadFailed = loadErr != nil
 	}
-	gs.listNames = nil
+	gs.listNames, gs.lists = nil, nil
 	for _, l := range lists {
 		gs.listNames = append(gs.listNames, l.Name)
+		gs.lists = append(gs.lists, newListInfo(l))
 	}
 	gs.lessonFilters = map[string][]string{}
 	if gs.store != nil {
@@ -438,6 +439,11 @@ func (gs *GameState) wordsStatus() WordsStatus {
 		WordsOnly: gs.wordsOnly, Filtered: len(src.Lessons) > 0}
 	if src.List == "" {
 		ws.Err, ws.Level = gs.wordsErr, src.Level
+	}
+	if found && src.List != "" {
+		if li, ok := gs.listByName(src.List); ok {
+			ws.Skipped = li.skipped
+		}
 	}
 	if gs.wordsDir != "" {
 		home, _ := os.UserHomeDir()
