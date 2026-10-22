@@ -278,12 +278,14 @@ Word data for the vocabulary trainer, independent of the game and the store:
 
 - `vocab.go`: `Word`, `Meanings` (per language, with fallback for display), `List`
 - `csvlist.go`, `jsonlist.go`, `dir.go`: private word lists (CSV/TSV/JSON, with header aliases) and `LoadDir`
+- `notation.go`: the notation of a kana field (placeholders, optional parts, punctuation,
+  variants): reading, shown form and other accepted readings, or why the row is skipped
 - `import.go`: `Inspect` and `Import`, checking and storing a word list for the settings' import;
   `InspectAll` keeps every skipped row's message for the check command
 - `manage.go`: `DeleteList`, `CheckListName` and `RenameList` for the word list dialog
 - `meaning.go`: `MeaningMatches`, answering a word by its meaning
 - `index.go`: `NewIndex` (one entry per reading across all sources, with each list entry's first
-  row) and `Playable` (words made only of known kana, filtered by JLPT level, list and lesson)
+  row, its shown form and its other accepted readings; `Entry.ReadingMatches`) and `Playable` (words made only of known kana, filtered by JLPT level, list and lesson)
 - `package.go`: `Source` and `NextPackage` (the next words to introduce from a list or JLPT, in
   learning order)
 - `bundled.go`: `Bundled`, the embedded JLPT word list (`data/words.json.gz`, with a frequency
@@ -425,8 +427,9 @@ panel's words line adds "· N rows skipped" when the chosen list has skipped row
 `go run ./cmd/listcheck FILE...` reads each file as the import does and changes nothing. For each
 file it prints the word list's name, its number of words and skipped rows, then the message of
 every skipped row (all of them, where the game keeps the first 100), or why the file cannot be
-imported and what to do about it. With `-words` it also lists every word with its romaji and
-lesson. The output can be passed on as it is, for example to whoever keeps the list; the exit
+imported and what to do about it. With `-words` it also lists every word as shown, with the
+romaji of its reading, its other accepted readings (an optional part left out, another variant)
+and its lesson. The output can be passed on as it is, for example to whoever keeps the list; the exit
 status is 1 when a file cannot be imported.
 
 Choose a list as the source of new words in the settings (Words tab; an imported list is
@@ -458,7 +461,31 @@ with Manage word lists keeps its lesson choice; renaming its file by hand forget
 - **JSON** (`*.json`): an array of `{"kana": "せんせい", "meaning": "teacher", "lesson": "1"}`;
   `meaning` may also be a list or an object per language (`{"de": "Lehrer", "en": "teacher"}`).
 
-Rows whose reading is not kana are skipped and reported.
+**Notation in the kana column** (CSV and JSON alike), for course lists that write more than
+plain kana:
+
+- `～` (also `〜` or `~`) stands for something you fill in, such as a name: `～さん`,
+  `こちらは～さんです`. The tile shows it; you type only the kana: `san`.
+- Text in brackets, `（…）` or `(…)`, is optional: `（どうぞ）よろしく（おねがいします）` is
+  answered with the full form `douzoyoroshikuonegaishimasu` or the short form `yoroshiku`,
+  nothing in between. Brackets must pair and must not nest.
+- Punctuation (`？ ！ 。 、 ・ ? ! . ,`) and spaces are shown, not typed: `おげんきですか？` is
+  `ogenkidesuka`.
+- `//` separates two writings of one word: `あめりか // アメリカ`. The tile shows the last one,
+  which also decides the script (`アメリカ` needs katakana switched on); every writing's
+  reading counts.
+- In an entry that uses any of the above except `//` alone (a phrase), は may also be typed
+  `wa` and へ `e`, as particles are spoken: `こちらは～さんです` takes `kochirawasandesu`.
+  Everywhere, を takes `o` as well as `wo`.
+
+The tile, the feedback, the word package intro, the import preview and the game-over list show
+a word as the list writes it, with the romaji of its full form. Progress belongs to the
+reading, the kana without the notation: `～さん` in two lists, or `～さん` in a list and `さん` in
+the JLPT list, is one word, shown as the first list writes it.
+
+Rows are skipped and reported when their kana field is empty after the notation, contains
+anything other than kana (kanji, Latin letters; a variant that is not kana skips the whole
+row), or has unpaired or nested brackets.
 
 ## Fonts
 
