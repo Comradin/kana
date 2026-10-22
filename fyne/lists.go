@@ -17,7 +17,7 @@ type listInfo struct {
 	words    int      // rows read as words
 	lessons  int      // distinct lessons; words without a lesson do not count
 	skipped  int      // skipped rows
-	problems []string // messages on skipped rows, at most 10
+	problems []string // messages on skipped rows, at most vocab's 100
 }
 
 // newListInfo summarises a loaded list.

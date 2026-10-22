@@ -49,8 +49,19 @@ type Candidate struct {
 
 // Inspect checks a source file for import: its name and extension, size,
 // encoding (UTF-16 with BOM is converted to UTF-8) and content. It touches
-// no files.
+// no files. The list keeps the first maxProblems messages.
 func Inspect(fileName string, data []byte) (Candidate, error) {
+	return inspect(fileName, data, maxProblems)
+}
+
+// InspectAll is Inspect keeping every skipped row's message, for the check
+// command.
+func InspectAll(fileName string, data []byte) (Candidate, error) {
+	return inspect(fileName, data, allProblems)
+}
+
+// inspect is Inspect with the list's message limit (see List).
+func inspect(fileName string, data []byte, limit int) (Candidate, error) {
 	fileName = filepath.Base(fileName) // a path must not escape the folder
 	ext := strings.ToLower(filepath.Ext(fileName))
 	base := strings.TrimSuffix(fileName, filepath.Ext(fileName))
@@ -76,9 +87,9 @@ func Inspect(fileName string, data []byte) (Candidate, error) {
 	}
 	var l List
 	if stored == ".json" {
-		l = readJSON(base, bytes.NewReader(text))
+		l = readJSON(base, bytes.NewReader(text), limit)
 	} else {
-		l = readCSV(base, bytes.NewReader(text))
+		l = readCSV(base, bytes.NewReader(text), limit)
 	}
 	if len(l.Words) == 0 {
 		return Candidate{}, noWords(l, text)

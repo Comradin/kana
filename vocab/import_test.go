@@ -229,3 +229,21 @@ func TestImportReplacesSeveralFiles(t *testing.T) {
 		t.Fatalf("files = %v; want only the new file", got)
 	}
 }
+
+func TestInspectAllKeepsEveryMessage(t *testing.T) {
+	data := []byte("kana;meaning\nあお;blue\n" + strings.Repeat("x;y\n", 150))
+	c, err := Inspect("many.csv", data)
+	if err != nil || len(c.List.Problems) != 100 || c.List.Skipped != 150 {
+		t.Fatalf("Inspect: %d messages, %d skipped, err %v; want the first 100 of 150", len(c.List.Problems), c.List.Skipped, err)
+	}
+	all, err := InspectAll("many.csv", data)
+	if err != nil || len(all.List.Problems) != 150 || all.List.Skipped != 150 {
+		t.Fatalf("InspectAll: %d messages, %d skipped, err %v; want all 150", len(all.List.Problems), all.List.Skipped, err)
+	}
+	if got := all.List.Problems[149]; got != "line 152: x is not kana" {
+		t.Fatalf("last message %q", got)
+	}
+	if all.Name != "many" || len(all.List.Words) != 1 {
+		t.Fatalf("candidate %+v", all)
+	}
+}
