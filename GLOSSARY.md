@@ -20,6 +20,22 @@ _Avoid_: upload, add list
 A line of a word list the game could not read, with the reason why; the rest of the list still plays.
 _Avoid_: problem, error, invalid row
 
+**Reading**:
+The kana a learner types a word by; progress belongs to it, whatever list the word comes from.
+_Avoid_: key, plain kana
+
+**Placeholder**:
+A wave dash (～) in a word list entry standing for something the learner fills in, such as a name in ～さん; shown, not typed.
+_Avoid_: wildcard, blank
+
+**Optional part**:
+A part of a word list entry in brackets that may be left out, as in （どうぞ）よろしく; both the long and the short form count.
+_Avoid_: optional word, bracket
+
+**Variant**:
+One of several writings of the same word in one entry, separated by //, as in あめりか // アメリカ.
+_Avoid_: alternative, synonym
+
 **Delete a word list**:
 Removing a word list from the game for good; the learner's progress on its words stays.
 _Avoid_: remove, uninstall
