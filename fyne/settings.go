@@ -645,12 +645,14 @@ func showSettingsDialog(gs *GameState, statsPanel *StatsPanel, gameCanvas *GameC
 		c.SetDismissText("Cancel")
 		c.Show()
 	}
+	// Pause first: the reload may drop tiles, which must not happen in a
+	// running round.
+	gs.SetSettingsOpen(true)
+	gameCanvas.Refresh()
 	gs.ReloadLists() // lists copied, edited or removed by hand come in
 	form := newSettingsForm(gs.settingsState(), onReset)
 	form.onImport = func() { showImportDialog(gs, form, win) }
 	form.onManage = func() { showListsDialog(gs, form, win) }
-	gs.SetSettingsOpen(true)
-	gameCanvas.Refresh()
 
 	d = dialog.NewCustomWithoutButtons("Settings", form.tabs, win)
 	openSettings = form

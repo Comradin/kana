@@ -159,8 +159,13 @@ func TestListsDialogRename(t *testing.T) {
 }
 
 func TestFolderURL(t *testing.T) {
-	if got := folderURL("/home/x/my words").String(); got != "file:///home/x/my%20words" {
-		t.Fatalf("folderURL = %q", got)
+	for in, want := range map[string]string{
+		"/home/x/my words": "file:///home/x/my%20words",
+		"C:/Users/x":       "file:///C:/Users/x",
+	} {
+		if got := folderURL(in).String(); got != want {
+			t.Fatalf("folderURL(%q) = %q, want %q", in, got, want)
+		}
 	}
 }
 

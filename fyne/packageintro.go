@@ -189,7 +189,7 @@ func showWordPackageDialog(gs *GameState, statsPanel *StatsPanel, inputBar *Inpu
 	})
 	dialogShowing = true
 	d.Show()
-	confirmOnEnter(d)
+	confirmOnEnter(d, w)
 }
 
 // levelOfferText asks whether to continue with the next JLPT level.

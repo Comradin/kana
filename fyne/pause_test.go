@@ -124,6 +124,19 @@ func TestResetClearsUserPause(t *testing.T) {
 	}
 }
 
+func TestResetKeepsTheImportPause(t *testing.T) {
+	gs := newTestState()
+	gs.SetImportOpen(true)
+	gs.Reset()
+	if !gs.paused {
+		t.Fatal("a round restarted under an import preview must stay paused")
+	}
+	gs.SetImportOpen(false)
+	if gs.paused {
+		t.Fatal("closing the preview resumes the new round")
+	}
+}
+
 func TestRomajiEntryEscapeCallsToggle(t *testing.T) {
 	test.NewApp()
 	calls := 0
