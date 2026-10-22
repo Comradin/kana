@@ -103,3 +103,19 @@ func TestRunExitStatus(t *testing.T) {
 		t.Fatalf("unknown flag: status %d", got)
 	}
 }
+
+func TestCheckWordsWithNotation(t *testing.T) {
+	path := writeFile(t, "course.csv", "kana;meaning;lesson\n"+
+		"～さん;Mr./Ms.;1\n"+
+		"（どうぞ）よろしく（おねがいします）;nice to meet you;1\n"+
+		"あめりか // アメリカ;America;2\n")
+	var out bytes.Buffer
+	checkFile(&out, path, true)
+	want := path + ": word list \"course\", 3 words, 0 rows skipped\nWords:\n" +
+		"  ～さん · san · lesson 1\n" +
+		"  （どうぞ）よろしく（おねがいします） · douzoyoroshikuonegaishimasu · also よろしく (yoroshiku) · lesson 1\n" +
+		"  アメリカ · amerika · also あめりか (amerika) · lesson 2\n"
+	if out.String() != want {
+		t.Fatalf("output:\n%s\nwant:\n%s", out.String(), want)
+	}
+}

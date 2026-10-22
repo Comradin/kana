@@ -4,9 +4,10 @@
 //	go run ./cmd/listcheck [-words] FILE...
 //
 // For each file it prints the word list's name with its number of words and
-// skipped rows, with -words every word, then every skipped row's message
-// (all of them; the game keeps the first 100), or why the file cannot be
-// imported and what to do about it. The exit status is 1 when a file cannot
+// skipped rows, with -words every word (shown form, romaji, other accepted
+// readings, lesson), then every skipped row's message (all of them; the
+// game keeps the first 100), or why the file cannot be imported and what to
+// do about it. The exit status is 1 when a file cannot
 // be read or imported, 2 for a usage error.
 package main
 
@@ -32,7 +33,7 @@ func main() {
 func run(args []string, stdout, stderr io.Writer) int {
 	flags := flag.NewFlagSet("listcheck", flag.ContinueOnError)
 	flags.SetOutput(stderr)
-	words := flags.Bool("words", false, "also print every word with its romaji and lesson")
+	words := flags.Bool("words", false, "also print every word: shown form, romaji, other readings, lesson")
 	flags.Usage = func() {
 		fmt.Fprintln(stderr, "usage: listcheck [-words] FILE...")
 		flags.PrintDefaults()
@@ -110,9 +111,19 @@ func readFile(path string) ([]byte, error) {
 	return io.ReadAll(io.LimitReader(f, vocab.MaxImportSize+1))
 }
 
-// wordLine describes a word for -words: "せんせい · sensei · lesson 1".
+// wordLine describes a word for -words: its shown form, the romaji of its
+// reading, its other accepted readings and its lesson, as
+// "（どうぞ）よろしく · douzoyoroshiku · also よろしく (yoroshiku) · lesson 1".
+// Other readings are given in kana, since variants often share the romaji.
 func wordLine(w vocab.Word) string {
-	parts := []string{w.Kana, kanacore.Romaji(w.Kana)}
+	parts := []string{w.Shown(), kanacore.Romaji(w.Kana)}
+	if len(w.Alts) > 0 {
+		alts := make([]string, len(w.Alts))
+		for i, a := range w.Alts {
+			alts[i] = fmt.Sprintf("%s (%s)", a, kanacore.Romaji(a))
+		}
+		parts = append(parts, "also "+strings.Join(alts, ", "))
+	}
 	if w.Lesson != "" {
 		parts = append(parts, "lesson "+w.Lesson)
 	}
