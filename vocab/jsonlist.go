@@ -20,9 +20,10 @@ type jsonWord struct {
 
 // readJSON reads a word list (an optional UTF-8 BOM is skipped): an array of objects with kana, meaning
 // (string, array of strings, or an object of language → string or array),
-// lesson and jlpt (number or string).
-func readJSON(name string, r io.Reader) List {
-	l := List{Name: name}
+// lesson and jlpt (number or string). limit is how many messages the list
+// keeps (see List).
+func readJSON(name string, r io.Reader, limit int) List {
+	l := List{Name: name, limit: limit}
 	br := bufio.NewReader(r)
 	if b, err := br.Peek(3); err == nil && string(b) == "\ufeff" {
 		br.Discard(3)

@@ -14,7 +14,7 @@ func TestReadJSON(t *testing.T) {
 	 {"kana": "ねこ", "meaning": "Katze"},
 	 {"kana": "猫", "meaning": "cat"}
 	]`
-	l := readJSON("x", strings.NewReader(in))
+	l := readJSON("x", strings.NewReader(in), maxProblems)
 	if len(l.Words) != 2 || l.Skipped != 1 {
 		t.Fatalf("words=%d skipped=%d problems=%v", len(l.Words), l.Skipped, l.Problems)
 	}
@@ -28,11 +28,11 @@ func TestReadJSON(t *testing.T) {
 	if got := l.Words[1].Meanings[""]; !reflect.DeepEqual(got, []string{"Katze"}) {
 		t.Fatalf("string meaning = %v", got)
 	}
-	bad := readJSON("x", strings.NewReader(`{"kana":`))
+	bad := readJSON("x", strings.NewReader(`{"kana":`), maxProblems)
 	if len(bad.Words) != 0 || len(bad.Problems) != 1 {
 		t.Fatalf("broken JSON: %+v", bad)
 	}
-	keys := readJSON("x", strings.NewReader(`[{"kana":"ねこ","meaning":{"de":"y","DE":"x"}}]`))
+	keys := readJSON("x", strings.NewReader(`[{"kana":"ねこ","meaning":{"de":"y","DE":"x"}}]`), maxProblems)
 	if got := keys.Words[0].Meanings["de"]; !reflect.DeepEqual(got, []string{"x", "y"}) {
 		t.Fatalf("object keys in sorted order: %v", got)
 	}
@@ -138,12 +138,22 @@ func TestLoadDirSkipsDotFiles(t *testing.T) {
 }
 
 func TestReadJSONBOMAndEmptyKana(t *testing.T) {
-	l := readJSON("x", strings.NewReader("\ufeff[{\"kana\":\"ねこ\"},{\"kana\":\"  \"},{\"meaning\":\"m\"}]"))
+	l := readJSON("x", strings.NewReader("\ufeff[{\"kana\":\"ねこ\"},{\"kana\":\"  \"},{\"meaning\":\"m\"}]"), maxProblems)
 	if len(l.Words) != 1 || l.Words[0].Kana != "ねこ" {
 		t.Fatalf("BOM: words = %+v, problems %v", l.Words, l.Problems)
 	}
 	want := []string{"entry 2: empty kana", "entry 3: empty kana"}
 	if l.Skipped != 2 || !reflect.DeepEqual(l.Problems, want) {
 		t.Fatalf("skipped=%d problems=%q, want %q", l.Skipped, l.Problems, want)
+	}
+}
+
+func TestReadJSONProblemLimit(t *testing.T) {
+	in := "[" + strings.TrimSuffix(strings.Repeat(`{"kana":"x"},`, 150), ",") + "]"
+	if l := readJSON("x", strings.NewReader(in), maxProblems); len(l.Problems) != maxProblems || l.Skipped != 150 {
+		t.Fatalf("problems=%d skipped=%d", len(l.Problems), l.Skipped)
+	}
+	if l := readJSON("x", strings.NewReader(in), allProblems); len(l.Problems) != 150 {
+		t.Fatalf("all problems: problems=%d", len(l.Problems))
 	}
 }

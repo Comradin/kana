@@ -27,14 +27,21 @@ type List struct {
 	Name     string
 	Path     string // the list's file; "" for a list not read from a folder
 	Words    []Word
-	Problems []string // at most maxProblems messages
+	Problems []string // messages in file order, at most the list's limit
 	Skipped  int      // rows skipped, including those without a message
+
+	limit int // messages kept: 0 = maxProblems, allProblems = every one
 }
 
 // BundledSource is the Source of bundled words and a reserved list name.
 const BundledSource = "jmdict"
 
-const maxProblems = 10
+// maxProblems is how many messages a list keeps unless it is read with
+// allProblems (see InspectAll).
+const maxProblems = 100
+
+// allProblems is the message limit that keeps every message.
+const allProblems = -1
 
 // SplitMeanings splits a field on ";", trims items and drops empty and
 // duplicate ones, keeping first-seen order.

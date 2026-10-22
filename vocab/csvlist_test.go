@@ -17,7 +17,7 @@ func TestReadCSVSeparators(t *testing.T) {
 		"case":      "Kana,Meaning_DE,MEANING_EN,Lesson\nせんせい,Lehrer; Lehrerin,teacher,1\n",
 	}
 	for name, in := range inputs {
-		l := readCSV("minna", strings.NewReader(in))
+		l := readCSV("minna", strings.NewReader(in), maxProblems)
 		if len(l.Words) != 1 || len(l.Problems) != 0 {
 			t.Fatalf("%s: words=%d problems=%v", name, len(l.Words), l.Problems)
 		}
@@ -33,7 +33,7 @@ func TestReadCSVSeparators(t *testing.T) {
 
 func TestReadCSVGenericMeaningAndLevel(t *testing.T) {
 	in := "kana,meaning,jlpt\nねこ,Katze,N5\nいぬ,Hund,4\n"
-	l := readCSV("x", strings.NewReader(in))
+	l := readCSV("x", strings.NewReader(in), maxProblems)
 	if len(l.Words) != 2 {
 		t.Fatalf("words = %d, problems %v", len(l.Words), l.Problems)
 	}
@@ -46,11 +46,11 @@ func TestReadCSVGenericMeaningAndLevel(t *testing.T) {
 }
 
 func TestReadCSVProblems(t *testing.T) {
-	l := readCSV("x", strings.NewReader("word,meaning\nねこ,Katze\n"))
+	l := readCSV("x", strings.NewReader("word,meaning\nねこ,Katze\n"), maxProblems)
 	if len(l.Words) != 0 || len(l.Problems) != 1 || !strings.Contains(l.Problems[0], "kana") {
 		t.Fatalf("missing kana column: %+v", l)
 	}
-	l = readCSV("x", strings.NewReader("kana,meaning\n先生,Lehrer\nねこ,Katze\n,leer\n"))
+	l = readCSV("x", strings.NewReader("kana,meaning\n先生,Lehrer\nねこ,Katze\n,leer\n"), maxProblems)
 	if len(l.Words) != 1 || l.Skipped != 2 {
 		t.Fatalf("words=%d skipped=%d", len(l.Words), l.Skipped)
 	}
@@ -62,14 +62,18 @@ func TestReadCSVProblems(t *testing.T) {
 	}
 	var b strings.Builder
 	b.WriteString("kana\n")
-	for i := 0; i < 15; i++ {
+	for i := 0; i < 150; i++ {
 		b.WriteString("x\n")
 	}
-	l = readCSV("x", strings.NewReader(b.String()))
-	if len(l.Problems) != maxProblems || l.Skipped != 15 {
+	l = readCSV("x", strings.NewReader(b.String()), maxProblems)
+	if len(l.Problems) != maxProblems || l.Skipped != 150 {
 		t.Fatalf("problems=%d skipped=%d", len(l.Problems), l.Skipped)
 	}
-	l = readCSV("x", strings.NewReader(""))
+	l = readCSV("x", strings.NewReader(b.String()), allProblems)
+	if len(l.Problems) != 150 || l.Skipped != 150 {
+		t.Fatalf("all problems: problems=%d skipped=%d", len(l.Problems), l.Skipped)
+	}
+	l = readCSV("x", strings.NewReader(""), maxProblems)
 	if len(l.Words) != 0 || len(l.Problems) != 1 {
 		t.Fatalf("empty file: %+v", l)
 	}
@@ -87,7 +91,7 @@ func (f failingReader) Read(p []byte) (int, error) {
 }
 
 func TestReadCSVReadError(t *testing.T) {
-	l := readCSV("x", failingReader{strings.NewReader("kana\nねこ\n")})
+	l := readCSV("x", failingReader{strings.NewReader("kana\nねこ\n")}, maxProblems)
 	if len(l.Words) != 1 {
 		t.Fatalf("words = %d, problems %v", len(l.Words), l.Problems)
 	}
@@ -104,7 +108,7 @@ func TestReadCSVColumnOrder(t *testing.T) {
 	// map iteration they would not be deterministic.
 	in := "meaning_de,kana,meaning,meaning_\nKatze,ねこ,cat,ignored\n"
 	for i := 0; i < 20; i++ {
-		l := readCSV("x", strings.NewReader(in))
+		l := readCSV("x", strings.NewReader(in), maxProblems)
 		if len(l.Words) != 1 {
 			t.Fatalf("words = %d, problems %v", len(l.Words), l.Problems)
 		}
@@ -118,7 +122,7 @@ func TestReadCSVColumnOrder(t *testing.T) {
 
 func TestReadCSVDuplicateHeader(t *testing.T) {
 	in := "kana,meaning,lesson,Kana,meaning,lesson\nねこ,Katze,1,いぬ,Hund,2\n"
-	l := readCSV("x", strings.NewReader(in))
+	l := readCSV("x", strings.NewReader(in), maxProblems)
 	if len(l.Words) != 1 {
 		t.Fatalf("words = %d, problems %v", len(l.Words), l.Problems)
 	}
@@ -130,7 +134,7 @@ func TestReadCSVDuplicateHeader(t *testing.T) {
 
 func TestReadCSVHeaderAliases(t *testing.T) {
 	in := "Japanische Schrift,Japanisch (Romaji),Deutsch,Lektion\nせんせい,sensei,Lehrer; Lehrerin,1\n"
-	l := readCSV("minna", strings.NewReader(in))
+	l := readCSV("minna", strings.NewReader(in), maxProblems)
 	if len(l.Words) != 1 || len(l.Problems) != 0 {
 		t.Fatalf("words=%d problems=%v", len(l.Words), l.Problems)
 	}
@@ -146,8 +150,8 @@ func TestReadCSVHeaderAliases(t *testing.T) {
 		"japanisch,englisch":       "kana,meaning_en",
 	}
 	for alias, canon := range aliases {
-		a := readCSV("x", strings.NewReader(alias+"\nねこ,cat,2\n"))
-		c := readCSV("x", strings.NewReader(canon+"\nねこ,cat,2\n"))
+		a := readCSV("x", strings.NewReader(alias+"\nねこ,cat,2\n"), maxProblems)
+		c := readCSV("x", strings.NewReader(canon+"\nねこ,cat,2\n"), maxProblems)
 		if len(a.Words) != 1 || !reflect.DeepEqual(a.Words, c.Words) {
 			t.Errorf("%q: %+v, want %+v", alias, a.Words, c.Words)
 		}
@@ -156,7 +160,7 @@ func TestReadCSVHeaderAliases(t *testing.T) {
 
 func TestReadCSVCanonicalColumnWinsOverAlias(t *testing.T) {
 	in := "deutsch,reading,kana,meaning_de,lektion,lesson\nfalsch,いぬ,ねこ,Katze,9,1\n"
-	l := readCSV("x", strings.NewReader(in))
+	l := readCSV("x", strings.NewReader(in), maxProblems)
 	if len(l.Words) != 1 {
 		t.Fatalf("words = %d, problems %v", len(l.Words), l.Problems)
 	}

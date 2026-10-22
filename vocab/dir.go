@@ -93,9 +93,9 @@ func loadFile(name, path, ext string) List {
 		l = List{Name: name}
 		l.problem(err.Error())
 	case ext == ".json":
-		l = readJSON(name, fh)
+		l = readJSON(name, fh, maxProblems)
 	default:
-		l = readCSV(name, fh)
+		l = readCSV(name, fh, maxProblems)
 	}
 	if fh != nil {
 		fh.Close()

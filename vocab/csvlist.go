@@ -28,9 +28,10 @@ var headerAliases = map[string]string{
 }
 
 // readCSV reads a word list with a header row. The separator (tab,
-// semicolon or comma) is taken from the header line.
-func readCSV(name string, r io.Reader) List {
-	l := List{Name: name}
+// semicolon or comma) is taken from the header line. limit is how many
+// messages the list keeps (see List).
+func readCSV(name string, r io.Reader, limit int) List {
+	l := List{Name: name, limit: limit}
 	br := bufio.NewReader(r)
 	header, err := br.ReadString('\n')
 	if err != nil && header == "" {
@@ -132,9 +133,14 @@ func readCSV(name string, r io.Reader) List {
 	return l
 }
 
-// problem records a message without counting a skipped row.
+// problem records a message without counting a skipped row; beyond the
+// list's limit it is dropped.
 func (l *List) problem(msg string) {
-	if len(l.Problems) < maxProblems {
+	limit := l.limit
+	if limit == 0 {
+		limit = maxProblems
+	}
+	if limit < 0 || len(l.Problems) < limit {
 		l.Problems = append(l.Problems, msg)
 	}
 }
