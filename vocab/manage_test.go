@@ -2,6 +2,7 @@ package vocab
 
 import (
 	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
@@ -56,12 +57,37 @@ func TestCheckListName(t *testing.T) {
 		{"OTHER", ErrNameTaken},
 		{"Dup", ErrNameTaken},       // the file name of two other lists
 		{"dup (CSV)", ErrNameTaken}, // the list name of another list
+		{"a<b", ErrNameChars},
+		{"a>b", ErrNameChars},
+		{"a:b", ErrNameChars},
+		{`a"b`, ErrNameChars},
+		{"a|b", ErrNameChars},
+		{"a?b", ErrNameChars},
+		{"a*b", ErrNameChars},
+		{"a\tb", ErrNameChars},
+		{"a\x00b", ErrNameChars},
+		{"a\x7fb", ErrNameChars},
+		{"CON", ErrNameDevice},
+		{"con", ErrNameDevice},
+		{"Nul", ErrNameDevice},
+		{"prn", ErrNameDevice},
+		{"AUX", ErrNameDevice},
+		{"com1", ErrNameDevice},
+		{"COM9", ErrNameDevice},
+		{"lpt1", ErrNameDevice},
+		{"LPT9", ErrNameDevice},
+		{"con.txt", ErrNameDevice}, // Windows ignores what follows the dot
+		{"Aux.backup", ErrNameDevice},
 	} {
 		if _, err := CheckListName(path, tc.in); !errors.Is(err, tc.want) {
 			t.Errorf("CheckListName(%q) = %v, want %v", tc.in, err, tc.want)
 		}
 	}
-	for in, want := range map[string]string{"mine": "mine", "Mine": "Mine", "  ours ": "ours"} {
+	for in, want := range map[string]string{
+		"mine": "mine", "Mine": "Mine", "  ours ": "ours",
+		"console": "console", "com": "com", "com0": "com0", "com10": "com10", "lpt": "lpt", "nul list": "nul list",
+		"my.con": "my.con", "ねこ": "ねこ",
+	} {
 		if got, err := CheckListName(path, in); err != nil || got != want {
 			t.Errorf("CheckListName(%q) = %q, %v; want %q", in, got, err, want)
 		}
@@ -110,6 +136,51 @@ func TestRenameListCaseOnly(t *testing.T) {
 	}
 	if got := dirNames(t, dir); !slices.Equal(got, []string{"Mine.csv"}) {
 		t.Fatalf("files = %v after renaming to the same name", got)
+	}
+}
+
+func TestRenameListCaseOnlyKeepsLeftoverTempFile(t *testing.T) {
+	dir := t.TempDir()
+	writeLists(t, dir, "mine.csv")
+	tmp := filepath.Join(dir, ".mine.csv.rename")
+	if err := os.WriteFile(tmp, []byte("left over"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := RenameList(filepath.Join(dir, "mine.csv"), "Mine"); err == nil {
+		t.Fatal("a leftover temporary file must stop the rename")
+	}
+	if got := dirNames(t, dir); !slices.Equal(got, []string{".mine.csv.rename", "mine.csv"}) {
+		t.Fatalf("files = %v, want both untouched", got)
+	}
+	if b, _ := os.ReadFile(tmp); string(b) != "left over" {
+		t.Fatalf("the leftover file was overwritten: %q", b)
+	}
+}
+
+func TestRenameListErrorsHideThePath(t *testing.T) {
+	dir := t.TempDir()
+	_, err := RenameList(filepath.Join(dir, "gone.csv"), "ours")
+	if err == nil {
+		t.Fatal("renaming a missing file must fail")
+	}
+	if strings.Contains(err.Error(), dir) || !strings.HasPrefix(err.Error(), "The word list could not be renamed: ") || !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("err = %q; want a sentence without the path that still wraps the cause", err)
+	}
+}
+
+func TestDeleteListErrorsHideThePath(t *testing.T) {
+	dir := t.TempDir()
+	full := filepath.Join(dir, "full.csv") // a non-empty folder cannot be removed
+	if err := os.Mkdir(full, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeLists(t, full, "inner.csv")
+	err := DeleteList(full)
+	if err == nil {
+		t.Fatal("deleting a non-empty folder must fail")
+	}
+	if strings.Contains(err.Error(), dir) || !strings.HasPrefix(err.Error(), "The word list could not be deleted: ") || !strings.HasSuffix(err.Error(), ".") {
+		t.Fatalf("err = %q; want a sentence without the path", err)
 	}
 }
 

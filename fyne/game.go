@@ -450,7 +450,7 @@ func (gs *GameState) Reset() {
 	gs.pendingLevelOffer = false
 	gs.userPaused = false
 	gs.settingsOpen = false
-	gs.paused = gs.introPending()
+	gs.paused = gs.introPending() || gs.importOpen
 
 	// reload overall stats
 	gs.overallStats = make(map[string]store.KanaStats)
@@ -1279,8 +1279,8 @@ func (gs *GameState) SetSettingsOpen(open bool) {
 
 // SetImportOpen pauses while dropped files are imported and releases that
 // pause afterwards; another reason (the settings) may still hold it. Reset
-// leaves it alone: the preview is modal, nothing restarts the round under
-// it.
+// keeps importOpen and the pause with it, should a round restart under a
+// preview.
 func (gs *GameState) SetImportOpen(open bool) {
 	gs.mu.Lock()
 	defer gs.mu.Unlock()

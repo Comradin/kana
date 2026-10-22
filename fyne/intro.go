@@ -28,17 +28,20 @@ var dialogShowing bool
 // enterConfirms closes the intro dialog that is showing, as its button
 // does; nil while none is. An Enter within enterGrace of the dialog opening
 // is ignored: it was meant as an answer, typed just before the dialog came
-// up. Fyne-thread-only, like dialogShowing.
+// up. So is an Enter while another dialog (a dropped file's import preview)
+// shows over it. Fyne-thread-only, like dialogShowing.
 var enterConfirms func()
 
 const enterGrace = 400 * time.Millisecond
 
-// confirmOnEnter lets Enter close d (see enterConfirms). Call it when d is
-// shown and clear enterConfirms when d closes.
-func confirmOnEnter(d dialog.Dialog) {
+// confirmOnEnter lets Enter close d (see enterConfirms) while d is the top
+// overlay of w. Call it right after d is shown and clear enterConfirms when
+// d closes.
+func confirmOnEnter(d dialog.Dialog, w fyne.Window) {
 	ready := time.Now().Add(enterGrace)
+	top := w.Canvas().Overlays().Top()
 	enterConfirms = func() {
-		if time.Now().Before(ready) {
+		if time.Now().Before(ready) || w.Canvas().Overlays().Top() != top {
 			return
 		}
 		d.Hide()
@@ -112,7 +115,7 @@ func showIntroDialog(gs *GameState, rowIDs []string, statsPanel *StatsPanel, inp
 	})
 	dialogShowing = true
 	d.Show()
-	confirmOnEnter(d)
+	confirmOnEnter(d, w)
 }
 
 // showKatakanaOffer asks once whether to add katakana. Call it through

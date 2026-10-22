@@ -4,11 +4,14 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/storage"
 	"fyne.io/fyne/v2/test"
+	"kana/vocab"
 )
 
 func TestImportOpenPausesLikeTheSettings(t *testing.T) {
@@ -115,5 +118,67 @@ func TestDropOnOpenSettingsShowsTheNewList(t *testing.T) {
 	}
 	if openSettings == nil || !slices.Contains(openSettings.sourceSelect.Options, "a") || openSettings.wordSource() != listSourcePrefix+"a" {
 		t.Fatal("the open settings must show and preselect the new list")
+	}
+}
+
+func TestEnterOnDropPreviewLeavesTheIntroUnderneath(t *testing.T) {
+	gs, d, w, src := dropGame(t)
+	t.Cleanup(func() { enterConfirms = nil })
+	gs.mu.Lock()
+	gs.pendingIntro = []string{"k"}
+	gs.paused = true
+	gs.mu.Unlock()
+	showPendingDialogs(gs, d.statsPanel, d.inputBar, w)
+	intro := w.Canvas().Overlays().Top()
+	if intro == nil || enterConfirms == nil {
+		t.Fatal("the kana intro is not showing")
+	}
+	a := writeList(t, src, "a.csv", "kana;meaning\nあお;blue\n")
+	d.drop([]fyne.URI{storage.NewFileURI(a)})
+	preview := w.Canvas().Overlays().Top()
+	if preview == intro || !labelContains(preview, "Word list: a") {
+		t.Fatal("the preview must show over the intro")
+	}
+	enter := &fyne.KeyEvent{Name: fyne.KeyReturn}
+	time.Sleep(enterGrace)
+	windowKey(enter, w, d.inputBar)
+	if len(gs.pendingIntro) == 0 || !dialogShowing {
+		t.Fatal("Enter on the preview must not close the intro underneath")
+	}
+	if w.Canvas().Overlays().Top() != preview {
+		t.Fatal("the preview must still show")
+	}
+	test.Tap(buttonIn(preview, "Cancel"))
+	if w.Canvas().Overlays().Top() != intro {
+		t.Fatal("the intro must be there again")
+	}
+	windowKey(enter, w, d.inputBar)
+	if len(gs.pendingIntro) != 0 {
+		t.Fatal("with the preview gone, Enter closes the intro")
+	}
+}
+
+func TestReadDroppedTooLargeIsRejectedByTheImport(t *testing.T) {
+	gs, d, w, src := dropGame(t)
+	big := filepath.Join(src, "big.csv")
+	content := "kana\n" + strings.Repeat("あ\n", vocab.MaxImportSize/4+1)
+	if len(content) <= vocab.MaxImportSize {
+		t.Fatal("the test file must be larger than MaxImportSize")
+	}
+	if err := os.WriteFile(big, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	data, err := readDropped(storage.NewFileURI(big))
+	if err != nil || len(data) != vocab.MaxImportSize+1 {
+		t.Fatalf("read %d bytes, err %v; want MaxImportSize+1", len(data), err)
+	}
+	d.drop([]fyne.URI{storage.NewFileURI(big)})
+	top := w.Canvas().Overlays().Top()
+	if top == nil || !labelContains(top, "The file is larger than 5 MB.") {
+		t.Fatal("a file over the limit must get the import's size error")
+	}
+	test.Tap(buttonIn(top, "OK"))
+	if gs.importOpen || len(gs.listNames) != 0 {
+		t.Fatalf("importOpen %v, lists %v", gs.importOpen, gs.listNames)
 	}
 }

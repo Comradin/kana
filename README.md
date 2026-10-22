@@ -408,7 +408,9 @@ open. Lists are read from there only and never belong in the repository.
 lessons. A list with rows the game could not read says "N rows skipped"; **Details** shows the
 lines and why (at most ten), so you can correct your source file and import it again.
 **Rename** renames the list's file (the extension stays); its lesson choice and its place as the
-source of new words go with it. **Delete** removes the file for good after asking; your progress
+source of new words go with it. The new name must not contain `/ \ < > : " | ? *`, start with
+".", be `jmdict` or a name Windows keeps for devices (CON, PRN, AUX, NUL, COM1–9, LPT1–9), on
+every system, so the folder can move between computers. **Delete** removes the file for good after asking; your progress
 on its words is kept, and if it was the source of new words, JLPT takes its place. Both act at
 once, not on Save. **Open folder** opens the words folder in your file manager. The status
 panel's words line adds "· N rows skipped" when the chosen list has skipped rows.
