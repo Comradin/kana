@@ -169,3 +169,31 @@ func TestReadCSVCanonicalColumnWinsOverAlias(t *testing.T) {
 		t.Fatalf("canonical columns must win: %+v", w)
 	}
 }
+
+func TestReadCSVNotation(t *testing.T) {
+	in := "kana;meaning;lesson\n" +
+		"～さん;Mr./Ms.;1\n" +
+		"（どうぞ）よろしく（おねがいします）;nice to meet you;1\n" +
+		"あめりか // アメリカ;America;2\n" +
+		"（どうぞ;x;2\n" +
+		"～;x;2\n" +
+		"あめりか // 米国;x;2\n"
+	l := readCSV("course", strings.NewReader(in), maxProblems)
+	want := []Word{
+		{Kana: "さん", Display: "～さん", Meanings: Meanings{"": {"Mr./Ms."}}, Source: "course", Lesson: "1"},
+		{Kana: "どうぞよろしくおねがいします", Display: "（どうぞ）よろしく（おねがいします）", Alts: []string{"よろしく"},
+			Meanings: Meanings{"": {"nice to meet you"}}, Source: "course", Lesson: "1"},
+		{Kana: "アメリカ", Alts: []string{"あめりか"}, Meanings: Meanings{"": {"America"}}, Source: "course", Lesson: "2"},
+	}
+	if !reflect.DeepEqual(l.Words, want) {
+		t.Fatalf("words:\n%+v\nwant\n%+v", l.Words, want)
+	}
+	wantProblems := []string{
+		"line 5: （どうぞ has unpaired brackets",
+		"line 6: empty kana",
+		"line 7: あめりか // 米国 is not kana",
+	}
+	if l.Skipped != 3 || !reflect.DeepEqual(l.Problems, wantProblems) {
+		t.Fatalf("skipped %d, problems %q; want %q", l.Skipped, l.Problems, wantProblems)
+	}
+}

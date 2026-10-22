@@ -7,8 +7,6 @@ import (
 	"fmt"
 	"io"
 	"strings"
-
-	"kana/kanacore"
 )
 
 // problemNoKanaColumn is the problem of a header without a kana column.
@@ -28,8 +26,9 @@ var headerAliases = map[string]string{
 }
 
 // readCSV reads a word list with a header row. The separator (tab,
-// semicolon or comma) is taken from the header line. limit is how many
-// messages the list keeps (see List).
+// semicolon or comma) is taken from the header line. The kana column may
+// use the notation (see parseNotation). limit is how many messages the list
+// keeps (see List).
 func readCSV(name string, r io.Reader, limit int) List {
 	l := List{Name: name, limit: limit}
 	br := bufio.NewReader(r)
@@ -105,15 +104,12 @@ func readCSV(name string, r io.Reader, limit int) List {
 		if kanaCol < len(rec) {
 			kana = strings.TrimSpace(rec[kanaCol])
 		}
-		if kana == "" {
-			l.skip(fmt.Sprintf("line %d: empty kana", line))
+		n, reason := parseNotation(kana)
+		if reason != "" {
+			l.skip(fmt.Sprintf("line %d: %s", line, reason))
 			continue
 		}
-		if _, ok := kanacore.KanaUnits(kana); !ok {
-			l.skip(fmt.Sprintf("line %d: %s is not kana", line, kana))
-			continue
-		}
-		w := Word{Kana: kana, Meanings: Meanings{}, Source: name,
+		w := Word{Kana: n.reading, Display: n.display, Alts: n.alts, Meanings: Meanings{}, Source: name,
 			Lesson: field(rec, "lesson"), JLPT: parseLevel(field(rec, "jlpt"))}
 		// Meanings in header order, so that the result is deterministic.
 		for i, col := range cols {

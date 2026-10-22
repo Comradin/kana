@@ -7,8 +7,6 @@ import (
 	"io"
 	"sort"
 	"strings"
-
-	"kana/kanacore"
 )
 
 type jsonWord struct {
@@ -20,8 +18,8 @@ type jsonWord struct {
 
 // readJSON reads a word list (an optional UTF-8 BOM is skipped): an array of objects with kana, meaning
 // (string, array of strings, or an object of language → string or array),
-// lesson and jlpt (number or string). limit is how many messages the list
-// keeps (see List).
+// lesson and jlpt (number or string); the kana field may use the notation
+// (see parseNotation). limit is how many messages the list keeps (see List).
 func readJSON(name string, r io.Reader, limit int) List {
 	l := List{Name: name, limit: limit}
 	br := bufio.NewReader(r)
@@ -34,16 +32,12 @@ func readJSON(name string, r io.Reader, limit int) List {
 		return l
 	}
 	for i, jw := range raw {
-		kana := strings.TrimSpace(jw.Kana)
-		if kana == "" {
-			l.skip(fmt.Sprintf("entry %d: empty kana", i+1))
+		n, reason := parseNotation(strings.TrimSpace(jw.Kana))
+		if reason != "" {
+			l.skip(fmt.Sprintf("entry %d: %s", i+1, reason))
 			continue
 		}
-		if _, ok := kanacore.KanaUnits(kana); !ok {
-			l.skip(fmt.Sprintf("entry %d: %s is not kana", i+1, kana))
-			continue
-		}
-		w := Word{Kana: kana, Meanings: Meanings{}, Source: name,
+		w := Word{Kana: n.reading, Display: n.display, Alts: n.alts, Meanings: Meanings{}, Source: name,
 			Lesson: scalar(jw.Lesson), JLPT: parseLevel(scalar(jw.JLPT))}
 		addJSONMeaning(w.Meanings, "", jw.Meaning)
 		l.Words = append(l.Words, w)

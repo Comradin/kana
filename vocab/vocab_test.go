@@ -62,3 +62,12 @@ func TestParseLevel(t *testing.T) {
 		}
 	}
 }
+
+func TestWordShown(t *testing.T) {
+	if got := (Word{Kana: "さん"}).Shown(); got != "さん" {
+		t.Fatalf("plain word shown as %q", got)
+	}
+	if got := (Word{Kana: "さん", Display: "～さん"}).Shown(); got != "～さん" {
+		t.Fatalf("word with notation shown as %q", got)
+	}
+}
