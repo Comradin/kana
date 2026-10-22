@@ -484,3 +484,30 @@ func TestWordsOnlyFocusAndLessonFilter(t *testing.T) {
 		t.Fatal("WordsOnly off not saved")
 	}
 }
+
+func TestRenameLessonFilter(t *testing.T) {
+	st := openTemp(t)
+	_ = st.SaveLessonFilter("minna", []string{"2", ""})
+	_ = st.SaveLessonFilter("ours", []string{"9"}) // stale, from an earlier list of that name
+	if err := st.RenameLessonFilter("minna", "ours"); err != nil {
+		t.Fatal(err)
+	}
+	if l, _ := st.LessonFilter("ours"); !reflect.DeepEqual(l, []string{"2", ""}) {
+		t.Fatalf("ours = %v, want the moved filter", l)
+	}
+	if l, _ := st.LessonFilter("minna"); l != nil {
+		t.Fatalf("minna = %v, want none left", l)
+	}
+	if err := st.RenameLessonFilter("ours", "ours"); err != nil {
+		t.Fatal(err)
+	}
+	if l, _ := st.LessonFilter("ours"); !reflect.DeepEqual(l, []string{"2", ""}) {
+		t.Fatalf("the same name must keep the filter: %v", l)
+	}
+	if err := st.RenameLessonFilter("Ours", "ours"); err != nil { // no filter under "Ours"
+		t.Fatal(err)
+	}
+	if l, _ := st.LessonFilter("ours"); l != nil {
+		t.Fatalf("a list without a filter must not inherit a stale one: %v", l)
+	}
+}

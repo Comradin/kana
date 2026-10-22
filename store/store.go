@@ -445,6 +445,30 @@ func (s *Store) SaveLessonFilter(list string, lessons []string) error {
 	return s.setSetting(lessonFilterPrefix+list, string(payload))
 }
 
+// RenameLessonFilter moves a word list's lesson filter to its new name; a
+// filter stored under the new name is replaced, also when the list has
+// none (all lessons). The same name changes nothing.
+func (s *Store) RenameLessonFilter(from, to string) error {
+	if from == to {
+		return nil
+	}
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("store: rename lesson filter: %w", err)
+	}
+	defer tx.Rollback() // a no-op after Commit
+	if _, err := tx.Exec(`DELETE FROM settings WHERE key = ?`, lessonFilterPrefix+to); err != nil {
+		return fmt.Errorf("store: rename lesson filter: %w", err)
+	}
+	if _, err := tx.Exec(`UPDATE settings SET key = ? WHERE key = ?`, lessonFilterPrefix+to, lessonFilterPrefix+from); err != nil {
+		return fmt.Errorf("store: rename lesson filter: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("store: rename lesson filter: %w", err)
+	}
+	return nil
+}
+
 // flag reads a setting stored as "1" or "0"; unset is false.
 func (s *Store) flag(key string) (bool, error) {
 	value, err := s.getSetting(key)
