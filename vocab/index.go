@@ -12,13 +12,39 @@ import (
 // Entry is one reading with everything known about it across sources.
 type Entry struct {
 	Kana     string
-	Units    []string // kanacore.KanaUnits, computed once
+	Display  string   // shown form from the first private list row of this reading; "" = Kana
+	Alts     []string // other accepted readings across sources, unique, in first-seen order
+	Units    []string // kanacore.KanaUnits of Kana, computed once
 	Meanings Meanings
 	JLPT     int                 // easiest bundled level, 0 if not bundled
 	Rank     int                 // best bundled frequency rank, lower = more common; 0 = unknown
 	Bundled  bool                // the bundled list contains it
 	Lists    map[string][]string // private list name → lessons
 	ListPos  map[string]int      // private list name → index of its first row in that list
+}
+
+// Shown returns how the entry is shown to the learner: its Display, else
+// its reading.
+func (e Entry) Shown() string {
+	if e.Display != "" {
+		return e.Display
+	}
+	return e.Kana
+}
+
+// ReadingMatches reports whether input is a romaji reading of the entry's
+// reading or of one of its other accepted readings (see
+// kanacore.ReadingMatches).
+func (e Entry) ReadingMatches(input string) bool {
+	if kanacore.ReadingMatches(e.Kana, input) {
+		return true
+	}
+	for _, a := range e.Alts {
+		if kanacore.ReadingMatches(a, input) {
+			return true
+		}
+	}
+	return false
 }
 
 // Index holds one entry per reading.
@@ -78,7 +104,8 @@ func (ix *Index) addLists(lists []List) {
 
 // add merges one word into its entry; list is "" for the bundled list, and
 // pos is the word's row index in its list. It reports whether the word was
-// added: a reading that cannot be split into units is dropped.
+// added: a reading that cannot be split into units is dropped. The first
+// private list row gives the shown form; other readings merge like meanings.
 func (ix *Index) add(w Word, list string, pos int) bool {
 	i, ok := ix.byKana[w.Kana]
 	if !ok {
@@ -98,6 +125,11 @@ func (ix *Index) add(w Word, list string, pos int) bool {
 	}
 	e := &ix.entries[i]
 	e.Meanings.Merge(w.Meanings)
+	for _, a := range w.Alts {
+		if !contains(e.Alts, a) {
+			e.Alts = append(e.Alts, a)
+		}
+	}
 	if list == "" {
 		if !e.Bundled || w.JLPT > e.JLPT {
 			e.JLPT = w.JLPT
@@ -107,6 +139,11 @@ func (ix *Index) add(w Word, list string, pos int) bool {
 		}
 		e.Bundled = true
 		return true
+	}
+	// The first private list row of this reading decides how it is shown,
+	// even when it has no notation.
+	if len(e.ListPos) == 0 {
+		e.Display = w.Display
 	}
 	if _, ok := e.ListPos[list]; !ok {
 		e.ListPos[list] = pos
@@ -137,9 +174,9 @@ func rankKey(r int) int {
 	return r
 }
 
-// clone copies the entry's Meanings, Lists and ListPos, so merging into the
-// copy leaves the original untouched. Units is never modified and stays
-// shared.
+// clone copies the entry's Meanings, Alts, Lists and ListPos, so merging
+// into the copy leaves the original untouched. Units is never modified and
+// stays shared.
 func (e Entry) clone() Entry {
 	m := make(Meanings, len(e.Meanings))
 	for lang, items := range e.Meanings {
@@ -149,16 +186,17 @@ func (e Entry) clone() Entry {
 	for name, lessons := range e.Lists {
 		l[name] = slices.Clone(lessons)
 	}
-	e.Meanings, e.Lists, e.ListPos = m, l, maps.Clone(e.ListPos)
+	e.Meanings, e.Lists, e.ListPos, e.Alts = m, l, maps.Clone(e.ListPos), slices.Clone(e.Alts)
 	return e
 }
 
 // Entries returns all entries sorted by reading. The slice and the entries'
-// Units, Meanings and Lists are shared with the index; do not modify them.
+// Units, Alts, Meanings and Lists are shared with the index; do not modify
+// them.
 func (ix *Index) Entries() []Entry { return ix.entries }
 
-// Lookup returns the entry for a reading. Its Units, Meanings and Lists are
-// shared with the index; do not modify them.
+// Lookup returns the entry for a reading. Its Units, Alts, Meanings and
+// Lists are shared with the index; do not modify them.
 func (ix *Index) Lookup(kana string) (Entry, bool) {
 	i, ok := ix.byKana[kana]
 	if !ok {

@@ -245,3 +245,68 @@ func TestIndexLanguages(t *testing.T) {
 		t.Fatalf("meanings without a language count as none, got %v", got)
 	}
 }
+
+func TestIndexShownForm(t *testing.T) {
+	bundled := []Word{word("さん", 5, BundledSource, "", "en", "Mr./Ms.")}
+	if e, _ := NewIndex(bundled, nil).Lookup("さん"); e.Shown() != "さん" {
+		t.Fatalf("a bundled word alone is shown as %q, want its reading", e.Shown())
+	}
+	san := Word{Kana: "さん", Display: "～さん", Meanings: Meanings{}}
+	plain := Word{Kana: "さん", Meanings: Meanings{}}
+	cases := []struct {
+		name  string
+		lists []List
+		want  string
+	}{
+		{"a list over the bundled word", []List{{Name: "a", Words: []Word{san}}}, "～さん"},
+		{"the first list wins", []List{{Name: "a", Words: []Word{san}}, {Name: "b", Words: []Word{plain}}}, "～さん"},
+		{"a plain first list wins too", []List{{Name: "a", Words: []Word{plain}}, {Name: "b", Words: []Word{san}}}, "さん"},
+		{"the first row of a list wins", []List{{Name: "a", Words: []Word{plain, san}}}, "さん"},
+	}
+	for _, c := range cases {
+		for how, ix := range map[string]*Index{
+			"NewIndex":  NewIndex(bundled, c.lists),
+			"WithLists": NewIndex(bundled, nil).WithLists(c.lists),
+		} {
+			e, ok := ix.Lookup("さん")
+			if !ok || !e.Bundled || e.Shown() != c.want {
+				t.Errorf("%s, %s: shown %q, bundled %v; want %q, one entry", c.name, how, e.Shown(), e.Bundled, c.want)
+			}
+		}
+	}
+}
+
+func TestIndexMergesAlts(t *testing.T) {
+	a := List{Name: "a", Words: []Word{{Kana: "アメリカ", Alts: []string{"あめりか"}, Meanings: Meanings{}}}}
+	b := List{Name: "b", Words: []Word{{Kana: "アメリカ", Alts: []string{"めりけん", "あめりか"}, Meanings: Meanings{}}}}
+	want := []string{"あめりか", "めりけん"}
+	if e, _ := NewIndex(nil, []List{a, b}).Lookup("アメリカ"); !reflect.DeepEqual(e.Alts, want) {
+		t.Fatalf("NewIndex alts = %v, want %v", e.Alts, want)
+	}
+	base := NewIndex(nil, []List{a})
+	if e, _ := base.WithLists([]List{b}).Lookup("アメリカ"); !reflect.DeepEqual(e.Alts, want) {
+		t.Fatalf("WithLists alts = %v, want %v", e.Alts, want)
+	}
+	if e, _ := base.Lookup("アメリカ"); !reflect.DeepEqual(e.Alts, []string{"あめりか"}) {
+		t.Fatalf("base alts = %v; WithLists must not change the base index", e.Alts)
+	}
+}
+
+func TestEntryReadingMatches(t *testing.T) {
+	e := Entry{Kana: "どうぞよろしくおねがいします", Alts: []string{"よろしく"}}
+	for in, want := range map[string]bool{
+		"douzoyoroshikuonegaishimasu": true,
+		"yoroshiku":                   true,
+		"douzoyoroshiku":              false, // no mix of the full and the short form
+		"douzo yoroshiku":             false,
+		"":                            false,
+	} {
+		if got := e.ReadingMatches(in); got != want {
+			t.Errorf("ReadingMatches(%q) = %v, want %v", in, got, want)
+		}
+	}
+	v := Entry{Kana: "ローソク", Alts: []string{"ろうそく"}}
+	if !v.ReadingMatches("roosoku") || !v.ReadingMatches("rousoku") {
+		t.Fatal("every variant's reading must match")
+	}
+}
