@@ -15,11 +15,22 @@ type Meanings map[string][]string
 // Word is one entry of a word list.
 type Word struct {
 	Kana     string   // reading, e.g. "せんせい"
+	Display  string   // the shown form as the list writes it, e.g. "～さん"; "" = Kana
+	Alts     []string // other accepted readings, e.g. an optional part left out; private lists only
 	Meanings Meanings // language → alternatives
 	JLPT     int      // 5…1, 0 = none
 	Rank     int      // bundled words: frequency rank, lower = more common; 0 = unknown
 	Source   string   // "jmdict" or a list name
 	Lesson   string   // optional, private lists only
+}
+
+// Shown returns how the word is shown to the learner: its Display, else its
+// reading.
+func (w Word) Shown() string {
+	if w.Display != "" {
+		return w.Display
+	}
+	return w.Kana
 }
 
 // List is one private word list file.

@@ -247,3 +247,10 @@ func TestInspectAllKeepsEveryMessage(t *testing.T) {
 		t.Fatalf("candidate %+v", all)
 	}
 }
+
+func TestInspectReadsNotation(t *testing.T) {
+	c, err := Inspect("course.csv", []byte("kana;meaning\n～さん;Mr./Ms.\nあめりか // アメリカ;America\n"))
+	if err != nil || len(c.List.Words) != 2 || c.List.Skipped != 0 {
+		t.Fatalf("c %+v, err %v; rows in notation are words, not skipped rows", c.List, err)
+	}
+}
