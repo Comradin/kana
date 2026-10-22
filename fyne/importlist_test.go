@@ -123,7 +123,7 @@ func TestImportChosenShowsPreviewAndImports(t *testing.T) {
 	w.Resize(fyne.NewSize(1000, 760))
 	f := newSettingsForm(gs.settingsState(), nil)
 
-	importChosen(gs, f, "mine.csv", []byte("kana;meaning\nあお;blue\n"), w)
+	importChosen(gs, f, "mine.csv", []byte("kana;meaning\nあお;blue\n"), w, nil)
 	preview := w.Canvas().Overlays().Top()
 	if preview == nil || buttonIn(preview, "Import") == nil {
 		t.Fatal("no preview with an Import button")
@@ -136,7 +136,7 @@ func TestImportChosenShowsPreviewAndImports(t *testing.T) {
 		t.Fatalf("source %q, options %v; want the new list preselected", f.wordSource(), f.sourceSelect.Options)
 	}
 
-	importChosen(gs, f, "MINE.csv", []byte("kana;meaning\nいえ;house\n"), w)
+	importChosen(gs, f, "MINE.csv", []byte("kana;meaning\nいえ;house\n"), w, nil)
 	if buttonIn(w.Canvas().Overlays().Top(), "Replace") == nil {
 		t.Fatal("an existing name must offer Replace")
 	}
@@ -155,7 +155,7 @@ func TestImportChosenRejectsWithHint(t *testing.T) {
 	defer w.Close()
 	w.Resize(fyne.NewSize(1000, 760))
 	f := newSettingsForm(gs.settingsState(), nil)
-	importChosen(gs, f, "list.xlsx", []byte("PK"), w)
+	importChosen(gs, f, "list.xlsx", []byte("PK"), w, nil)
 	top := w.Canvas().Overlays().Top()
 	if top == nil || !labelContains(top, "This is a spreadsheet file.") || !labelContains(top, "CSV UTF-8") {
 		t.Fatal("a rejected file must show the reason and the hint")
@@ -177,7 +177,7 @@ func TestImportDoesNotChangeTheSource(t *testing.T) {
 	defer w.Close()
 	w.Resize(fyne.NewSize(1000, 760))
 	f := newSettingsForm(gs.settingsState(), nil)
-	importChosen(gs, f, "mine.csv", []byte("kana;meaning\nあお;blue\n"), w)
+	importChosen(gs, f, "mine.csv", []byte("kana;meaning\nあお;blue\n"), w, nil)
 	test.Tap(buttonIn(w.Canvas().Overlays().Top(), "Import"))
 	if after, _ := st.WordSource(); gs.wordSource != before || after != before {
 		t.Fatalf("source %q, stored %q; want %q until the settings are saved", gs.wordSource, after, before)
@@ -208,7 +208,7 @@ func TestImportRefreshesMeaningLanguagesAndLessonFilter(t *testing.T) {
 	}
 	f.lessonFilters["mine"] = []string{"1"} // stale
 
-	importChosen(gs, f, "mine.csv", []byte("kana;meaning_eo;lesson\nあお;blua;1\nいえ;domo;2\n"), w)
+	importChosen(gs, f, "mine.csv", []byte("kana;meaning_eo;lesson\nあお;blua;1\nいえ;domo;2\n"), w, nil)
 	test.Tap(buttonIn(w.Canvas().Overlays().Top(), "Import"))
 	if i := slices.Index(f.meaningValues, "eo"); i < 0 || len(f.meaningSelect.Options) != len(f.meaningValues) {
 		t.Fatalf("meaning options %v (values %v) lack the imported language", f.meaningSelect.Options, f.meaningValues)
@@ -236,4 +236,32 @@ func labelContains(o fyne.CanvasObject, s string) bool {
 		}
 	}
 	return false
+}
+
+func TestImportChosenWithoutFormCallsThen(t *testing.T) {
+	test.NewApp()
+	defer test.NewApp()
+	isolateWordsDir(t)
+	gs := NewGameState(openTestStore(t))
+	w := test.NewWindow(nil)
+	defer w.Close()
+	w.Resize(fyne.NewSize(1000, 760))
+	calls := 0
+	then := func() { calls++ }
+
+	importChosen(gs, nil, "mine.csv", []byte("kana;meaning\nあお;blue\n"), w, then)
+	test.Tap(buttonIn(w.Canvas().Overlays().Top(), "Cancel"))
+	if calls != 1 || len(gs.listNames) != 0 {
+		t.Fatalf("after Cancel: then called %d times, lists %v", calls, gs.listNames)
+	}
+	importChosen(gs, nil, "list.xlsx", []byte("PK"), w, then)
+	test.Tap(buttonIn(w.Canvas().Overlays().Top(), "OK"))
+	if calls != 2 {
+		t.Fatalf("after the error: then called %d times", calls)
+	}
+	importChosen(gs, nil, "mine.csv", []byte("kana;meaning\nあお;blue\n"), w, then)
+	test.Tap(buttonIn(w.Canvas().Overlays().Top(), "Import"))
+	if calls != 3 || !equalIDs(gs.listNames, []string{"mine"}) {
+		t.Fatalf("after Import: then called %d times, lists %v", calls, gs.listNames)
+	}
 }

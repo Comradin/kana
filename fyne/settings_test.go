@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -600,5 +601,47 @@ func TestNoLessonBoxSavesAllLessonsForAnExistingList(t *testing.T) {
 	f = newSettingsForm(gs.settingsState(), nil)
 	if got := f.words().lessons; !equalIDs(got, []string{"2"}) {
 		t.Fatalf("a missing list keeps its filter: %v", got)
+	}
+}
+
+func TestWordsTabHasManageButton(t *testing.T) {
+	test.NewApp()
+	f := newSettingsForm(settingsGame().settingsState(), nil)
+	b := buttonIn(f.wordsTab.Content, "Manage word lists…")
+	if b == nil {
+		t.Fatal("no Manage word lists… button")
+	}
+	test.Tap(b) // a nil handler must not panic
+	called := false
+	f.onManage = func() { called = true }
+	test.Tap(b)
+	if !called {
+		t.Fatal("onManage not called")
+	}
+}
+
+func TestSettingsOpenReloadsLists(t *testing.T) {
+	test.NewApp()
+	defer test.NewApp()
+	t.Cleanup(func() { openSettings = nil })
+	dir := isolateWordsDir(t)
+	st := openTestStore(t)
+	_ = st.SaveSelectedRows([]string{"vowels"})
+	gs := NewGameState(st)
+	writeList(t, dir, "copied.csv", "kana;meaning\nあお;blue\n") // by hand, after the start
+	w := test.NewWindow(nil)
+	defer w.Close()
+	w.Resize(fyne.NewSize(1000, 760))
+	statsPanel := newStatsPanel()
+	gameCanvas := newGameCanvas(gs)
+	ib := newInputBar(gs, statsPanel, gameCanvas, w)
+
+	showSettingsDialog(gs, statsPanel, gameCanvas, ib, w)
+	if openSettings == nil || !slices.Contains(openSettings.sourceSelect.Options, "copied") {
+		t.Fatal("the settings must show the hand-copied list")
+	}
+	test.Tap(buttonIn(w.Canvas().Overlays().Top(), "Cancel"))
+	if openSettings != nil {
+		t.Fatal("openSettings must be cleared when the dialog closes")
 	}
 }

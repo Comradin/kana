@@ -100,7 +100,7 @@ func showImportDialog(gs *GameState, f *settingsForm, win fyne.Window) {
 			dialog.ShowError(err, win)
 			return
 		}
-		importChosen(gs, f, r.URI().Name(), data, win)
+		importChosen(gs, f, r.URI().Name(), data, win, nil)
 	}, win)
 	d.SetFilter(storage.NewExtensionFileFilter(importFileExts))
 	if home, err := os.UserHomeDir(); err == nil {
@@ -113,16 +113,22 @@ func showImportDialog(gs *GameState, f *settingsForm, win fyne.Window) {
 }
 
 // importChosen checks a chosen source file and shows its preview, or why it
-// cannot be imported. Import (Replace for an existing name) stores it,
-// reloads the lists and preselects it in f. Must run on the Fyne thread.
-func importChosen(gs *GameState, f *settingsForm, fileName string, data []byte, win fyne.Window) {
+// cannot be imported. Import (Replace for an existing name) stores it and
+// reloads the lists; a settings form f (may be nil) preselects it. then (may
+// be nil) is called once the preview or error is closed, whatever the
+// answer. Must run on the Fyne thread.
+func importChosen(gs *GameState, f *settingsForm, fileName string, data []byte, win fyne.Window, then func()) {
+	done := func() {
+		if then != nil {
+			then()
+		}
+	}
 	c, err := vocab.Inspect(fileName, data)
 	if err != nil {
-		showImportError(err, win)
+		showImportError(err, win, then)
 		return
 	}
 	files := gs.ListFiles(c.Name)
-	replaces := len(files) > 0
 	body := container.NewVBox()
 	for _, line := range importPreviewLines(c, gs.MeaningLang(), files) {
 		label := widget.NewLabel(line)
@@ -130,41 +136,31 @@ func importChosen(gs *GameState, f *settingsForm, fileName string, data []byte, 
 		body.Add(label)
 	}
 	confirm := "Import"
-	if replaces {
+	if len(files) > 0 {
 		confirm = "Replace"
 	}
 	d := dialog.NewCustomConfirm("Import word list", confirm, "Cancel", body, func(ok bool) {
 		if !ok {
+			done()
 			return
 		}
 		name, err := gs.ImportList(c)
 		if err != nil {
-			dialog.ShowError(err, win)
+			showErrorThen(err, win, then)
 			return
 		}
-		st := gs.settingsState()
-		f.listLessons = st.lessons
-		// The imported list's filter in this dialog predates it: take the
-		// stored one, and drop the checks shown for a replaced list.
-		if f.lessonList == name {
-			f.lessonList = ""
+		if f != nil {
+			f.listImported(gs.settingsState(), name)
 		}
-		if ls, ok := st.lessonFilters[name]; ok {
-			f.lessonFilters[name] = ls
-		} else {
-			delete(f.lessonFilters, name)
-		}
-		f.setLists(st.lists, name)
-		f.setMeaningLangs(st.languages)
-		// The summary may have said the chosen list was missing.
-		f.summary.SetText(st.summary)
+		done()
 	}, win)
 	d.Resize(fyne.NewSize(480, 0))
 	d.Show()
 }
 
-// showImportError shows why a file cannot be imported and what to do.
-func showImportError(err error, win fyne.Window) {
+// showImportError shows why a file cannot be imported and what to do; then
+// (may be nil) is called once it is closed.
+func showImportError(err error, win fyne.Window, then func()) {
 	text := err.Error()
 	var ie *vocab.ImportError
 	if errors.As(err, &ie) && ie.Hint != "" {
@@ -173,6 +169,18 @@ func showImportError(err error, win fyne.Window) {
 	label := widget.NewLabel(text)
 	label.Wrapping = fyne.TextWrapWord
 	d := dialog.NewCustom("Cannot import", "OK", label, win)
+	if then != nil {
+		d.SetOnClosed(then)
+	}
 	d.Resize(fyne.NewSize(480, 0))
+	d.Show()
+}
+
+// showErrorThen shows err; then (may be nil) is called once it is closed.
+func showErrorThen(err error, win fyne.Window, then func()) {
+	d := dialog.NewError(err, win)
+	if then != nil {
+		d.SetOnClosed(then)
+	}
 	d.Show()
 }

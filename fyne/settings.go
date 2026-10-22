@@ -135,9 +135,16 @@ type settingsForm struct {
 	kanaFont   *widget.RadioGroup
 	limit      int // the score limit the dialog started with
 
-	onReset  func(kanacore.Script) // a reset button was clicked; may be nil
-	onImport func()                // the import button was clicked; may be nil
+	onReset        func(kanacore.Script) // a reset button was clicked; may be nil
+	onImport       func()                // the import button was clicked; may be nil
+	onManage       func()                // the word lists button was clicked; may be nil
+	onListsChanged func()                // the lists shown changed; set while the word list dialog is open
 }
+
+// openSettings is the form of the settings dialog while it is open, so a
+// dropped file's import can show its list there; nil otherwise.
+// Fyne-thread-only, like dialogShowing.
+var openSettings *settingsForm
 
 // newSettingsForm builds the tabs from st; onReset is called with the script
 // whose reset button is clicked.
@@ -222,16 +229,81 @@ func sourceOptions(lists []string, stored string) (labels, values []string) {
 	return append(labels, "JLPT"), append(values, jlptSource)
 }
 
-// setLists replaces the source select's lists and selects the list named
-// selected.
+// setLists replaces the source select's lists and selects the word source
+// selected; JLPT when it is not among them. Must run on the Fyne thread.
 func (f *settingsForm) setLists(lists []string, selected string) {
 	labels, values := sourceOptions(lists, f.storedSource)
 	f.sourceValues = values
 	f.sourceSelect.SetOptions(labels)
-	if i := slices.Index(values, listSourcePrefix+selected); i >= 0 {
-		f.sourceSelect.SetSelectedIndex(i)
+	i := slices.Index(values, selected)
+	if i < 0 {
+		i = len(values) - 1 // JLPT
 	}
+	f.sourceSelect.SetSelectedIndex(i)
 	f.showLessons()
+}
+
+// listsChanged shows the word lists of st after an import, delete or rename:
+// the source select with selected (a word source) selected, the lessons, the
+// meaning languages and the summary. An open word list dialog refreshes
+// too. Must run on the Fyne thread.
+func (f *settingsForm) listsChanged(st settingsState, selected string) {
+	f.storedSource = st.wordSource
+	f.listLessons = st.lessons
+	f.setLists(st.lists, selected)
+	f.setMeaningLangs(st.languages)
+	f.summary.SetText(st.summary)
+	if f.onListsChanged != nil {
+		f.onListsChanged()
+	}
+}
+
+// listImported shows an imported list, selected. Its lesson checks start
+// from its stored filter: checks shown so far belonged to the list it
+// replaced. Must run on the Fyne thread.
+func (f *settingsForm) listImported(st settingsState, name string) {
+	if f.lessonList == name {
+		f.lessonList = ""
+	}
+	if ls, ok := st.lessonFilters[name]; ok {
+		f.lessonFilters[name] = ls
+	} else {
+		delete(f.lessonFilters, name)
+	}
+	f.listsChanged(st, listSourcePrefix+name)
+}
+
+// listDeleted drops a deleted list: its lesson checks go, and JLPT is
+// selected if it was selected. Must run on the Fyne thread.
+func (f *settingsForm) listDeleted(st settingsState, name string) {
+	if f.lessonList == name {
+		f.lessonList = ""
+	}
+	delete(f.lessonFilters, name)
+	selected := f.wordSource()
+	if selected == listSourcePrefix+name {
+		selected = jlptSource
+	}
+	f.listsChanged(st, selected)
+}
+
+// listRenamed follows a renamed list: its lesson checks as edited in this
+// dialog and its selection move to the new name. Must run on the Fyne
+// thread.
+func (f *settingsForm) listRenamed(st settingsState, from, to string) {
+	f.keepLessons()
+	if f.lessonList == from {
+		f.lessonList = ""
+	}
+	if ls, ok := f.lessonFilters[from]; ok {
+		delete(f.lessonFilters, from)
+		f.lessonFilters[to] = ls
+	}
+	selected := f.wordSource()
+	if selected == listSourcePrefix+from {
+		selected = listSourcePrefix + to
+	}
+	f.listsChanged(st, selected)
 }
 
 // newWordsTab holds the tiles (kana and words, or words only), where new
@@ -301,6 +373,11 @@ func (f *settingsForm) newWordsTab(st settingsState) fyne.CanvasObject {
 			f.onImport()
 		}
 	})
+	manageButton := widget.NewButton("Manage word lists…", func() {
+		if f.onManage != nil {
+			f.onManage()
+		}
+	})
 	f.folder = widget.NewLabel("")
 	if st.wordsDir != "" {
 		f.folder.SetText("Word lists are kept in " + st.wordsDir)
@@ -313,7 +390,7 @@ func (f *settingsForm) newWordsTab(st settingsState) fyne.CanvasObject {
 		widget.NewSeparator(),
 		widget.NewLabelWithStyle("New words from", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 		f.sourceSelect,
-		importButton,
+		container.NewHBox(importButton, manageButton),
 		f.lessonScroll,
 		widget.NewLabel("JLPT level"),
 		f.wordLevel,
@@ -568,12 +645,17 @@ func showSettingsDialog(gs *GameState, statsPanel *StatsPanel, gameCanvas *GameC
 		c.SetDismissText("Cancel")
 		c.Show()
 	}
+	gs.ReloadLists() // lists copied, edited or removed by hand come in
 	form := newSettingsForm(gs.settingsState(), onReset)
 	form.onImport = func() { showImportDialog(gs, form, win) }
+	form.onManage = func() { showListsDialog(gs, form, win) }
 	gs.SetSettingsOpen(true)
 	gameCanvas.Refresh()
 
 	d = dialog.NewCustomWithoutButtons("Settings", form.tabs, win)
+	openSettings = form
+	// Every way out (Save, Cancel, a reset) hides the dialog.
+	d.SetOnClosed(func() { openSettings = nil })
 	// closed releases the settings pause on every path; showPendingDialogs
 	// then resumes the game or shows whatever is pending.
 	closed := func(save bool) {
