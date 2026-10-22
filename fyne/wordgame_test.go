@@ -1057,3 +1057,53 @@ func TestPlaceholderWordIsShownAsWritten(t *testing.T) {
 		t.Fatalf("game-over list %q, want the shown form", got)
 	}
 }
+
+func TestOptionalPartsTakeBothReadings(t *testing.T) {
+	yoroshiku := vocab.Word{Kana: "どうぞよろしくおねがいします", Display: "（どうぞ）よろしく（おねがいします）",
+		Alts: []string{"よろしく"}, Source: "course", Meanings: vocab.Meanings{"en": {"nice to meet you"}}}
+	for _, input := range []string{"douzoyoroshikuonegaishimasu", "yoroshiku"} {
+		gs := newTestState()
+		gs.canvasW = 1000
+		withList(gs, "course", yoroshiku)
+		gs.tiles = []*KanaTile{wordTileAt(gs, yoroshiku.Kana, 0)}
+		gs.checkAnswer(input)
+		if len(gs.tiles) != 0 || gs.wordSessionStats[yoroshiku.Kana].CorrectCount != 1 {
+			t.Fatalf("%q must answer the word", input)
+		}
+		if got := gs.feedback[0].text.Text; strings.Contains(got, "·") {
+			t.Fatalf("%q: feedback %q; a reading is not an answer by meaning", input, got)
+		}
+	}
+	gs := newTestState()
+	withList(gs, "course", yoroshiku)
+	gs.tiles = []*KanaTile{wordTileAt(gs, yoroshiku.Kana, 0)}
+	gs.checkAnswer("douzoyoroshiku")
+	if len(gs.tiles) != 1 {
+		t.Fatal("a mix of the full and the short form is no reading")
+	}
+}
+
+func TestVariantWordNeedsItsScriptAndTakesEveryReading(t *testing.T) {
+	candle := vocab.Word{Kana: "ローソク", Alts: []string{"ろうそく"}, Source: "course", Meanings: vocab.Meanings{"en": {"candle"}}}
+	gs := newTestState() // hiragana only
+	withList(gs, "course", candle)
+	learnKana(gs, "ろ", "う", "そ", "く", "ロ", "ソ", "ク")
+	if got := playableKana(gs); len(got) != 0 {
+		t.Fatalf("playable without katakana = %v; the shown variant ローソク needs katakana", got)
+	}
+	gs.activeScripts[kanacore.ScriptKatakana] = true
+	gs.invalidatePlayable()
+	if got := playableKana(gs); !equalIDs(got, []string{"ローソク"}) {
+		t.Fatalf("playable with katakana = %v", got)
+	}
+	for _, input := range []string{"roosoku", "rousoku"} { // the reading, the other variant's reading
+		gs.tiles = []*KanaTile{wordTileAt(gs, "ローソク", 0)}
+		gs.checkAnswer(input)
+		if len(gs.tiles) != 0 {
+			t.Fatalf("%q must answer ローソク", input)
+		}
+		if got := gs.feedback[len(gs.feedback)-1].text.Text; strings.Contains(got, "·") {
+			t.Fatalf("%q: feedback %q; a variant's reading is not an answer by meaning", input, got)
+		}
+	}
+}

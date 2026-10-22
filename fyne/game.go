@@ -644,8 +644,9 @@ func (gs *GameState) spawnKana() {
 
 // checkAnswer removes the lowest tile that input answers: a kana tile by its
 // canonical or alternative romaji, a word tile by any valid reading of the
-// whole word or by its meaning. An input that answers no tile may count as a mistake (see
-// wrongInput). Acquires the lock itself; releases before triggering
+// whole word or of another accepted reading (an optional part left out,
+// another variant), or by its meaning. An input that answers no tile may
+// count as a mistake (see wrongInput). Acquires the lock itself; releases before triggering
 // canvas.Refresh() so the UI updates immediately on correct answers.
 func (gs *GameState) checkAnswer(input string) {
 	gs.mu.Lock()
@@ -670,7 +671,7 @@ func (gs *GameState) checkAnswer(input string) {
 		if tile.word != nil {
 			gs.score += 10 * len(tile.word.Units) * gs.pointsFactor()
 			gs.recordWordCorrect(tile.word.Kana)
-			byMeaning := !kanacore.ReadingMatches(tile.word.Kana, input)
+			byMeaning := !tile.word.ReadingMatches(input)
 			gs.addFeedback(feedbackHit, hitFeedbackText(*tile.word, gs.meaningLang, byMeaning), tile.pos)
 		} else {
 			gs.score += 10 * gs.pointsFactor()
@@ -716,11 +717,12 @@ func (gs *GameState) wrongInput(input string) {
 	}
 }
 
-// answers reports whether input answers the tile: a word by its reading or
-// its meaning. Must be called under lock.
+// answers reports whether input answers the tile: a word by one of its
+// readings (see vocab.Entry.ReadingMatches) or its meaning. Must be called
+// under lock.
 func (gs *GameState) answers(tile *KanaTile, input string) bool {
 	if tile.word != nil {
-		return kanacore.ReadingMatches(tile.word.Kana, input) || tile.word.Meanings.MeaningMatches(gs.meaningLang, input)
+		return tile.word.ReadingMatches(input) || tile.word.Meanings.MeaningMatches(gs.meaningLang, input)
 	}
 	return gs.charSet.Matches(tile.kana.Char, input)
 }
