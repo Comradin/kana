@@ -12,29 +12,29 @@ func TestParseNotation(t *testing.T) {
 	}{
 		{"せんせい", notation{reading: "せんせい"}},
 		// placeholders
-		{"～さん", notation{reading: "さん", display: "～さん"}},
-		{"〜さん", notation{reading: "さん", display: "〜さん"}},
-		{"~さん", notation{reading: "さん", display: "~さん"}},
-		{"こちらは～さんです", notation{reading: "こちらはさんです", display: "こちらは～さんです"}},
+		{"～さん", notation{reading: "さん", display: "～さん", phrase: true}},
+		{"〜さん", notation{reading: "さん", display: "〜さん", phrase: true}},
+		{"~さん", notation{reading: "さん", display: "~さん", phrase: true}},
+		{"こちらは～さんです", notation{reading: "こちらはさんです", display: "こちらは～さんです", phrase: true}},
 		// punctuation and spaces
-		{"おなまえは？", notation{reading: "おなまえは", display: "おなまえは？"}},
-		{"はい、そうです。", notation{reading: "はいそうです", display: "はい、そうです。"}},
-		{"どうぞ よろしく", notation{reading: "どうぞよろしく", display: "どうぞ よろしく"}},
-		{"どうぞ　よろしく", notation{reading: "どうぞよろしく", display: "どうぞ　よろしく"}},
+		{"おなまえは？", notation{reading: "おなまえは", display: "おなまえは？", phrase: true}},
+		{"はい、そうです。", notation{reading: "はいそうです", display: "はい、そうです。", phrase: true}},
+		{"どうぞ よろしく", notation{reading: "どうぞよろしく", display: "どうぞ よろしく", phrase: true}},
+		{"どうぞ　よろしく", notation{reading: "どうぞよろしく", display: "どうぞ　よろしく", phrase: true}},
 		// optional parts: the full and the short form, nothing in between
 		{"（どうぞ）よろしく（おねがいします）", notation{reading: "どうぞよろしくおねがいします",
-			display: "（どうぞ）よろしく（おねがいします）", alts: []string{"よろしく"}}},
-		{"(どうぞ)よろしく", notation{reading: "どうぞよろしく", display: "(どうぞ)よろしく", alts: []string{"よろしく"}}},
-		{"（どうぞ)よろしく", notation{reading: "どうぞよろしく", display: "（どうぞ)よろしく", alts: []string{"よろしく"}}},
+			display: "（どうぞ）よろしく（おねがいします）", alts: []string{"よろしく"}, phrase: true}},
+		{"(どうぞ)よろしく", notation{reading: "どうぞよろしく", display: "(どうぞ)よろしく", alts: []string{"よろしく"}, phrase: true}},
+		{"（どうぞ)よろしく", notation{reading: "どうぞよろしく", display: "（どうぞ)よろしく", alts: []string{"よろしく"}, phrase: true}},
 		// a placeholder with an optional part; a placeholder in brackets
-		{"（お）～さん", notation{reading: "おさん", display: "（お）～さん", alts: []string{"さん"}}},
-		{"（～さん）", notation{reading: "さん", display: "（～さん）"}},
+		{"（お）～さん", notation{reading: "おさん", display: "（お）～さん", alts: []string{"さん"}, phrase: true}},
+		{"（～さん）", notation{reading: "さん", display: "（～さん）", phrase: true}},
 		// variants: the last one is shown and is the reading
 		{"あめりか // アメリカ", notation{reading: "アメリカ", alts: []string{"あめりか"}}},
 		{"あめりか//アメリカ", notation{reading: "アメリカ", alts: []string{"あめりか"}}},
 		{"ろうそく // ローソク", notation{reading: "ローソク", alts: []string{"ろうそく"}}},
-		{"～くん // ～クン", notation{reading: "クン", display: "～クン", alts: []string{"くん"}}},
-		{"（どうぞ）よろしく // よろしく", notation{reading: "よろしく", alts: []string{"どうぞよろしく"}}},
+		{"～くん // ～クン", notation{reading: "クン", display: "～クン", alts: []string{"くん"}, phrase: true}},
+		{"（どうぞ）よろしく // よろしく", notation{reading: "よろしく", alts: []string{"どうぞよろしく"}, phrase: true}},
 		{"ねこ // ねこ", notation{reading: "ねこ"}},
 	}
 	for _, c := range cases {

@@ -109,7 +109,7 @@ func readCSV(name string, r io.Reader, limit int) List {
 			l.skip(fmt.Sprintf("line %d: %s", line, reason))
 			continue
 		}
-		w := Word{Kana: n.reading, Display: n.display, Alts: n.alts, Meanings: Meanings{}, Source: name,
+		w := Word{Kana: n.reading, Display: n.display, Alts: n.alts, Phrase: n.phrase, Meanings: Meanings{}, Source: name,
 			Lesson: field(rec, "lesson"), JLPT: parseLevel(field(rec, "jlpt"))}
 		// Meanings in header order, so that the result is deterministic.
 		for i, col := range cols {

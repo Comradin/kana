@@ -88,6 +88,35 @@ func TestReadingMatches(t *testing.T) {
 	}
 }
 
+func TestPhraseReadingMatches(t *testing.T) {
+	yes := map[string][]string{
+		"こちらはさんです": {"kochirawasandesu", "kochirahasandesu"},
+		"にほんへ":     {"nihone", "nihonhe"},
+		"はな":       {"hana", "wana"},
+	}
+	for word, inputs := range yes {
+		for _, in := range inputs {
+			if !PhraseReadingMatches(word, in) {
+				t.Errorf("PhraseReadingMatches(%s, %q) = false, want true", word, in)
+			}
+		}
+	}
+	if PhraseReadingMatches("ハナ", "wana") || PhraseReadingMatches("ヘヤ", "eya") {
+		t.Error("katakana ハ and ヘ are no particles")
+	}
+	if PhraseReadingMatches("こちらはさんです", "kochirasandesu") {
+		t.Error("は must still be typed")
+	}
+	if ReadingMatches("はな", "wana") || ReadingMatches("にほんへ", "nihone") {
+		t.Error("outside a phrase は is ha and へ is he")
+	}
+	for _, in := range []string{"okashi", "wokashi"} {
+		if !ReadingMatches("をかし", in) {
+			t.Errorf("ReadingMatches(をかし, %q) = false; を takes o and wo", in)
+		}
+	}
+}
+
 func TestRomaji(t *testing.T) {
 	cases := map[string]string{
 		"きって":    "kitte",

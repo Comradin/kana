@@ -124,7 +124,7 @@ var HiraganaRows = withScript(ScriptHiragana, []KanaRow{
 	{ID: "m", Label: "M-row (ま)", Group: GroupBasic, Entries: []Entry{entry("ま", "ma"), entry("み", "mi"), entry("む", "mu"), entry("め", "me"), entry("も", "mo")}},
 	{ID: "y", Label: "Y-row (や)", Group: GroupBasic, Entries: []Entry{entry("や", "ya"), entry("ゆ", "yu"), entry("よ", "yo")}},
 	{ID: "r", Label: "R-row (ら)", Group: GroupBasic, Entries: []Entry{entry("ら", "ra"), entry("り", "ri"), entry("る", "ru"), entry("れ", "re"), entry("ろ", "ro")}},
-	{ID: "w", Label: "W-row (わ)", Group: GroupBasic, Entries: []Entry{entry("わ", "wa"), entry("を", "wo")}},
+	{ID: "w", Label: "W-row (わ)", Group: GroupBasic, Entries: []Entry{entry("わ", "wa"), entry("を", "wo", "o")}},
 	{ID: "n-only", Label: "N (ん)", Group: GroupBasic, Entries: []Entry{entry("ん", "n", "nn")}},
 	// Dakuon
 	{ID: "g", Label: "G-row (が)", Group: GroupDakuon, Entries: []Entry{entry("が", "ga"), entry("ぎ", "gi"), entry("ぐ", "gu"), entry("げ", "ge"), entry("ご", "go")}},

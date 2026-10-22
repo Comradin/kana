@@ -14,6 +14,7 @@ type Entry struct {
 	Kana     string
 	Display  string   // shown form from the first private list row of this reading; "" = Kana
 	Alts     []string // other accepted readings across sources, unique, in first-seen order
+	Phrase   bool     // any source row is a phrase: は may be wa, へ e
 	Units    []string // kanacore.KanaUnits of Kana, computed once
 	Meanings Meanings
 	JLPT     int                 // easiest bundled level, 0 if not bundled
@@ -34,13 +35,17 @@ func (e Entry) Shown() string {
 
 // ReadingMatches reports whether input is a romaji reading of the entry's
 // reading or of one of its other accepted readings (see
-// kanacore.ReadingMatches).
+// kanacore.ReadingMatches; kanacore.PhraseReadingMatches for a phrase).
 func (e Entry) ReadingMatches(input string) bool {
-	if kanacore.ReadingMatches(e.Kana, input) {
+	matches := kanacore.ReadingMatches
+	if e.Phrase {
+		matches = kanacore.PhraseReadingMatches
+	}
+	if matches(e.Kana, input) {
 		return true
 	}
 	for _, a := range e.Alts {
-		if kanacore.ReadingMatches(a, input) {
+		if matches(a, input) {
 			return true
 		}
 	}
@@ -105,7 +110,8 @@ func (ix *Index) addLists(lists []List) {
 // add merges one word into its entry; list is "" for the bundled list, and
 // pos is the word's row index in its list. It reports whether the word was
 // added: a reading that cannot be split into units is dropped. The first
-// private list row gives the shown form; other readings merge like meanings.
+// private list row gives the shown form; other readings merge like meanings,
+// and the entry is a phrase if any of its rows is.
 func (ix *Index) add(w Word, list string, pos int) bool {
 	i, ok := ix.byKana[w.Kana]
 	if !ok {
@@ -125,6 +131,7 @@ func (ix *Index) add(w Word, list string, pos int) bool {
 	}
 	e := &ix.entries[i]
 	e.Meanings.Merge(w.Meanings)
+	e.Phrase = e.Phrase || w.Phrase
 	for _, a := range w.Alts {
 		if !contains(e.Alts, a) {
 			e.Alts = append(e.Alts, a)

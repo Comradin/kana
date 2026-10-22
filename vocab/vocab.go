@@ -17,6 +17,7 @@ type Word struct {
 	Kana     string   // reading, e.g. "せんせい"
 	Display  string   // the shown form as the list writes it, e.g. "～さん"; "" = Kana
 	Alts     []string // other accepted readings, e.g. an optional part left out; private lists only
+	Phrase   bool     // written with a placeholder, optional part, punctuation or space: は may be wa, へ e
 	Meanings Meanings // language → alternatives
 	JLPT     int      // 5…1, 0 = none
 	Rank     int      // bundled words: frequency rank, lower = more common; 0 = unknown

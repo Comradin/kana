@@ -1107,3 +1107,21 @@ func TestVariantWordNeedsItsScriptAndTakesEveryReading(t *testing.T) {
 		}
 	}
 }
+
+func TestPhraseTakesParticleReadings(t *testing.T) {
+	kochira := vocab.Word{Kana: "こちらはさんです", Display: "こちらは～さんです", Phrase: true, Source: "course",
+		Meanings: vocab.Meanings{"en": {"this is Mr./Ms. ..."}}}
+	for _, input := range []string{"kochirawasandesu", "kochirahasandesu"} {
+		gs := newTestState()
+		gs.canvasW = 1000
+		withList(gs, "course", kochira)
+		gs.tiles = []*KanaTile{wordTileAt(gs, kochira.Kana, 0)}
+		gs.checkAnswer(input)
+		if len(gs.tiles) != 0 {
+			t.Fatalf("%q must answer こちらは～さんです", input)
+		}
+		if got := gs.feedback[0].text.Text; strings.Contains(got, "·") {
+			t.Fatalf("%q: feedback %q; a particle reading is not an answer by meaning", input, got)
+		}
+	}
+}

@@ -97,6 +97,23 @@ func lastVowel(s string) byte {
 // before ch), ー as the previous vowel or "-". Input is trimmed and
 // lower-cased first, and a typographic apostrophe (’) counts as '.
 func ReadingMatches(word, input string) bool {
+	return readingMatches(word, input, false)
+}
+
+// PhraseReadingMatches reports whether input is a valid romaji reading of
+// word like ReadingMatches; は may also be wa and へ e, as particles in a
+// phrase.
+func PhraseReadingMatches(word, input string) bool {
+	return readingMatches(word, input, true)
+}
+
+// particleSpellings are the extra spellings of hiragana that can be
+// particles: は as wa, へ as e.
+var particleSpellings = map[string]string{"は": "wa", "へ": "e"}
+
+// readingMatches is ReadingMatches; with particles, は and へ also take
+// their particle spellings.
+func readingMatches(word, input string, particles bool) bool {
 	units, ok := KanaUnits(word)
 	if !ok {
 		return false
@@ -143,7 +160,11 @@ func ReadingMatches(word, input string) bool {
 				}
 			}
 		default:
-			for _, s := range spellingsOf(u) {
+			spellings := spellingsOf(u)
+			if p, ok := particleSpellings[u]; ok && particles {
+				spellings = append(append([]string(nil), spellings...), p)
+			}
+			for _, s := range spellings {
 				if strings.HasPrefix(rest, s) && match(i+1, pos+len(s), lastVowel(s)) {
 					return true
 				}
