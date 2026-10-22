@@ -44,6 +44,14 @@ func buildWindow(a fyne.App, st *store.Store) fyne.Window {
 
 	w.Canvas().SetOnTypedKey(func(key *fyne.KeyEvent) { windowKey(key, w, inputBar) })
 
+	// A file dropped anywhere on the window opens the import preview.
+	// GLFW delivers drops on the main thread; fyne.Do keeps that true for
+	// any driver.
+	drops := &dropImporter{gs: gs, statsPanel: statsPanel, gameCanvas: gameCanvas, inputBar: inputBar, win: w}
+	w.SetOnDropped(func(_ fyne.Position, uris []fyne.URI) {
+		fyne.Do(func() { drops.drop(uris) })
+	})
+
 	// Initial stats render
 	gs.mu.Lock()
 	snap := gs.snapshot()

@@ -279,6 +279,7 @@ Word data for the vocabulary trainer, independent of the game and the store:
 - `vocab.go`: `Word`, `Meanings` (per language, with fallback for display), `List`
 - `csvlist.go`, `jsonlist.go`, `dir.go`: private word lists (CSV/TSV/JSON, with header aliases) and `LoadDir`
 - `import.go`: `Inspect` and `Import`, checking and storing a word list for the settings' import
+- `manage.go`: `DeleteList`, `CheckListName` and `RenameList` for the word list dialog
 - `meaning.go`: `MeaningMatches`, answering a word by its meaning
 - `index.go`: `NewIndex` (one entry per reading across all sources, with each list entry's first
   row) and `Playable` (words made only of known kana, filtered by JLPT level, list and lesson)
@@ -328,6 +329,8 @@ Built on [Fyne v2](https://fyne.io) with goroutine-based game loop:
 - `statswidgets.go`: the fixed-column grid layout and the kana cell widget used by the stats panel
 - `input.go`: `InputBar` — score, level, tempo, miss count, text entry
 - `settings.go`: In-game settings dialog with the tabs Kana (scripts and row selection, one tab per script, per-group "all" toggle, auto-progression), Words (tiles, source, lessons, JLPT level, package size, meaning language), Game (difficulty level, points per hit, focus on weak items, score limit, kana font) and Sources
+- `lists.go`, `listsdialog.go`: the word lists in the game (reload, delete, rename) and the Manage word lists dialog
+- `drop.go`: importing files dropped on the window
 - `version.go`: the version label and the Sources tab
 - `theme.go`: `KanaTheme` — warm paper colour palette
 
@@ -393,12 +396,22 @@ Add your own lists (for example from a textbook) with **Settings → Words → I
 list…**. The game checks the file, shows a preview (words, lessons, meaning languages, skipped
 rows, the first words) and copies it into the `words` folder next to `kana.db`:
 `$XDG_DATA_HOME/kana/words/`, or `~/.local/share/kana/words/` (created at the first start; the
-Words tab shows where). Importing a file with the name of an existing list replaces that list;
-your progress is kept. The file must be UTF-8 ("CSV UTF-8" in spreadsheet programs) or UTF-16
-with a byte order mark (Excel's "Unicode Text", a `.txt` file, stored as `.tsv`); `.xlsx` and
-`.ods` sheets must be saved as CSV first; at most 5 MB. Files can also be copied into the folder
-by hand; they are read when the app starts. Lists are read from there only and never belong in
-the repository.
+Words tab shows where). You can also drop files anywhere on the game window: each gets the same
+preview, one after another, and the game pauses meanwhile. Importing a file with the name of an
+existing list replaces that list; your progress is kept. The file must be UTF-8 ("CSV UTF-8" in
+spreadsheet programs) or UTF-16 with a byte order mark (Excel's "Unicode Text", a `.txt` file,
+stored as `.tsv`); `.xlsx` and `.ods` sheets must be saved as CSV first; at most 5 MB. Files can
+also be copied into the folder or edited there by hand; they are read each time the settings
+open. Lists are read from there only and never belong in the repository.
+
+**Settings → Words → Manage word lists…** lists every word list with its number of words and
+lessons. A list with rows the game could not read says "N rows skipped"; **Details** shows the
+lines and why (at most ten), so you can correct your source file and import it again.
+**Rename** renames the list's file (the extension stays); its lesson choice and its place as the
+source of new words go with it. **Delete** removes the file for good after asking; your progress
+on its words is kept, and if it was the source of new words, JLPT takes its place. Both act at
+once, not on Save. **Open folder** opens the words folder in your file manager. The status
+panel's words line adds "· N rows skipped" when the chosen list has skipped rows.
 
 Choose a list as the source of new words in the settings (Words tab; an imported list is
 preselected); its words are introduced lesson by lesson (numeric lessons in number order,
@@ -406,7 +419,7 @@ others in the order they first appear), then in file order, with words without a
 If the chosen list is missing, the status panel says where to add it.
 
 Choose lessons below the source to practise only them (all lessons by default); renaming a list
-file forgets its lesson choice.
+with Manage word lists keeps its lesson choice; renaming its file by hand forgets it.
 
 - **CSV/TSV** (`*.csv`, `*.tsv`): a header row; the separator (tab, semicolon or comma) is
   taken from it. Columns: `kana` (required), `meaning` (any language), `meaning_de`,
