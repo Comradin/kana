@@ -645,3 +645,31 @@ func TestSettingsOpenReloadsLists(t *testing.T) {
 		t.Fatal("openSettings must be cleared when the dialog closes")
 	}
 }
+
+func TestWordsAskInTheWordsTab(t *testing.T) {
+	test.NewApp()
+	gs := settingsGame()
+	f := newSettingsForm(gs.settingsState(), nil)
+	if !equalIDs(f.wordsAsk.Options, []string{"Reading", "Meaning"}) || f.wordsAsk.Selected != "Reading" {
+		t.Fatalf("options %v, selected %q", f.wordsAsk.Options, f.wordsAsk.Selected)
+	}
+	if !labelContains(f.wordsTab.Content, "Words ask for") {
+		t.Fatal("the Words tab needs the label 'Words ask for'")
+	}
+	if f.words().ask != readingKind {
+		t.Fatal("Reading gives readingKind")
+	}
+	f.wordsAsk.SetSelected("Meaning")
+	f.apply(gs)
+	if gs.wordsAsk != meaningKind {
+		t.Fatalf("applied %v, want meaning", gs.wordsAsk)
+	}
+	f = newSettingsForm(gs.settingsState(), nil)
+	if f.wordsAsk.Selected != "Meaning" {
+		t.Fatalf("reopened: %q", f.wordsAsk.Selected)
+	}
+	f.apply(gs) // saving the reopened dialog unchanged keeps the mode
+	if gs.wordsAsk != meaningKind {
+		t.Fatalf("reapplied %v, want meaning", gs.wordsAsk)
+	}
+}

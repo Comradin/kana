@@ -36,6 +36,7 @@ type settingsState struct {
 	kanaFont    string // the kana font's id
 
 	wordsOnly     bool
+	wordsAsk      wordKind
 	lessons       map[string][]string // per list: its lessons in learning order, "" last when it has words without a lesson
 	lessonFilters map[string][]string // per list: the stored lesson filter; absent = all lessons
 	meaningLang   string              // the stored meaning language; "" = System
@@ -84,6 +85,7 @@ func (gs *GameState) settingsState() settingsState {
 		kanaFont:    gs.kanaFont.id,
 
 		wordsOnly:     gs.wordsOnly,
+		wordsAsk:      gs.wordsAsk,
 		lessons:       lessons,
 		lessonFilters: filters,
 		meaningLang:   gs.meaningSetting,
@@ -96,6 +98,12 @@ func (gs *GameState) settingsState() settingsState {
 const (
 	tilesMixed     = "Kana and words"
 	tilesWordsOnly = "Words only"
+)
+
+// The Words tab's "Words ask for" choices.
+const (
+	askReadingLabel = "Reading"
+	askMeaningLabel = "Meaning"
 )
 
 // settingsForm is the settings dialog's content: the tabs Kana, Words, Game
@@ -117,6 +125,7 @@ type settingsForm struct {
 	folder       *widget.Label // where the word lists are kept
 
 	tiles         *widget.RadioGroup  // tilesMixed or tilesWordsOnly
+	wordsAsk      *widget.RadioGroup  // askReadingLabel or askMeaningLabel
 	listLessons   map[string][]string // per list: its lessons, "" last for words without one
 	lessonFilters map[string][]string // per list: its lesson filter as edited in this dialog
 	lessonBox     *fyne.Container     // "All lessons" and the selected list's lesson checks
@@ -306,10 +315,11 @@ func (f *settingsForm) listRenamed(st settingsState, from, to string) {
 	f.listsChanged(st, selected)
 }
 
-// newWordsTab holds the tiles (kana and words, or words only), where new
-// words come from, the import button, the lessons of a list, the JLPT level
-// (for JLPT only), the package size, the meaning language, a summary of the
-// current source and the word list folder.
+// newWordsTab holds the tiles (kana and words, or words only), what word
+// tiles ask for (reading or meaning), where new words come from, the import
+// button, the lessons of a list, the JLPT level (for JLPT only), the package
+// size, the meaning language, a summary of the current source and the word
+// list folder.
 func (f *settingsForm) newWordsTab(st settingsState) fyne.CanvasObject {
 	f.storedSource = st.wordSource
 	labels, values := sourceOptions(st.lists, st.wordSource)
@@ -326,6 +336,14 @@ func (f *settingsForm) newWordsTab(st settingsState) fyne.CanvasObject {
 	f.tiles.SetSelected(tilesMixed)
 	if st.wordsOnly {
 		f.tiles.SetSelected(tilesWordsOnly)
+	}
+
+	f.wordsAsk = widget.NewRadioGroup([]string{askReadingLabel, askMeaningLabel}, nil)
+	f.wordsAsk.Horizontal = true
+	f.wordsAsk.Required = true
+	f.wordsAsk.SetSelected(askReadingLabel)
+	if st.wordsAsk == meaningKind {
+		f.wordsAsk.SetSelected(askMeaningLabel)
 	}
 
 	// The lesson box comes before the source select, whose OnChanged
@@ -387,6 +405,8 @@ func (f *settingsForm) newWordsTab(st settingsState) fyne.CanvasObject {
 	return container.NewVBox(
 		widget.NewLabelWithStyle("Tiles", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 		f.tiles,
+		widget.NewLabelWithStyle("Words ask for", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		f.wordsAsk,
 		widget.NewSeparator(),
 		widget.NewLabelWithStyle("New words from", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 		f.sourceSelect,
@@ -483,12 +503,21 @@ func (f *settingsForm) wordSource() string {
 	return jlptSource
 }
 
+// askedKind is what the Words tab says word tiles ask for.
+func (f *settingsForm) askedKind() wordKind {
+	if f.wordsAsk.Selected == askMeaningLabel {
+		return meaningKind
+	}
+	return readingKind
+}
+
 // words returns the Words tab's values.
 func (f *settingsForm) words() wordSettings {
 	level, _ := strconv.Atoi(strings.TrimPrefix(f.wordLevel.Selected, "N"))
 	size, _ := strconv.Atoi(f.packageSize.Selected)
 	return wordSettings{source: f.wordSource(), level: level, packageSize: size,
-		wordsOnly: f.tiles.Selected == tilesWordsOnly, lessons: f.selectedLessons(), meaningLang: f.meaningLang()}
+		wordsOnly: f.tiles.Selected == tilesWordsOnly, lessons: f.selectedLessons(), meaningLang: f.meaningLang(),
+		ask: f.askedKind()}
 }
 
 // showLessons fills the lesson box for the selected source: "All lessons"
