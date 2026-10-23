@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.7.0](https://github.com/Comradin/kana/compare/v0.6.1...v0.7.0) (2026-10-23)
+
+
+### New
+
+* **fyne:** add meaning tiles with a marker ([bd131f7](https://github.com/Comradin/kana/commit/bd131f7b8b0112c0a50fab37bff1919183e8f05a))
+* **fyne:** ask word tiles for their meaning in meaning mode ([d2c1e01](https://github.com/Comradin/kana/commit/d2c1e012c59e91da0dd001a8dfddd30b7f755736))
+* **fyne:** choose what word tiles ask for in the settings ([37035b5](https://github.com/Comradin/kana/commit/37035b569b931f878f4ef0014f9cda60bf3785f7))
+* **fyne:** count answers for the reading or the meaning ([ddb7698](https://github.com/Comradin/kana/commit/ddb76983026f9dfcf41dff98ba67a94f587b996c))
+* **fyne:** judge packages and the words line by the asked levels ([2063fe8](https://github.com/Comradin/kana/commit/2063fe83c09854af7dc41c87d29369b75f3ad86d))
+* **fyne:** pick meaning tiles by meaning level and memory ([02122cf](https://github.com/Comradin/kana/commit/02122cf2cfa233d65c25a28c153c8d03c9ddc3a4))
+* **fyne:** track reading and meaning progress per word apart ([4af06e1](https://github.com/Comradin/kana/commit/4af06e1bcbed368d037e2db0cdaf5ea5fcda3eca))
+* **store:** keep meaning stats and what word tiles ask for ([441616d](https://github.com/Comradin/kana/commit/441616dc16cc0e953fb7680ed715e4e5abea0dd2))
+* **vocab:** tell whether a word has a meaning to type ([7bacc4b](https://github.com/Comradin/kana/commit/7bacc4b89ea15cf948fcfbb1b9204d1455e42fd6))
+
+
+### Improvements and fixes
+
+* **fyne:** count meaningless words by reading for the package rule ([f4e11cf](https://github.com/Comradin/kana/commit/f4e11cf85ac8028a2167bcc1e92c7c5b88af719a))
+* **fyne:** keep the settings dialog inside the window ([158582a](https://github.com/Comradin/kana/commit/158582a881f9b4847ebb4af6a193385b6737fe63))
+
 ## [0.6.1](https://github.com/Comradin/kana/compare/v0.6.0...v0.6.1) (2026-10-23)
 
 
