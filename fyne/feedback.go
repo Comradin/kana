@@ -12,6 +12,7 @@ type feedbackKind int
 const (
 	feedbackHit feedbackKind = iota
 	feedbackMiss
+	feedbackHint // "type the meaning": no hit, no miss
 )
 
 const (
@@ -23,6 +24,13 @@ const (
 
 var feedbackHitColor = color.RGBA{R: 0x3d, G: 0x6b, B: 0x35, A: 0xff}
 
+// feedbackHintColor is the Warm Paper accent, so a hint looks neither like a
+// hit nor like a miss.
+var feedbackHintColor = color.RGBA{R: 0x8b, G: 0x5e, B: 0x3c, A: 0xff}
+
+// meaningHintText is shown at a meaning tile whose reading was typed.
+const meaningHintText = "type the meaning"
+
 // feedbackLabel is a short text shown after a word hit or miss. The text
 // object carries the message and its position; it is created once and
 // published in the tile snapshot.
@@ -32,15 +40,18 @@ type feedbackLabel struct {
 	ticksLeft int // tick() counts down; the label goes at 0
 }
 
-// addFeedback shows msg for feedbackTicks ticks. A hit label sits at pos
-// (the tile's last position), a miss label at the bottom of the field in the
-// error colour; both are kept inside the field. A label wider than the field
+// addFeedback shows msg for feedbackTicks ticks. A hit or hint label sits at
+// pos (the tile's last position), a miss label at the bottom of the field in
+// the error colour; all are kept inside the field. A label wider than the field
 // shrinks down to feedbackMinTextSize and is then cut with "…". It is shown
 // in the kana font if that has every character. Must be called under lock.
 func (gs *GameState) addFeedback(kind feedbackKind, msg string, pos fyne.Position) {
 	var c color.Color = feedbackHitColor
-	if kind == feedbackMiss {
+	switch kind {
+	case feedbackMiss:
 		c = cellMissedColor
+	case feedbackHint:
+		c = feedbackHintColor
 	}
 	txt := canvas.NewText(msg, c)
 	txt.TextSize = feedbackTextSize
@@ -113,4 +124,19 @@ func (gs *GameState) ageFeedback() {
 		}
 	}
 	gs.feedback = kept
+}
+
+// showMeaningHint shows meaningHintText at the tile. An earlier hint still
+// on the field goes, so repeated Enters do not stack labels. Must be called
+// under lock.
+func (gs *GameState) showMeaningHint(tile *KanaTile) {
+	kept := gs.feedback[:0]
+	for _, f := range gs.feedback {
+		if f.kind != feedbackHint {
+			kept = append(kept, f)
+		}
+	}
+	gs.feedback = kept
+	gs.addFeedback(feedbackHint, meaningHintText, tile.pos)
+	gs.buildSnapshot()
 }

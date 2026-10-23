@@ -577,7 +577,7 @@ func (gs *GameState) tick() {
 			missedNow = true
 			gs.lastFallen, gs.lastFallenAt = tile, gs.now()
 			if tile.word != nil {
-				gs.recordWordMiss(tile.word.Kana, readingKind)
+				gs.recordWordMiss(tile.word.Kana, tile.ask)
 				gs.missedWords = append(gs.missedWords, *tile.word)
 				gs.addFeedback(feedbackMiss, missFeedbackText(*tile.word, gs.meaningLang), tile.pos)
 			} else {
@@ -651,12 +651,13 @@ func (gs *GameState) spawnKana() {
 	}
 }
 
-// checkAnswer removes the lowest tile that input answers: a kana tile by its
-// canonical or alternative romaji, a word tile by any valid reading of the
-// whole word or of another accepted reading (an optional part left out,
-// another variant), or by its meaning. An input that answers no tile may
-// count as a mistake (see wrongInput). Acquires the lock itself; releases before triggering
-// canvas.Refresh() so the UI updates immediately on correct answers.
+// checkAnswer removes the lowest tile that input answers (see answers): a
+// word hit counts for the reading or the meaning (see answeredKind). If no
+// tile is answered but input is the reading of a tile asking for its
+// meaning, the hint "type the meaning" is shown there, which is no mistake.
+// Any other input that answers no tile may count as a mistake (see
+// wrongInput). Acquires the lock itself; releases before triggering
+// canvas.Refresh() so the UI updates immediately.
 func (gs *GameState) checkAnswer(input string) {
 	gs.mu.Lock()
 	if gs.paused || gs.over {
@@ -673,15 +674,16 @@ func (gs *GameState) checkAnswer(input string) {
 		}
 	}
 	matched := best >= 0
+	refresh := matched
 	if matched {
 		tile := gs.tiles[best]
 		gs.tiles = append(gs.tiles[:best], gs.tiles[best+1:]...)
 		announced := false
 		if tile.word != nil {
 			gs.score += 10 * len(tile.word.Units) * gs.pointsFactor()
-			gs.recordWordCorrect(tile.word.Kana, readingKind)
-			byMeaning := !tile.word.ReadingMatches(input)
-			gs.addFeedback(feedbackHit, hitFeedbackText(*tile.word, gs.meaningLang, byMeaning), tile.pos)
+			kind := answeredKind(tile, input)
+			gs.recordWordCorrect(tile.word.Kana, kind)
+			gs.addFeedback(feedbackHit, hitFeedbackText(*tile.word, gs.meaningLang, kind == meaningKind), tile.pos)
 		} else {
 			gs.score += 10 * gs.pointsFactor()
 			announced = gs.recordCorrect(tile.kana.Char)
@@ -694,13 +696,16 @@ func (gs *GameState) checkAnswer(input string) {
 		}
 		gs.maybeOfferPackage()
 		gs.buildSnapshot()
+	} else if hinted := gs.readingTyped(input); hinted != nil {
+		gs.showMeaningHint(hinted)
+		refresh = true
 	} else {
 		gs.wrongInput(input)
 	}
 	canvas := gs.canvas
 	gs.mu.Unlock()
 
-	if matched && canvas != nil {
+	if refresh && canvas != nil {
 		canvas.Refresh()
 	}
 }
@@ -709,29 +714,34 @@ func (gs *GameState) checkAnswer(input string) {
 // tile on the field. With several tiles it is unclear which one was meant,
 // and an input answering a tile that just fell through is a late Enter;
 // both are ignored, as is blank input. The tile stays, the miss limit and
-// the tempo are untouched, and no feedback is shown. Must be called under
-// lock.
+// the tempo are untouched, and no feedback is shown. The mistake counts for
+// the tile's question. Must be called under lock.
 func (gs *GameState) wrongInput(input string) {
 	if strings.TrimSpace(input) == "" || len(gs.tiles) != 1 {
 		return
 	}
-	if gs.lastFallen != nil && gs.now().Sub(gs.lastFallenAt) < lateAnswerWindow && gs.answers(gs.lastFallen, input) {
+	if gs.lastFallen != nil && gs.now().Sub(gs.lastFallenAt) < lateAnswerWindow &&
+		(gs.answers(gs.lastFallen, input) || typedReading(gs.lastFallen, input)) {
 		return
 	}
 	tile := gs.tiles[0]
 	if tile.word != nil {
-		gs.applyWordMistake(tile.word.Kana, readingKind)
+		gs.applyWordMistake(tile.word.Kana, tile.ask)
 	} else {
 		gs.applyKanaMistake(tile.kana.Char)
 	}
 }
 
-// answers reports whether input answers the tile: a word by one of its
-// readings (see vocab.Entry.ReadingMatches) or its meaning. Must be called
-// under lock.
+// answers reports whether input answers the tile: a kana by its romaji; a
+// word by its meaning (see vocab.Meanings.MeaningMatches) or, if it asks
+// for its reading, by one of its readings (see vocab.Entry.ReadingMatches).
+// Must be called under lock.
 func (gs *GameState) answers(tile *KanaTile, input string) bool {
 	if tile.word != nil {
-		return tile.word.ReadingMatches(input) || tile.word.Meanings.MeaningMatches(gs.meaningLang, input)
+		if tile.word.Meanings.MeaningMatches(gs.meaningLang, input) {
+			return true
+		}
+		return tile.ask == readingKind && tile.word.ReadingMatches(input)
 	}
 	return gs.charSet.Matches(tile.kana.Char, input)
 }

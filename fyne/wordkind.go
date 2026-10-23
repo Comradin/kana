@@ -116,3 +116,32 @@ func (gs *GameState) loadTrack(k wordKind) {
 		*t.progressLoadFailed = true
 	}
 }
+
+// answeredKind is what a hit on a word tile counts for: everything on a
+// tile asking for the meaning; on a tile asking for the reading, the
+// reading when input is one of its readings, else (answered by meaning) the
+// meaning.
+func answeredKind(tile *KanaTile, input string) wordKind {
+	if tile.ask == meaningKind || !tile.word.ReadingMatches(input) {
+		return meaningKind
+	}
+	return readingKind
+}
+
+// typedReading reports whether input is the reading of a word tile that
+// asks for its meaning.
+func typedReading(tile *KanaTile, input string) bool {
+	return tile.word != nil && tile.ask == meaningKind && tile.word.ReadingMatches(input)
+}
+
+// readingTyped returns the lowest falling tile that asks for its meaning
+// and whose reading input is, or nil. Must be called under lock.
+func (gs *GameState) readingTyped(input string) *KanaTile {
+	var best *KanaTile
+	for _, t := range gs.tiles {
+		if typedReading(t, input) && (best == nil || t.pos.Y > best.pos.Y) {
+			best = t
+		}
+	}
+	return best
+}
