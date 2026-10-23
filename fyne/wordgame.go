@@ -399,19 +399,21 @@ func (gs *GameState) sourceLeft(src vocab.Source) int {
 	return n
 }
 
-// introducedCounts counts the introduced readings in the word index, those
-// of them that are learned and, in mixed mode, the practised ones that wait
-// for a kana to be learned before they can fall; words-only mode does not
-// wait for kana. Must be called under lock.
+// introducedCounts counts the introduced readings in the word index that
+// new tiles may ask about (see askable: in meaning mode those with a
+// meaning), those of them that are learned in what tiles ask for, and, in
+// mixed mode, the practised ones that wait for a kana to be learned before
+// they can fall; words-only mode does not wait for kana. Must be called
+// under lock.
 func (gs *GameState) introducedCounts() (introduced, learnedN, waiting int) {
 	src, found := gs.source()
 	for kana := range gs.introduced {
 		e, ok := gs.words.Lookup(kana)
-		if !ok {
+		if !ok || !gs.askable(e) {
 			continue
 		}
 		introduced++
-		if gs.wordLearned(kana, readingKind) {
+		if gs.wordLearned(kana, gs.wordsAsk) {
 			learnedN++
 		}
 		if !gs.wordsOnly && gs.practised(e, src, found) && !gs.unitsKnown(e.Units) {
@@ -422,8 +424,9 @@ func (gs *GameState) introducedCounts() (introduced, learnedN, waiting int) {
 }
 
 // wordsSummary is the settings' Words tab line: "Introduced: 25 · learned:
-// 18 · waiting for kana: 4 · left in source: 101" (the waiting part only when
-// some wait), or that the chosen list is missing. Must be called under lock.
+// 18 · waiting for kana: 4 · left in source: 101" ("meanings learned" in
+// meaning mode; the waiting part only when some wait), or that the chosen
+// list is missing. Must be called under lock.
 func (gs *GameState) wordsSummary() string {
 	src, found := gs.source()
 	if !found {
@@ -433,7 +436,11 @@ func (gs *GameState) wordsSummary() string {
 		return "No words available"
 	}
 	introduced, learnedN, waiting := gs.introducedCounts()
-	s := fmt.Sprintf("Introduced: %d · learned: %d", introduced, learnedN)
+	learnedLabel := "learned"
+	if gs.wordsAsk == meaningKind {
+		learnedLabel = "meanings learned"
+	}
+	s := fmt.Sprintf("Introduced: %d · %s: %d", introduced, learnedLabel, learnedN)
 	if waiting > 0 {
 		s += fmt.Sprintf(" · waiting for kana: %d", waiting)
 	}
@@ -445,7 +452,7 @@ func (gs *GameState) wordsSummary() string {
 func (gs *GameState) wordsStatus() WordsStatus {
 	src, found := gs.source()
 	ws := WordsStatus{LoadFailed: gs.introducedLoadFailed, Source: sourceLabel(src), Missing: !found,
-		WordsOnly: gs.wordsOnly, Filtered: len(src.Lessons) > 0}
+		WordsOnly: gs.wordsOnly, Filtered: len(src.Lessons) > 0, Meaning: gs.wordsAsk == meaningKind}
 	if src.List == "" {
 		ws.Err, ws.Level = gs.wordsErr, src.Level
 	}

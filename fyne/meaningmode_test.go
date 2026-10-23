@@ -299,3 +299,60 @@ func TestMeaningModePicksByMeaningMemory(t *testing.T) {
 		t.Fatalf("meaning mode picked あお %d/1000; its meaning was just missed", n)
 	}
 }
+
+func TestNewestPackageDoneByTheAskedLevels(t *testing.T) {
+	gs := packageReady(40)
+	pkg := introduceFirst(gs, 5)
+	for _, kana := range pkg {
+		setWordLevel(gs, kana, learnedLevel)
+	}
+	gs.wordsAsk = meaningKind
+	for _, kana := range pkg[:3] {
+		gs.meaningProgress[kana] = store.Progress{Level: learnedLevel}
+	}
+	if gs.newestPackageDone() {
+		t.Fatal("meaning mode: 3 of 5 meanings learned is not done, whatever the readings")
+	}
+	gs.meaningProgress[pkg[3]] = store.Progress{Level: learnedLevel}
+	if !gs.newestPackageDone() {
+		t.Fatal("meaning mode: 4 of 5 meanings learned is done")
+	}
+	gs.wordsAsk = readingKind
+	for _, kana := range pkg {
+		delete(gs.wordProgress, kana)
+	}
+	if gs.newestPackageDone() {
+		t.Fatal("reading mode goes by the reading levels")
+	}
+}
+
+func TestWordsLineCountsTheAskedLevels(t *testing.T) {
+	gs := newTestState()
+	selectRows(gs, "vowels")
+	learnKana(gs, "あ", "い", "う", "え", "お")
+	withWords(gs,
+		bw("あい", 5, "love"),
+		vocab.Word{Kana: "あお", JLPT: 5, Source: vocab.BundledSource, Meanings: vocab.Meanings{}},
+		bw("いえ", 5, "house"),
+		bw("うえ", 5, "above"),
+	)
+	delete(gs.introduced, "うえ") // a package can still come, so the line shows counts
+	gs.invalidatePlayable()
+	setWordLevel(gs, "あい", learnedLevel)
+	setWordLevel(gs, "あお", learnedLevel)
+	gs.meaningProgress["いえ"] = store.Progress{Level: learnedLevel}
+
+	if got := formatWordsLine(gs.wordsStatus()); got != "Words: 3 introduced · 2 learned · JLPT N5" {
+		t.Fatalf("reading mode line %q", got)
+	}
+	if got := gs.wordsSummary(); got != "Introduced: 3 · learned: 2 · left in source: 1" {
+		t.Fatalf("reading mode summary %q", got)
+	}
+	gs.wordsAsk = meaningKind
+	if got := formatWordsLine(gs.wordsStatus()); got != "Meanings: 2 introduced · 1 learned · JLPT N5" {
+		t.Fatalf("meaning mode line %q (あお has no meaning)", got)
+	}
+	if got := gs.wordsSummary(); got != "Introduced: 2 · meanings learned: 1 · left in source: 1" {
+		t.Fatalf("meaning mode summary %q", got)
+	}
+}
