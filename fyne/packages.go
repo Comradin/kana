@@ -30,6 +30,7 @@ type wordSettings struct {
 	wordsOnly   bool     // only words fall
 	lessons     []string // the lesson filter of a list source; nil = all lessons
 	meaningLang string   // "" = System
+	ask         wordKind // what word tiles ask for
 }
 
 // readingsOf returns the readings of entries, in order.
@@ -286,7 +287,8 @@ func (gs *GameState) DeclineLevelOffer() {
 // applyWordSettings applies the settings dialog's Words tab. A new source or
 // lesson filter clears the newest package, so its first package can come at
 // once; words already introduced keep falling; switching words-only mode
-// keeps it. The caller re-checks packages (applySettings does).
+// keeps it. A new "Words ask for" applies to tiles spawned afterwards. The
+// caller re-checks packages (applySettings does).
 func (gs *GameState) applyWordSettings(ws wordSettings) {
 	gs.mu.Lock()
 	defer gs.mu.Unlock()
@@ -339,6 +341,14 @@ func (gs *GameState) applyWordSettings(ws wordSettings) {
 		gs.meaningLang = resolveMeaningLang(ws.meaningLang, systemLanguage())
 		if gs.store != nil {
 			_ = gs.store.SaveMeaningLang(ws.meaningLang)
+		}
+	}
+	if ws.ask != gs.wordsAsk {
+		// Only new tiles follow; falling tiles keep their question, and
+		// the playable words do not depend on it, so nothing is dropped.
+		gs.wordsAsk = ws.ask
+		if gs.store != nil {
+			_ = gs.store.SaveWordsAsk(ws.ask.setting())
 		}
 	}
 	if changed {
