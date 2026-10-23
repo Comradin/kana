@@ -35,7 +35,7 @@ level**, **meaning level**, **learned**, **slipped**, **weak item**,
 | Feedback | Hit, miss and the game-over list show "kana · romaji — meaning" as today, in both modes. |
 | Status line | Shows the counts of the chosen mode: "Words: N introduced · N learned · …" in reading mode, "Meanings: N introduced · N learned · …" in meaning mode. Showing both levels per word belongs to the level-dots backlog issue. |
 | Statistics | Per-word hit/miss counts are kept apart for reading and meaning; wherever they are shown, the chosen mode's counts are shown. |
-| Word packages | Shared: a word is introduced once and then belongs to both modes; the package intro is unchanged. Whether the newest package is done (80 % learned) is judged by the chosen mode's levels. |
+| Word packages | Shared: a word is introduced once and then belongs to both modes; the package intro is unchanged. Whether the newest package is done (80 % learned) is judged by the chosen mode's levels; in meaning mode a word without a meaning counts by its reading level. |
 | Speed | No special fall speed in meaning mode; the difficulty setting covers it. |
 | Existing progress | Today's word levels, slipped flags, memory and hit/miss counts become the reading values. All meaning levels start at 0. |
 

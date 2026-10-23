@@ -42,16 +42,19 @@ Kana is a Fyne v2 desktop app (`kana-desktop`).
 - **Meaning mode**: Settings → Words → "Words ask for: Meaning" makes word tiles ask for the
   word's meaning instead of its reading. They carry a small "?" in the corner, so a one-kana
   word such as き is not taken for a kana tile; kana tiles still ask for the romaji. Type a
-  meaning in the meaning language or in English, as for any word; typing the reading instead
-  shows "type the meaning" at the tile and costs nothing. Every word has a reading level and a
-  meaning level of its own: in meaning mode only meanings count and a missed tile lowers its
-  meaning level; in reading mode the reading raises the reading level, and a meaning is still
-  accepted and raises the meaning level. In meaning mode the choice of tiles, "Focus on weak
-  items", the status line ("Meanings: 12 introduced · 4 learned · …") and when the next word
-  package comes go by the meaning levels, and words without a meaning do not fall. Together
-  with "Words only" it is a pure meaning drill. A change applies to new tiles; tiles already
-  falling keep their question. Progress from before counts as reading progress; all meaning
-  levels start at 0, and "Already known" in a package intro counts for the reading only.
+  meaning in the meaning language or in English (for a word with neither, in a language it
+  has), as for any word; typing the reading instead shows "type the meaning" at the tile and
+  costs nothing. Every word has a reading level and a meaning level of its own: in meaning mode
+  only meanings count and a missed tile lowers its meaning level; in reading mode the reading
+  raises the reading level, and a meaning is still accepted and raises the meaning level. In
+  meaning mode the choice of tiles, "Focus on weak items", the status line ("Meanings: 12
+  introduced · 4 learned · …") and when the next word package comes go by the meaning levels.
+  Words without a meaning do not fall; for the next package they count by their reading level,
+  so it waits until you learn their readings in reading mode. Together with "Words only" it is
+  a pure meaning drill. A change applies to new tiles; tiles already falling keep their
+  question. Progress from before counts as reading progress; all meaning levels start at 0, and
+  "Already known" in a package intro counts for the reading only: in meaning mode such words
+  still fall until their meaning is learned.
 - **Learning path**: start with あいうえお, unlock two rows at a time; each automatically unlocked row is introduced before it is asked, and the game pauses while new rows are introduced
 - **Two scripts**: hiragana and katakana progress independently; switch scripts in the settings. After the basic hiragana you are offered katakana once.
 - **Score Limit Mode**: Set a target score or 0 for endless practice
