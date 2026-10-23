@@ -356,3 +356,63 @@ func TestWordsLineCountsTheAskedLevels(t *testing.T) {
 		t.Fatalf("meaning mode summary %q", got)
 	}
 }
+
+func TestMeaningModeWordsWithoutMeaningsHoldTheNextPackage(t *testing.T) {
+	isolateWordsDir(t)
+	gs := newTestState()
+	selectRows(gs, "vowels")
+	learnKana(gs, "あ", "い", "う", "え", "お")
+	gs.packageSize = 3
+	var words []vocab.Word
+	for _, w := range vowelWords(30) {
+		words = append(words, vocab.Word{Kana: w.Kana, Source: "course", Meanings: vocab.Meanings{}})
+	}
+	withList(gs, "course", words...)
+	gs.introduced = map[string]bool{}
+	gs.invalidatePlayable()
+	gs.wordsAsk = meaningKind
+
+	offers := 0
+	for i := 0; i < 20; i++ {
+		gs.maybeOfferPackage()
+		if len(gs.pendingPackage) == 0 {
+			break
+		}
+		offers++
+		drainEvents(gs)
+		gs.FinishPackage(nil)
+	}
+	if offers != 1 {
+		t.Fatalf("%d package offers; words without a meaning count by their reading, so the next package waits", offers)
+	}
+	for _, kana := range gs.newestPackage[:2] {
+		setWordLevel(gs, kana, learnedLevel)
+	}
+	if gs.newestPackageDone() {
+		t.Fatal("2 of 3 readings learned is not done")
+	}
+	setWordLevel(gs, gs.newestPackage[2], learnedLevel)
+	if !gs.newestPackageDone() {
+		t.Fatal("all readings learned: done")
+	}
+}
+
+func TestMeaningModeWordsOnlyNoMeaningsWhilePackagesCome(t *testing.T) {
+	gs := newTestState()
+	selectRows(gs, "vowels")
+	gs.wordsOnly = true
+	gs.wordsAsk = meaningKind
+	withWords(gs,
+		vocab.Word{Kana: "あお", JLPT: 5, Source: vocab.BundledSource, Meanings: vocab.Meanings{}},
+		vocab.Word{Kana: "いえ", JLPT: 5, Source: vocab.BundledSource, Meanings: vocab.Meanings{}},
+	)
+	delete(gs.introduced, "いえ") // a package can still come
+	gs.invalidatePlayable()
+	gs.spawnKana()
+	if gs.tiles[0].word != nil {
+		t.Fatal("no word with a meaning: a kana falls")
+	}
+	if got := formatWordsLine(gs.wordsStatus()); got != "Words only: no word has a meaning to ask for" {
+		t.Fatalf("line %q", got)
+	}
+}

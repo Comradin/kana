@@ -233,7 +233,7 @@ type WordsStatus struct {
 
 	WordsOnly    bool // words-only mode is on
 	Meaning      bool // meaning mode: the counts are of meaning levels
-	KanaFallback bool // words-only mode, but no word can fall and no package can come: kana fall
+	KanaFallback bool // words-only mode, but no word can fall and either no package can come or none has a meaning to ask for: kana fall
 	Filtered     bool // a lesson filter limits the source
 	Empty        bool // the source with its lesson filter has no word at all
 	NoMeanings   bool // meaning mode: words can fall, but none has a meaning to ask for

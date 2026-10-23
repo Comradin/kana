@@ -482,8 +482,10 @@ func (gs *GameState) wordsStatus() WordsStatus {
 		}
 	}
 	askable := gs.askableWords()
-	ws.KanaFallback = gs.wordsOnly && len(askable) == 0 && !canCome
 	ws.NoMeanings = len(askable) == 0 && len(gs.playableWords()) > 0
+	// Kana fall when no word can fall and none can come, and also while
+	// packages can still come but no playable word has a meaning to ask.
+	ws.KanaFallback = gs.wordsOnly && len(askable) == 0 && (!canCome || ws.NoMeanings)
 	return ws
 }
 
