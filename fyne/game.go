@@ -103,6 +103,7 @@ type GameState struct {
 	wordSource           string              // where new words come from: jlptSource or listSourcePrefix + name
 	lessonFilters        map[string][]string // lesson filter per list name; absent = all lessons
 	wordsOnly            bool                // words-only mode: only words fall; the kana learning path rests
+	wordsAsk             wordKind            // what new word tiles ask for: the reading or the meaning
 
 	selectedRows  map[string]bool
 	autoProgress  bool
@@ -245,6 +246,9 @@ func NewGameState(st *store.Store) *GameState {
 		}
 		if on, err := st.WordsOnly(); err == nil {
 			gs.wordsOnly = on
+		}
+		if a, err := st.WordsAsk(); err == nil {
+			gs.wordsAsk = kindFromSetting(a)
 		}
 		if on, err := st.FocusWeak(); err == nil {
 			gs.focusWeak = on
@@ -610,7 +614,7 @@ func (gs *GameState) tick() {
 // probability wordShare when words are playable, otherwise a kana; with no
 // kana available it spawns a word if one is playable, else nothing. In
 // words-only mode every spawn is a word while one is playable, and a kana
-// only when none is.
+// only when none is. A word tile asks for what gs.wordsAsk says.
 func (gs *GameState) spawnKana() {
 	gs.mu.Lock()
 	if gs.over || gs.paused {
@@ -622,7 +626,11 @@ func (gs *GameState) spawnKana() {
 	base := gs.level.MinFall + rand.Float32()*(gs.level.MaxFall-gs.level.MinFall)
 	chars := gs.availableCharacters()
 	if entry, ok := gs.pickWord(gs.wordsOnly || len(chars) == 0); ok {
-		tile = newWordTile(entry, gs.canvasW, gs.kanaFont)
+		if gs.wordsAsk == meaningKind {
+			tile = newMeaningTile(entry, gs.canvasW, gs.kanaFont)
+		} else {
+			tile = newWordTile(entry, gs.canvasW, gs.kanaFont)
+		}
 		tile.fallSeconds = base * wordFallFactor(len(entry.Units)) * tempoFactor(gs.tempoStep)
 	} else if len(chars) == 0 {
 		gs.mu.Unlock()

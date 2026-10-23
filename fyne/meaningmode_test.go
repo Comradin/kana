@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/test"
 	"kana/store"
 	"kana/vocab"
 )
@@ -131,5 +132,66 @@ func TestLateReadingForAFallenMeaningTileIsNoMistake(t *testing.T) {
 	}
 	if gs.feedback[len(gs.feedback)-1].kind == feedbackHint {
 		t.Fatal("no hint for a tile that is gone")
+	}
+}
+
+func TestWordsAskIsStored(t *testing.T) {
+	test.NewApp()
+	isolateWordsDir(t)
+	st := openTestStore(t)
+	_ = st.SaveSelectedRows([]string{"vowels"})
+	gs := NewGameState(st)
+	if gs.wordsAsk != readingKind {
+		t.Fatalf("default wordsAsk %v, want reading", gs.wordsAsk)
+	}
+	gs.applyWordSettings(wordSettings{source: gs.wordSource, level: gs.wordLevel, packageSize: gs.packageSize, ask: meaningKind})
+	if a, _ := st.WordsAsk(); a != store.WordsAskMeaning || gs.wordsAsk != meaningKind {
+		t.Fatalf("stored %q, state %v", a, gs.wordsAsk)
+	}
+	if again := NewGameState(st); again.wordsAsk != meaningKind {
+		t.Fatalf("loaded %v, want meaning", again.wordsAsk)
+	}
+}
+
+func TestMeaningModeSpawnsMeaningTiles(t *testing.T) {
+	gs := newTestState()
+	selectRows(gs, "vowels")
+	gs.wordsOnly = true
+	withWords(gs, bw("あい", 5, "love"))
+	gs.wordsAsk = meaningKind
+	gs.spawnKana()
+	if len(gs.tiles) != 1 || gs.tiles[0].word == nil || gs.tiles[0].ask != meaningKind || gs.tiles[0].marker == nil {
+		t.Fatal("in meaning mode a word spawns as a meaning tile")
+	}
+
+	gs = newTestState() // no words: kana fall
+	selectRows(gs, "vowels")
+	gs.wordsAsk = meaningKind
+	gs.spawnKana()
+	if len(gs.tiles) != 1 || gs.tiles[0].word != nil || gs.tiles[0].ask != readingKind || gs.tiles[0].marker != nil {
+		t.Fatal("kana tiles still ask for the romaji")
+	}
+}
+
+func TestChangingWordsAskLeavesFallingTiles(t *testing.T) {
+	gs := newTestState()
+	selectRows(gs, "vowels")
+	learnKana(gs, "あ", "い", "う", "え", "お")
+	withWords(gs, bw("あい", 5, "love"), vocab.Word{Kana: "あお", JLPT: 5, Source: vocab.BundledSource, Meanings: vocab.Meanings{}})
+	reading := wordTileAt(gs, "あお", 100) // no meaning at all
+	meaning := meaningTileAt(gs, "あい", 50)
+	gs.tiles = []*KanaTile{reading, meaning}
+	// A package size change as well, so dropInactiveTiles runs.
+	gs.applyWordSettings(wordSettings{source: jlptSource, level: 5, packageSize: 3, ask: meaningKind})
+	if len(gs.tiles) != 2 || gs.tiles[0] != reading || gs.tiles[1] != meaning || reading.ask != readingKind {
+		t.Fatal("switching to meaning mode keeps falling tiles and their questions")
+	}
+	gs.checkAnswer("ao")
+	if len(gs.tiles) != 1 || gs.wordProgress["あお"].Level != 1 {
+		t.Fatal("the falling reading tile still takes its reading")
+	}
+	gs.applyWordSettings(wordSettings{source: jlptSource, level: 5, packageSize: 5, ask: readingKind})
+	if len(gs.tiles) != 1 || gs.tiles[0] != meaning || meaning.ask != meaningKind {
+		t.Fatal("switching back keeps the meaning tile")
 	}
 }
