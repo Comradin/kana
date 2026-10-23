@@ -327,10 +327,10 @@ func (gs *GameState) wordCandidates(playable []vocab.Entry) []string {
 // pickWord decides with gs.rnd whether this spawn is a word (wordShare) and,
 // if so, picks one with the focus pick or memory.Pick over the word memory.
 // With always set it skips the wordShare draw and picks a word whenever one
-// is playable. With no playable word it returns false without drawing from
-// gs.rnd. Must be called under lock.
+// is playable. With no askable word (see askableWords) it returns false
+// without drawing from gs.rnd. Must be called under lock.
 func (gs *GameState) pickWord(always bool) (vocab.Entry, bool) {
-	playable := gs.playableWords()
+	playable := gs.askableWords()
 	if len(playable) == 0 || (!always && gs.rnd() >= wordShare(len(playable))) {
 		return vocab.Entry{}, false
 	}
@@ -474,7 +474,9 @@ func (gs *GameState) wordsStatus() WordsStatus {
 			}
 		}
 	}
-	ws.KanaFallback = gs.wordsOnly && len(gs.playableWords()) == 0 && !canCome
+	askable := gs.askableWords()
+	ws.KanaFallback = gs.wordsOnly && len(askable) == 0 && !canCome
+	ws.NoMeanings = len(askable) == 0 && len(gs.playableWords()) > 0
 	return ws
 }
 
