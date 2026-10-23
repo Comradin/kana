@@ -33,6 +33,7 @@ const (
 	newestPackageKey   = "newest_package"
 	wordsOnlyKey       = "words_only"
 	focusWeakKey       = "focus_weak"
+	wordsAskKey        = "words_ask"
 	lessonFilterPrefix = "lesson_filter:" // followed by a word list's name
 	databaseFilePerm   = 0o644
 	databaseDirPerm    = 0o755
@@ -50,6 +51,18 @@ const DefaultPackageSize = 5
 // DefaultKanaFont is the kana font when unset (Noto Sans JP).
 const DefaultKanaFont = "noto"
 
+// What word tiles ask for, as stored in the words_ask setting.
+const (
+	WordsAskReading = "reading" // the default
+	WordsAskMeaning = "meaning"
+)
+
+// The tables of per-reading hit and miss counts.
+const (
+	wordStatsTable    = "word_stats"    // typing the reading
+	meaningStatsTable = "meaning_stats" // typing the meaning
+)
+
 // Store provides persisted access to user settings and kana statistics.
 type Store struct {
 	db *sql.DB
@@ -63,8 +76,9 @@ type KanaStats struct {
 	Streak       int
 }
 
-// WordStats is the aggregated statistics for one word reading. It is kept
-// apart from KanaStats: the word か (mosquito) is not the character か.
+// WordStats is the aggregated statistics for one word reading: of typing the
+// reading (word_stats) or the meaning (meaning_stats). It is kept apart from
+// KanaStats: the word か (mosquito) is not the character か.
 type WordStats struct {
 	Kana         string
 	CorrectCount int
@@ -412,6 +426,31 @@ func (s *Store) FocusWeak() (bool, error) { return s.flag(focusWeakKey) }
 // SaveFocusWeak persists the focus on weak items.
 func (s *Store) SaveFocusWeak(on bool) error { return s.saveFlag(focusWeakKey, on) }
 
+// WordsAsk returns what word tiles ask for: WordsAskMeaning, or
+// WordsAskReading when stored so, unset or unknown.
+func (s *Store) WordsAsk() (string, error) {
+	value, err := s.getSetting(wordsAskKey)
+	if errors.Is(err, sql.ErrNoRows) {
+		return WordsAskReading, nil
+	}
+	if err != nil {
+		return WordsAskReading, err
+	}
+	if value == WordsAskMeaning {
+		return value, nil
+	}
+	return WordsAskReading, nil
+}
+
+// SaveWordsAsk persists what word tiles ask for (WordsAskReading or
+// WordsAskMeaning).
+func (s *Store) SaveWordsAsk(ask string) error {
+	if ask != WordsAskReading && ask != WordsAskMeaning {
+		return fmt.Errorf("store: words ask %q is not %q or %q", ask, WordsAskReading, WordsAskMeaning)
+	}
+	return s.setSetting(wordsAskKey, ask)
+}
+
 // LessonFilter returns a word list's lesson filter: the chosen lessons, ""
 // for words without a lesson. Nil when unset: all lessons.
 func (s *Store) LessonFilter(list string) ([]string, error) {
@@ -630,33 +669,52 @@ func (s *Store) KanaStatistics() (map[string]KanaStats, error) {
 // SaveWordStats upserts the aggregated statistics for one word reading
 // (absolute values, like SaveKanaStats).
 func (s *Store) SaveWordStats(kana string, correctCount, missCount int) error {
+	return s.saveCounts(wordStatsTable, "word stats", kana, correctCount, missCount)
+}
+
+// WordStatistics returns the stats for all tracked word readings.
+func (s *Store) WordStatistics() (map[string]WordStats, error) {
+	return s.counts(wordStatsTable, "word stats")
+}
+
+// SaveMeaningStats upserts the hit and miss counts of typing one word's
+// meaning, keyed by its reading (absolute values, like SaveWordStats).
+func (s *Store) SaveMeaningStats(kana string, correctCount, missCount int) error {
+	return s.saveCounts(meaningStatsTable, "meaning stats", kana, correctCount, missCount)
+}
+
+// MeaningStatistics returns the meaning stats of all tracked readings.
+func (s *Store) MeaningStatistics() (map[string]WordStats, error) {
+	return s.counts(meaningStatsTable, "meaning stats")
+}
+
+// saveCounts upserts one reading's counts in table (wordStatsTable or
+// meaningStatsTable); what names them in errors. Negative counts become 0.
+func (s *Store) saveCounts(table, what, kana string, correctCount, missCount int) error {
 	if kana == "" {
 		return errors.New("store: word reading is required")
 	}
-	if correctCount < 0 {
-		correctCount = 0
-	}
-	if missCount < 0 {
-		missCount = 0
-	}
+	correctCount = max(correctCount, 0)
+	missCount = max(missCount, 0)
 	_, err := s.db.Exec(`
-		INSERT INTO word_stats (kana, correct_count, miss_count)
+		INSERT INTO `+table+` (kana, correct_count, miss_count)
 		VALUES (?, ?, ?)
 		ON CONFLICT(kana) DO UPDATE SET
 			correct_count = excluded.correct_count,
 			miss_count = excluded.miss_count
 	`, kana, correctCount, missCount)
 	if err != nil {
-		return fmt.Errorf("store: save word stats %s: %w", kana, err)
+		return fmt.Errorf("store: save %s %s: %w", what, kana, err)
 	}
 	return nil
 }
 
-// WordStatistics returns the stats for all tracked word readings.
-func (s *Store) WordStatistics() (map[string]WordStats, error) {
-	rows, err := s.db.Query(`SELECT kana, correct_count, miss_count FROM word_stats`)
+// counts returns every reading's counts in table; what names them in
+// errors.
+func (s *Store) counts(table, what string) (map[string]WordStats, error) {
+	rows, err := s.db.Query(`SELECT kana, correct_count, miss_count FROM ` + table)
 	if err != nil {
-		return nil, fmt.Errorf("store: query word stats: %w", err)
+		return nil, fmt.Errorf("store: query %s: %w", what, err)
 	}
 	defer rows.Close()
 
@@ -664,12 +722,12 @@ func (s *Store) WordStatistics() (map[string]WordStats, error) {
 	for rows.Next() {
 		var ws WordStats
 		if err := rows.Scan(&ws.Kana, &ws.CorrectCount, &ws.MissCount); err != nil {
-			return nil, fmt.Errorf("store: scan word stats: %w", err)
+			return nil, fmt.Errorf("store: scan %s: %w", what, err)
 		}
 		stats[ws.Kana] = ws
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("store: iterate word stats: %w", err)
+		return nil, fmt.Errorf("store: iterate %s: %w", what, err)
 	}
 	return stats, nil
 }
@@ -725,6 +783,11 @@ func migrate(ctx context.Context, db *sql.DB) error {
 			streak INTEGER NOT NULL DEFAULT 0
 		);`,
 		`CREATE TABLE IF NOT EXISTS word_stats (
+			kana TEXT PRIMARY KEY,
+			correct_count INTEGER NOT NULL DEFAULT 0,
+			miss_count INTEGER NOT NULL DEFAULT 0
+		);`,
+		`CREATE TABLE IF NOT EXISTS meaning_stats (
 			kana TEXT PRIMARY KEY,
 			correct_count INTEGER NOT NULL DEFAULT 0,
 			miss_count INTEGER NOT NULL DEFAULT 0

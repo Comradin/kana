@@ -511,3 +511,85 @@ func TestRenameLessonFilter(t *testing.T) {
 		t.Fatalf("a list without a filter must not inherit a stale one: %v", l)
 	}
 }
+
+func TestMeaningStatsApartFromWordStats(t *testing.T) {
+	st := openTemp(t)
+	if err := st.SaveWordStats("かさ", 4, 1); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SaveMeaningStats("かさ", 2, 3); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SaveMeaningStats("いぬ", -1, -2); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SaveMeaningStats("", 1, 0); err == nil {
+		t.Fatal("an empty reading must be refused")
+	}
+	words, err := st.WordStatistics()
+	if err != nil || !reflect.DeepEqual(words, map[string]WordStats{"かさ": {Kana: "かさ", CorrectCount: 4, MissCount: 1}}) {
+		t.Fatalf("word stats %v, %v; the meaning counts must not mix in", words, err)
+	}
+	meanings, err := st.MeaningStatistics()
+	want := map[string]WordStats{
+		"かさ": {Kana: "かさ", CorrectCount: 2, MissCount: 3},
+		"いぬ": {Kana: "いぬ"}, // negative counts are stored as 0
+	}
+	if err != nil || !reflect.DeepEqual(meanings, want) {
+		t.Fatalf("meaning stats %v, %v; want %v", meanings, err, want)
+	}
+	if err := st.SaveMeaningStats("かさ", 5, 3); err != nil {
+		t.Fatal(err)
+	}
+	if m, _ := st.MeaningStatistics(); m["かさ"].CorrectCount != 5 {
+		t.Fatalf("upsert: %+v", m["かさ"])
+	}
+}
+
+func TestMeaningProgressAndMemoryApartFromReading(t *testing.T) {
+	st := openTemp(t)
+	now := time.Unix(1_700_000_000, 0)
+	for _, err := range []error{
+		st.SaveProgress("word:かさ", Progress{Level: 5}),
+		st.SaveProgress("meaning:かさ", Progress{Level: 1, Flagged: true}),
+		st.SaveMemoryState("word:かさ", memory.State{Stability: 4, LastSeen: now}),
+		st.SaveMemoryState("meaning:かさ", memory.State{Stability: 0.5, LastSeen: now}),
+	} {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	words, _ := st.Progress("word:")
+	meanings, _ := st.Progress("meaning:")
+	if !reflect.DeepEqual(words, map[string]Progress{"かさ": {Level: 5}}) ||
+		!reflect.DeepEqual(meanings, map[string]Progress{"かさ": {Level: 1, Flagged: true}}) {
+		t.Fatalf("progress: word %v, meaning %v", words, meanings)
+	}
+	wm, _ := st.MemoryStates("word:")
+	mm, _ := st.MemoryStates("meaning:")
+	if len(wm) != 1 || wm["かさ"].Stability != 4 || len(mm) != 1 || mm["かさ"].Stability != 0.5 {
+		t.Fatalf("memory: word %v, meaning %v", wm, mm)
+	}
+}
+
+func TestWordsAsk(t *testing.T) {
+	st := openTemp(t)
+	if a, err := st.WordsAsk(); err != nil || a != WordsAskReading {
+		t.Fatalf("unset WordsAsk = %q, %v; want %q", a, err, WordsAskReading)
+	}
+	if err := st.SaveWordsAsk(WordsAskMeaning); err != nil {
+		t.Fatal(err)
+	}
+	if a, _ := st.WordsAsk(); a != WordsAskMeaning {
+		t.Fatalf("WordsAsk = %q, want %q", a, WordsAskMeaning)
+	}
+	if err := st.SaveWordsAsk("kanji"); err == nil {
+		t.Fatal("an unknown value must be refused")
+	}
+	if err := st.setSetting(wordsAskKey, "kanji"); err != nil {
+		t.Fatal(err)
+	}
+	if a, _ := st.WordsAsk(); a != WordsAskReading {
+		t.Fatalf("unknown stored value gives %q, want %q", a, WordsAskReading)
+	}
+}
