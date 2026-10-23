@@ -47,8 +47,16 @@ _Avoid_: move
 ## Practice
 
 **Learning level**:
-A kana's or word's progress from 0 (new) to 5 (learned); a hit raises it by one, a mistake lowers it by two.
+Progress from 0 (new) to 5 (learned) of a kana, or of a word's reading or meaning; a hit raises it by one, a mistake lowers it by two.
 _Avoid_: score, mastery
+
+**Reading level**:
+A word's learning level for typing its reading.
+_Avoid_: word level, kana level
+
+**Meaning level**:
+A word's learning level for typing its meaning; it starts at 0 and grows only from meanings typed.
+_Avoid_: translation level, vocabulary level
 
 **Learned**:
 At learning level 5.
@@ -69,6 +77,10 @@ _Avoid_: paused word, blocked word
 **Words-only mode**:
 Practice in which only words fall, no single kana.
 _Avoid_: vocabulary mode, word mode
+
+**Meaning mode**:
+Practice in which a word tile asks for the word's meaning instead of its reading; kana tiles still ask for the romaji.
+_Avoid_: translation mode, vocabulary mode
 
 **Lesson filter**:
 The lessons of a word list chosen for practice; they decide which words fall and where new word packages come from.
