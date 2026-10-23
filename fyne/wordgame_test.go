@@ -21,7 +21,7 @@ import (
 
 func TestRecordWordCorrectTouchesOnlyWordProgress(t *testing.T) {
 	gs := newTestState()
-	gs.recordWordCorrect("あい")
+	gs.recordWordCorrect("あい", readingKind)
 	if got := gs.wordSessionStats["あい"]; got.CorrectCount != 1 || got.Kana != "あい" || !gs.wordSessionDirty {
 		t.Fatalf("word session = %+v, dirty %v", got, gs.wordSessionDirty)
 	}
@@ -39,7 +39,7 @@ func TestRecordWordCorrectTouchesOnlyWordProgress(t *testing.T) {
 func TestRecordWordMiss(t *testing.T) {
 	gs := newTestState()
 	gs.tempoStep, gs.answerStreak = 3, 4
-	gs.recordWordMiss("あい")
+	gs.recordWordMiss("あい", readingKind)
 	if got := gs.wordSessionStats["あい"]; got.MissCount != 1 || !gs.wordSessionDirty {
 		t.Fatalf("word session = %+v", got)
 	}
@@ -50,7 +50,7 @@ func TestRecordWordMiss(t *testing.T) {
 		t.Fatalf("tempoStep=%d streak=%d, want 1/0", gs.tempoStep, gs.answerStreak)
 	}
 	gs.wordMemory["あお"] = memory.State{Stability: 1, LastSeen: time.Now()}
-	gs.recordWordMiss("あお")
+	gs.recordWordMiss("あお", readingKind)
 	if s := gs.wordMemory["あお"].Stability; s < 0.29 || s > 0.31 || !gs.wordMemoryDirty["あお"] {
 		t.Fatalf("miss on known word → %v, want 0.3 and dirty", s)
 	}
@@ -63,9 +63,9 @@ func TestMergePersistsWordProgress(t *testing.T) {
 	gs := NewGameState(st)
 
 	gs.mu.Lock()
-	gs.recordWordCorrect("あい")
-	gs.recordWordCorrect("あい")
-	gs.recordWordMiss("あい")
+	gs.recordWordCorrect("あい", readingKind)
+	gs.recordWordCorrect("あい", readingKind)
+	gs.recordWordMiss("あい", readingKind)
 	gs.mergeSessionStats() // only words changed: the kana merge returns early
 	sessionLeft, dirty, memDirty := len(gs.wordSessionStats), gs.wordSessionDirty, len(gs.wordMemoryDirty)
 	overall := gs.wordOverallStats["あい"]
@@ -88,7 +88,7 @@ func TestMergePersistsWordProgress(t *testing.T) {
 	}
 
 	gs.mu.Lock()
-	gs.recordWordCorrect("あい")
+	gs.recordWordCorrect("あい", readingKind)
 	gs.mergeSessionStats()
 	gs.mu.Unlock()
 	if words, _ := st.WordStatistics(); words["あい"].CorrectCount != 3 {
@@ -130,7 +130,7 @@ func TestMergesAreIndependent(t *testing.T) {
 
 			gs.mu.Lock()
 			gs.recordCorrect("か")
-			gs.recordWordCorrect("あい")
+			gs.recordWordCorrect("あい", readingKind)
 			gs.mergeSessionStats()
 			kanaDirty, wordDirty := gs.sessionDirty, gs.wordSessionDirty
 			gs.mu.Unlock()
@@ -164,7 +164,7 @@ func TestResetReloadsWordStatsAndKeepsMemory(t *testing.T) {
 		t.Fatalf("loaded = %+v", gs.wordOverallStats["あい"])
 	}
 	gs.mu.Lock()
-	gs.recordWordCorrect("あい")
+	gs.recordWordCorrect("あい", readingKind)
 	gs.mu.Unlock()
 	gs.Reset()
 	if len(gs.wordSessionStats) != 0 || gs.wordSessionDirty {
@@ -185,7 +185,7 @@ func TestFailedWordMemoryLoadSkipsSave(t *testing.T) {
 	gs := NewGameState(st)
 	gs.mu.Lock()
 	gs.wordMemoryLoadFailed = true
-	gs.recordWordCorrect("あい")
+	gs.recordWordCorrect("あい", readingKind)
 	gs.mergeSessionStats()
 	gs.mu.Unlock()
 	if got, _ := st.MemoryStates("word:"); len(got) != 0 {

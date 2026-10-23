@@ -68,12 +68,12 @@ func TestKanaHitAndMissChangeTheLevel(t *testing.T) {
 
 func TestWordHitAndMissChangeTheLevel(t *testing.T) {
 	gs := newTestState()
-	gs.recordWordCorrect("あい")
-	gs.recordWordCorrect("あい")
+	gs.recordWordCorrect("あい", readingKind)
+	gs.recordWordCorrect("あい", readingKind)
 	if p := gs.wordProgress["あい"]; p.Level != 2 || !gs.wordProgressDirty["あい"] {
 		t.Fatalf("after two hits: %+v", p)
 	}
-	gs.recordWordMiss("あい")
+	gs.recordWordMiss("あい", readingKind)
 	if p := gs.wordProgress["あい"]; p != (store.Progress{Level: 0, Flagged: true}) {
 		t.Fatalf("after a miss: %+v", p)
 	}
@@ -149,7 +149,7 @@ func TestProgressSavedAndReloaded(t *testing.T) {
 	gs.mu.Lock()
 	gs.recordCorrect("か")
 	gs.recordMiss("き")
-	gs.recordWordCorrect("あい")
+	gs.recordWordCorrect("あい", readingKind)
 	gs.mergeSessionStats()
 	dirty := len(gs.kanaProgressDirty) + len(gs.wordProgressDirty)
 	gs.mu.Unlock()
