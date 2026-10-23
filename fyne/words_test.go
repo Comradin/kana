@@ -121,6 +121,9 @@ func TestFormatWordsLine(t *testing.T) {
 		{"words only, new words need a script", WordsStatus{WordsOnly: true, Next: wordsNeedKana, Introduced: 3, Source: "minna"}, "Words only: new words need a script that is off"},
 		{"mixed, empty lessons", WordsStatus{Empty: true, Filtered: true, Next: wordsFinished, Source: "minna"}, "Words: no words in the chosen lessons"},
 		{"words only, no meanings", WordsStatus{WordsOnly: true, KanaFallback: true, NoMeanings: true, Introduced: 2, Source: "minna"}, "Words only: no word has a meaning to ask for"},
+		{"meaning counts", WordsStatus{Meaning: true, Introduced: 25, Learned: 3, Source: "JLPT N5", Level: 5}, "Meanings: 25 introduced · 3 learned · JLPT N5"},
+		{"meaning, waiting for kana", WordsStatus{Meaning: true, Introduced: 18, Learned: 5, Waiting: 15, Source: "minna"}, "Meanings: 18 introduced · 5 learned · 15 waiting for kana · minna"},
+		{"meaning, needs kana", WordsStatus{Meaning: true, Next: wordsNeedKana, Introduced: 5, Source: "JLPT N5", Level: 5}, "Words: learn more kana for new words"},
 	}
 	for _, c := range cases {
 		if got := formatWordsLine(c.ws); got != c.want {

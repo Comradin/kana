@@ -232,6 +232,7 @@ type WordsStatus struct {
 	Skipped    int       // rows skipped in the chosen list; 0 for JLPT or a missing list
 
 	WordsOnly    bool // words-only mode is on
+	Meaning      bool // meaning mode: the counts are of meaning levels
 	KanaFallback bool // words-only mode, but no word can fall and no package can come: kana fall
 	Filtered     bool // a lesson filter limits the source
 	Empty        bool // the source with its lesson filter has no word at all
@@ -240,9 +241,13 @@ type WordsStatus struct {
 
 // formatWordsLine is the status panel's words line: counts, or a hint when
 // nothing can be introduced. In words-only mode a problem starts with
-// "Words only:".
+// "Words only:". In meaning mode the counts line starts with "Meanings:".
 func formatWordsLine(ws WordsStatus) string {
 	var s string
+	label := "Words"
+	if ws.Meaning {
+		label = "Meanings"
+	}
 	switch {
 	case ws.KanaFallback:
 		s = "Words only: " + wordsOnlyReason(ws)
@@ -265,9 +270,9 @@ func formatWordsLine(ws WordsStatus) string {
 	case ws.Next == wordsFinished:
 		s = "Words: " + ws.Source + " finished"
 	case ws.Waiting > 0:
-		s = fmt.Sprintf("Words: %d introduced · %d learned · %d waiting for kana · %s", ws.Introduced, ws.Learned, ws.Waiting, ws.Source)
+		s = fmt.Sprintf("%s: %d introduced · %d learned · %d waiting for kana · %s", label, ws.Introduced, ws.Learned, ws.Waiting, ws.Source)
 	default:
-		s = fmt.Sprintf("Words: %d introduced · %d learned · %s", ws.Introduced, ws.Learned, ws.Source)
+		s = fmt.Sprintf("%s: %d introduced · %d learned · %s", label, ws.Introduced, ws.Learned, ws.Source)
 	}
 	if ws.Skipped > 0 {
 		s += " · " + plural(ws.Skipped, "row") + " skipped"
