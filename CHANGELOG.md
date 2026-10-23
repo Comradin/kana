@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.1](https://github.com/Comradin/kana/compare/v0.6.0...v0.6.1) (2026-10-23)
+
+
+### Improvements and fixes
+
+* **vocab:** update word data from JMdict ([415d576](https://github.com/Comradin/kana/commit/415d576cf282f467dec6be951f656fd26f66c7ea))
+
 ## [0.6.0](https://github.com/Comradin/kana/compare/v0.5.0...v0.6.0) (2026-10-23)
 
 **Manage your word lists.** *Settings → Words → Manage word lists…* shows each of your own lists with its words, lessons and skipped rows.
