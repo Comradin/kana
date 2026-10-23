@@ -39,6 +39,19 @@ Kana is a Fyne v2 desktop app (`kana-desktop`).
   path waits meanwhile (no new rows, no katakana offer) and goes on when you switch back. If no
   word can fall (no word in the chosen lessons, list missing), kana fall and the status panel
   says why.
+- **Meaning mode**: Settings → Words → "Words ask for: Meaning" makes word tiles ask for the
+  word's meaning instead of its reading. They carry a small "?" in the corner, so a one-kana
+  word such as き is not taken for a kana tile; kana tiles still ask for the romaji. Type a
+  meaning in the meaning language or in English, as for any word; typing the reading instead
+  shows "type the meaning" at the tile and costs nothing. Every word has a reading level and a
+  meaning level of its own: in meaning mode only meanings count and a missed tile lowers its
+  meaning level; in reading mode the reading raises the reading level, and a meaning is still
+  accepted and raises the meaning level. In meaning mode the choice of tiles, "Focus on weak
+  items", the status line ("Meanings: 12 introduced · 4 learned · …") and when the next word
+  package comes go by the meaning levels, and words without a meaning do not fall. Together
+  with "Words only" it is a pure meaning drill. A change applies to new tiles; tiles already
+  falling keep their question. Progress from before counts as reading progress; all meaning
+  levels start at 0, and "Already known" in a package intro counts for the reading only.
 - **Learning path**: start with あいうえお, unlock two rows at a time; each automatically unlocked row is introduced before it is asked, and the game pauses while new rows are introduced
 - **Two scripts**: hiragana and katakana progress independently; switch scripts in the settings. After the basic hiragana you are offered katakana once.
 - **Score Limit Mode**: Set a target score or 0 for endless practice
@@ -95,8 +108,9 @@ Kana is a Fyne v2 desktop app (`kana-desktop`).
 - **Word packages**: where new words come from (a private list or JLPT), the JLPT level, the
   lessons of a list (checkboxes with "All lessons" and "No lesson", stored per list: only these
   lessons' words fall and new packages come from the earliest chosen lesson), the package size
-  (3, 5 or 10) and the meaning language ("Meanings in": System, or any language of the word
-  data; English answers are always accepted)
+  (3, 5 or 10), what word tiles ask for ("Words ask for": Reading or Meaning) and the meaning
+  language ("Meanings in": System, or any language of the word data; English answers are
+  always accepted)
 - **Kana font**: Noto Sans JP (default), M PLUS Rounded 1c or the system font, for tiles,
   intros, the kana grid and the word labels; both fonts ship with the app
 
@@ -323,10 +337,11 @@ Built on [Fyne v2](https://fyne.io) with goroutine-based game loop:
   per-character fall factor, the session tempo factor, the input bar's status line and the
   game-over reason text
 - `canvas.go`: `GameCanvas` widget, atomic snapshot renderer (avoids mutex/render-thread deadlock)
-- `tile.go`: `KanaTile` — shadow + face + text canvas objects, for a kana or a word
+- `tile.go`: `KanaTile` — shadow + face + text canvas objects, for a kana or a word; a meaning tile adds its "?" marker
+- `wordkind.go`: reading and meaning as two kinds of word progress (`wordKind`, `track`), which answer counts for which, and the words a meaning tile may ask about
 - `words.go`: word helpers — meaning language, missed-word and feedback texts, the words line
 - `wordgame.go`: word progress (stats, memory, merge), the playable-word rule and cache, word spawning
-- `feedback.go`: the labels shown after a word hit or miss
+- `feedback.go`: the labels shown after a word hit or miss, and the "type the meaning" hint
 - `focus.go`: the focus pick on weak items
 - `packages.go`: word packages — when the next one is due, finishing it ("already known" words
   count as secure), replacement words, the JLPT level offer
@@ -337,7 +352,7 @@ Built on [Fyne v2](https://fyne.io) with goroutine-based game loop:
 - `progress.go`: computes each script's learning-path status (`PathStatus`) and total correct counts per character
 - `statswidgets.go`: the fixed-column grid layout and the kana cell widget used by the stats panel
 - `input.go`: `InputBar` — score, level, tempo, miss count, text entry
-- `settings.go`: In-game settings dialog with the tabs Kana (scripts and row selection, one tab per script, per-group "all" toggle, auto-progression), Words (tiles, source, lessons, JLPT level, package size, meaning language), Game (difficulty level, points per hit, focus on weak items, score limit, kana font) and Sources
+- `settings.go`: In-game settings dialog with the tabs Kana (scripts and row selection, one tab per script, per-group "all" toggle, auto-progression), Words (tiles, words ask for, source, lessons, JLPT level, package size, meaning language), Game (difficulty level, points per hit, focus on weak items, score limit, kana font) and Sources
 - `lists.go`, `listsdialog.go`: the word lists in the game (reload, delete, rename) and the Manage word lists dialog
 - `drop.go`: importing files dropped on the window
 - `version.go`: the version label and the Sources tab
@@ -345,7 +360,7 @@ Built on [Fyne v2](https://fyne.io) with goroutine-based game loop:
 
 ### Persistence (`store/`)
 
-- `store/store.go`: SQLite persistence, including active scripts, the katakana offer flag, the chosen difficulty level, the points setting and per-character spaced-repetition memory states (seeded once from past correct counts), per-word statistics, the introduced words and the word settings (`word_level`, `word_source`, `package_size`, `newest_package`, `meaning_lang`, `words_only`, `focus_weak`, `lesson_filter:<list>`) and the kana font (`kana_font`)
+- `store/store.go`: SQLite persistence, including active scripts, the katakana offer flag, the chosen difficulty level, the points setting and per-character spaced-repetition memory states (seeded once from past correct counts), per-word statistics (reading and meaning apart), the introduced words and the word settings (`word_level`, `word_source`, `package_size`, `newest_package`, `meaning_lang`, `words_only`, `focus_weak`, `words_ask`, `lesson_filter:<list>`) and the kana font (`kana_font`)
 
 ### Game Timing
 - Tick loop: 100ms
@@ -370,13 +385,17 @@ It holds:
 - Per-character spaced-repetition memory state (`memory` table), used to choose which kana
   spawn next
 - Per-word statistics (`word_stats`: correct and miss count per reading) and per-word
-  spaced-repetition memory (`word:` items in the `memory` table)
+  spaced-repetition memory (`word:` items in the `memory` table), both for typing the reading;
+  the same for typing the meaning in `meaning_stats` and as `meaning:` items in the `memory`
+  table. Learning levels and slipped flags are `kana:`, `word:` and `meaning:` items in the
+  `progress` table
 - The words shown in a package intro (`introduced_words`; when the table is created, every
   word with stats or memory counts as introduced) and the newest package (`newest_package`)
 - Where new words come from (`word_source`: `jlpt` or `list:<name>`; chosen once on the first
   start: your first list, else JLPT), the JLPT level packages come down to (`word_level`,
   default N5), the package size (`package_size`, default 5) and the meaning language
   (`meaning_lang`; unset means the system language if the word list has it, else English)
+- What word tiles ask for (`words_ask`: `reading`, the default, or `meaning`)
 - The kana font (`kana_font`: `noto`, `mplus` or `system`)
 
 The database is created automatically on first run. If a `kana.db` from an older version is
