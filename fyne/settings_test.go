@@ -673,3 +673,29 @@ func TestWordsAskInTheWordsTab(t *testing.T) {
 		t.Fatalf("reapplied %v, want meaning", gs.wordsAsk)
 	}
 }
+
+func TestFitTabsScrollsOnlyTallTabs(t *testing.T) {
+	f := newSettingsForm(newTestState().settingsState(), nil)
+	tall, short := f.tabs.Items[0], f.tabs.Items[0]
+	for _, tab := range f.tabs.Items {
+		if tab.Content.MinSize().Height > tall.Content.MinSize().Height {
+			tall = tab
+		}
+		if tab.Content.MinSize().Height < short.Content.MinSize().Height {
+			short = tab
+		}
+	}
+	tallContent, shortContent := tall.Content, short.Content
+	limit := (tallContent.MinSize().Height + shortContent.MinSize().Height) / 2
+	f.fitTabs(limit)
+	scroll, ok := tall.Content.(*container.Scroll)
+	if !ok || scroll.Content != tallContent {
+		t.Fatalf("%s tab not wrapped in a scroll: %T", tall.Text, tall.Content)
+	}
+	if got := scroll.MinSize().Height; got != limit {
+		t.Errorf("scroll height %v, want %v", got, limit)
+	}
+	if short.Content != shortContent {
+		t.Errorf("%s tab wrapped although it fits", short.Text)
+	}
+}
