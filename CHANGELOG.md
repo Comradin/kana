@@ -2,8 +2,29 @@
 
 ## [0.6.0](https://github.com/Comradin/kana/compare/v0.5.0...v0.6.0) (2026-10-23)
 
+**Manage your word lists.** *Settings → Words → Manage word lists…* shows each of your own lists with its words, lessons and skipped rows.
 
-### New
+- **Rename** a list: its lesson choice goes with it, and if it is your source of new words, it stays your source.
+- **Delete** a list after a confirmation. Your progress on its words is kept.
+- **Details** explains why rows were skipped. The status panel shows the skipped rows of your chosen list too.
+- **Import…** adds a list. **Open folder** opens the folder the lists are kept in.
+- **Drag & drop:** drop a list file on the game window to import it.
+- Lists you copied or edited by hand are read again each time you open the settings.
+
+**Textbook notation in your word lists.** Rows your course writes with more than plain kana used to be skipped. Now they play, shown as written:
+
+- `～さん` or `こちらは～さんです`: the `～` stands for a name. You type only the kana, `san`.
+- `（どうぞ）よろしく（おねがいします）`: the parts in brackets are optional. Type the whole phrase or just `yoroshiku`.
+- `おなまえは？`: punctuation and spaces are shown, not typed.
+- `あめりか // アメリカ`: two writings of one word. The tile shows the last one.
+- In such phrases は may be typed `wa` and へ `e`, as they are spoken. を takes `o` as well as `wo`, also as a single kana tile.
+- A word you already know from the JLPT list, like `さん`, keeps its progress when your list writes it `～さん`.
+
+**Check a word list.** `go run ./cmd/listcheck yourlist.csv` lists every row the game would skip and why, without importing anything. This is for those who run the game from source.
+
+### Commits
+
+#### New
 
 * accept particle readings in phrases and o for を ([9bb7110](https://github.com/Comradin/kana/commit/9bb71103b288c4d6f1aa0ef35c80b17646629c73))
 * **fyne:** accept every reading of words with optional parts, variants ([5c0edfc](https://github.com/Comradin/kana/commit/5c0edfca75584ce3c31683f09793f09cc36851bc))
@@ -22,7 +43,7 @@
 * **vocab:** read the kana notation in CSV and JSON word lists ([6909a5b](https://github.com/Comradin/kana/commit/6909a5be4cd1556bb6fdb957d83e3968457d83d0))
 
 
-### Improvements and fixes
+#### Improvements and fixes
 
 * **fyne:** keep dialogs under a dropped file's preview, check names ([e3224a0](https://github.com/Comradin/kana/commit/e3224a0a2f9114fc30f64c3d62481301fde7d1ec))
 * list every skipped row, keep rows whose short form is no word ([2184c73](https://github.com/Comradin/kana/commit/2184c7346924c3a0ff0e8b437f542b4e251ac75a))
