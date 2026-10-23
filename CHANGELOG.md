@@ -2,8 +2,21 @@
 
 ## [0.7.0](https://github.com/Comradin/kana/compare/v0.6.1...v0.7.0) (2026-10-23)
 
+**Meaning mode: practise what your words mean.** *Settings → Words → Words ask for* now offers **Reading** (as before) and **Meaning**. In meaning mode a word tile shows the word in kana, and you type what it means, in your meaning language or in English.
 
-### New
+- **Two levels per word.** Every word keeps a reading level and a meaning level of its own. A meaning typed in reading mode still counts, but now for the meaning, not for the reading.
+- **Marked tiles.** Word tiles that ask for the meaning carry a small "?", so a one-kana word like き (tree) is not mistaken for a kana tile.
+- **Typed the reading by habit?** You see "type the meaning" at the tile. It is no mistake, and the tile keeps falling.
+- **Your progress follows the mode.** Which words fall, *Focus on weak items*, when the next word package comes and the status line ("Meanings: … learned") all follow the levels of the mode you chose.
+- **Your progress so far** is your reading progress. Meanings start at level 0.
+- Words that have no meaning to type, for example from a list without a meaning column, do not fall in meaning mode.
+- Combine it with *Tiles: Words only* for a pure vocabulary drill.
+
+**Settings fit small windows.** The Words tab is more compact, and a tab taller than the window scrolls instead of hiding behind the buttons.
+
+### Commits
+
+#### New
 
 * **fyne:** add meaning tiles with a marker ([bd131f7](https://github.com/Comradin/kana/commit/bd131f7b8b0112c0a50fab37bff1919183e8f05a))
 * **fyne:** ask word tiles for their meaning in meaning mode ([d2c1e01](https://github.com/Comradin/kana/commit/d2c1e012c59e91da0dd001a8dfddd30b7f755736))
@@ -16,7 +29,7 @@
 * **vocab:** tell whether a word has a meaning to type ([7bacc4b](https://github.com/Comradin/kana/commit/7bacc4b89ea15cf948fcfbb1b9204d1455e42fd6))
 
 
-### Improvements and fixes
+#### Improvements and fixes
 
 * **fyne:** count meaningless words by reading for the package rule ([f4e11cf](https://github.com/Comradin/kana/commit/f4e11cf85ac8028a2167bcc1e92c7c5b88af719a))
 * **fyne:** keep the settings dialog inside the window ([158582a](https://github.com/Comradin/kana/commit/158582a881f9b4847ebb4af6a193385b6737fe63))
