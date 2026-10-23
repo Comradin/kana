@@ -44,19 +44,24 @@ func readingsOf(entries []vocab.Entry) []string {
 
 // newestPackageDone reports whether the newest package is learned well
 // enough for the next one: at least ceil(0.8 × p) of its p readings that
-// can fall now and that new tiles may ask about (see askable) are learned
-// in what tiles ask for (gs.wordsAsk). With none of them (a script switched
-// off, a list gone, no meanings) it counts as done. Must be called under
-// lock.
+// can fall now are learned in what tiles ask for (gs.wordsAsk). In meaning
+// mode a word without a meaning to ask for (see askable) counts by its
+// reading level: it never falls there, so skipping it would let packages
+// come back to back. With none of them (a script switched off, a list
+// gone) it counts as done. Must be called under lock.
 func (gs *GameState) newestPackageDone() bool {
 	playable, learnedN := 0, 0
 	for _, kana := range gs.newestPackage {
 		e, ok := gs.words.Lookup(kana)
-		if !ok || !gs.unitsFit(e.Units) || !gs.askable(e) {
+		if !ok || !gs.unitsFit(e.Units) {
 			continue
 		}
 		playable++
-		if gs.wordLearned(kana, gs.wordsAsk) {
+		kind := gs.wordsAsk
+		if !gs.askable(e) {
+			kind = readingKind
+		}
+		if gs.wordLearned(kana, kind) {
 			learnedN++
 		}
 	}
