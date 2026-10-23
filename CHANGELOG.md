@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.6.0](https://github.com/Comradin/kana/compare/v0.5.0...v0.6.0) (2026-10-23)
+
+
+### New
+
+* accept particle readings in phrases and o for を ([9bb7110](https://github.com/Comradin/kana/commit/9bb71103b288c4d6f1aa0ef35c80b17646629c73))
+* **fyne:** accept every reading of words with optional parts, variants ([5c0edfc](https://github.com/Comradin/kana/commit/5c0edfca75584ce3c31683f09793f09cc36851bc))
+* **fyne:** import word lists dropped on the window ([7600802](https://github.com/Comradin/kana/commit/760080248b820fcf9eef06204b64f63ab810d43a))
+* **fyne:** manage word lists from the settings ([f2191ab](https://github.com/Comradin/kana/commit/f2191abd9f844ec99f8d0ae315c57af697d3bf4f))
+* **fyne:** reload, delete and rename word lists in the game ([9149648](https://github.com/Comradin/kana/commit/9149648c712824308ef6a2d892d3145e59d7fa24))
+* **fyne:** scroll long lists of skipped rows ([b3c9f59](https://github.com/Comradin/kana/commit/b3c9f591647f1fbd57e736dc7abae68b8078104d))
+* **fyne:** show words as their word list writes them ([44f2b88](https://github.com/Comradin/kana/commit/44f2b88caceab52a6541b4d7f0527edeafa75ba7))
+* **listcheck:** add a command that lists every skipped row of a list ([f14c3e3](https://github.com/Comradin/kana/commit/f14c3e353074756780dada5aa901a51c02e2466c))
+* **listcheck:** print shown forms and other readings with -words ([b8e8dac](https://github.com/Comradin/kana/commit/b8e8dacc21f1a4cfc7fd3ad5dbb0c77bb051acc9))
+* **store:** move a lesson filter to a renamed list ([b18f8dd](https://github.com/Comradin/kana/commit/b18f8dd30655958b9ec4af763de83b33a9ddf6de))
+* **vocab:** delete and rename a word list's file ([3d1ccd1](https://github.com/Comradin/kana/commit/3d1ccd1cbb499af5af54918ee5ad1ab76ece4869))
+* **vocab:** keep 100 skipped-row messages, all with InspectAll ([c6c4adf](https://github.com/Comradin/kana/commit/c6c4adff1b483a77d1836a05218bd7c70cc89fe1))
+* **vocab:** merge shown forms and accepted readings per entry ([ee5a016](https://github.com/Comradin/kana/commit/ee5a01666265065126c9f32e3a380d51f1340734))
+* **vocab:** parse placeholders, optional parts and variants ([e4ccba7](https://github.com/Comradin/kana/commit/e4ccba7a95ec3a3acd234e95bb9e0a12413d4db7))
+* **vocab:** read the kana notation in CSV and JSON word lists ([6909a5b](https://github.com/Comradin/kana/commit/6909a5be4cd1556bb6fdb957d83e3968457d83d0))
+
+
+### Improvements and fixes
+
+* **fyne:** keep dialogs under a dropped file's preview, check names ([e3224a0](https://github.com/Comradin/kana/commit/e3224a0a2f9114fc30f64c3d62481301fde7d1ec))
+* list every skipped row, keep rows whose short form is no word ([2184c73](https://github.com/Comradin/kana/commit/2184c7346924c3a0ff0e8b437f542b4e251ac75a))
+
 ## [0.5.0](https://github.com/Comradin/kana/compare/v0.4.1...v0.5.0) (2026-10-20)
 
 **Practise your course's vocabulary.** Four new settings help you drill exactly the words you are working on.
