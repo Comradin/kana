@@ -646,7 +646,8 @@ func TestWordAnsweredByMeaning(t *testing.T) {
 		withWords(gs, kasa)
 		gs.tiles = []*KanaTile{wordTileAt(gs, "かさ", 0)}
 		gs.checkAnswer(c.input)
-		if len(gs.tiles) != 0 || gs.wordSessionStats["かさ"].CorrectCount != 1 {
+		hits := gs.wordSessionStats["かさ"].CorrectCount + gs.meaningSessionStats["かさ"].CorrectCount
+		if len(gs.tiles) != 0 || hits != 1 {
 			t.Fatalf("%q: tiles %d, stats %+v; want a hit like a reading hit", c.input, len(gs.tiles), gs.wordSessionStats["かさ"])
 		}
 		if got := gs.feedback[0].text.Text; got != c.feedback {
