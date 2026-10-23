@@ -42,3 +42,25 @@ func TestMeaningMatches(t *testing.T) {
 		}
 	}
 }
+
+func TestAnswerable(t *testing.T) {
+	cases := []struct {
+		name string
+		m    Meanings
+		lang string
+		want bool
+	}{
+		{"nil", nil, "de", false},
+		{"empty", Meanings{}, "de", false},
+		{"meaning language", Meanings{"de": {"Regenschirm"}}, "de", true},
+		{"English only", Meanings{"en": {"umbrella"}}, "de", true},
+		{"language-less", Meanings{"": {"die Person dort drüben"}}, "fr", true},
+		{"only brackets", Meanings{"en": {"(polite)", "[obsolete]"}}, "en", false},
+		{"another language, as For falls back to it", Meanings{"hu": {"esernyő"}}, "de", true},
+	}
+	for _, c := range cases {
+		if got := c.m.Answerable(c.lang); got != c.want {
+			t.Errorf("%s: Answerable(%q) = %v, want %v", c.name, c.lang, got, c.want)
+		}
+	}
+}

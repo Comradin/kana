@@ -35,6 +35,20 @@ func (m Meanings) MeaningMatches(lang, input string) bool {
 	return false
 }
 
+// Answerable reports whether some meaning can be typed for lang: one of the
+// meanings MeaningMatches compares (For(lang) and English) keeps some text
+// once case, brackets, punctuation and a leading article are ignored.
+func (m Meanings) Answerable(lang string) bool {
+	for _, items := range [][]string{m.For(lang), m["en"]} {
+		for _, it := range items {
+			if normalizeMeaning(it) != "" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // normalizeMeaning reduces a meaning to the form MeaningMatches compares.
 func normalizeMeaning(s string) string {
 	s = umlauts.Replace(strings.ToLower(s))
