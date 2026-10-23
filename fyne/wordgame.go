@@ -14,69 +14,78 @@ import (
 	"kana/vocab"
 )
 
-// recordWordCorrect records a hit on a word: word session stats, word memory
-// and the answer streak. Kana stats are not touched. Must be called under
-// lock.
-func (gs *GameState) recordWordCorrect(kana string) {
-	stat := gs.wordSessionStats[kana]
+// recordWordCorrect records a hit on a word in kind k: that kind's session
+// stats, memory and level, and the answer streak. Kana stats are not
+// touched. Must be called under lock.
+func (gs *GameState) recordWordCorrect(kana string, k wordKind) {
+	t := gs.track(k)
+	stat := t.sessionStats[kana]
 	stat.Kana = kana
 	stat.CorrectCount++
-	gs.wordSessionStats[kana] = stat
-	gs.wordSessionDirty = true
+	t.sessionStats[kana] = stat
+	*t.sessionDirty = true
 
-	prev, known := gs.wordMemory[kana]
-	gs.wordMemory[kana] = memory.Correct(prev, known, gs.now())
-	gs.wordMemoryDirty[kana] = true
-	gs.raiseWord(kana)
+	prev, known := t.memory[kana]
+	t.memory[kana] = memory.Correct(prev, known, gs.now())
+	t.memoryDirty[kana] = true
+	gs.raiseWord(kana, k)
 
 	gs.raiseTempo()
 }
 
-// applyWordMistake records a mistake on a word: session miss, word memory
-// miss (if known), level down and flag. Its kana are not touched. Must be
-// called under lock.
-func (gs *GameState) applyWordMistake(kana string) {
-	stat := gs.wordSessionStats[kana]
+// applyWordMistake records a mistake on a word in kind k: session miss,
+// memory miss (if known), level down and flag, all of that kind. Its kana
+// and its other kind are not touched. Must be called under lock.
+func (gs *GameState) applyWordMistake(kana string, k wordKind) {
+	t := gs.track(k)
+	stat := t.sessionStats[kana]
 	stat.Kana = kana
 	stat.MissCount++
-	gs.wordSessionStats[kana] = stat
-	gs.wordSessionDirty = true
+	t.sessionStats[kana] = stat
+	*t.sessionDirty = true
 
-	if prev, known := gs.wordMemory[kana]; known {
-		gs.wordMemory[kana] = memory.Miss(prev, gs.now())
-		gs.wordMemoryDirty[kana] = true
+	if prev, known := t.memory[kana]; known {
+		t.memory[kana] = memory.Miss(prev, gs.now())
+		t.memoryDirty[kana] = true
 	}
-	gs.lowerWord(kana)
+	gs.lowerWord(kana, k)
 }
 
-// recordWordMiss records a word that fell through: a mistake plus the
-// tempo. Must be called under lock.
-func (gs *GameState) recordWordMiss(kana string) {
-	gs.applyWordMistake(kana)
+// recordWordMiss records a word that fell through, in kind k: a mistake
+// plus the tempo. Must be called under lock.
+func (gs *GameState) recordWordMiss(kana string, k wordKind) {
+	gs.applyWordMistake(kana, k)
 	gs.lowerTempo()
 }
 
-// mergeWordStats writes (baseline + session) word stats, independently of
-// the kana stats. A failed baseline read keeps wordSessionDirty so the next
-// merge retries. Must be called under lock.
+// mergeWordStats writes (baseline + session) word stats of both kinds,
+// independently of the kana stats and of each other. Must be called under
+// lock.
 func (gs *GameState) mergeWordStats() {
-	if !gs.wordSessionDirty {
+	for _, k := range wordKinds {
+		gs.mergeWordStatsOf(k)
+	}
+}
+
+// mergeWordStatsOf writes (baseline + session) stats of kind k. A failed
+// baseline read keeps the session dirty so the next merge retries. Must be
+// called under lock.
+func (gs *GameState) mergeWordStatsOf(k wordKind) {
+	t := gs.track(k)
+	if !*t.sessionDirty {
 		return
 	}
 
-	var baseline map[string]store.WordStats
+	baseline := map[string]store.WordStats{}
 	if gs.store != nil {
-		stats, err := gs.store.WordStatistics()
+		stats, err := gs.loadWordStats(k)
 		if err != nil {
 			return
 		}
 		baseline = stats
 	}
-	if baseline == nil {
-		baseline = make(map[string]store.WordStats)
-	}
 
-	for kana, session := range gs.wordSessionStats {
+	for kana, session := range t.sessionStats {
 		if session.CorrectCount == 0 && session.MissCount == 0 {
 			continue
 		}
@@ -85,15 +94,15 @@ func (gs *GameState) mergeWordStats() {
 		base.CorrectCount += session.CorrectCount
 		base.MissCount += session.MissCount
 		if gs.store != nil {
-			if err := gs.store.SaveWordStats(kana, base.CorrectCount, base.MissCount); err != nil {
+			if err := gs.saveWordStats(k, kana, base.CorrectCount, base.MissCount); err != nil {
 				continue
 			}
 		}
-		gs.wordOverallStats[kana] = base
-		delete(gs.wordSessionStats, kana)
+		t.overallStats[kana] = base
+		delete(t.sessionStats, kana)
 	}
 
-	gs.wordSessionDirty = false
+	*t.sessionDirty = false
 }
 
 // wordsDirPerm is the permission of the word list folder.
@@ -402,7 +411,7 @@ func (gs *GameState) introducedCounts() (introduced, learnedN, waiting int) {
 			continue
 		}
 		introduced++
-		if gs.wordLearned(kana) {
+		if gs.wordLearned(kana, readingKind) {
 			learnedN++
 		}
 		if !gs.wordsOnly && gs.practised(e, src, found) && !gs.unitsKnown(e.Units) {
@@ -469,12 +478,14 @@ func (gs *GameState) wordsStatus() WordsStatus {
 	return ws
 }
 
-// sessionWordCorrect is the number of word hits this session. Must be
-// called under lock.
+// sessionWordCorrect is the number of word hits this session, reading and
+// meaning alike. Must be called under lock.
 func (gs *GameState) sessionWordCorrect() int {
 	n := 0
-	for _, st := range gs.wordSessionStats {
-		n += st.CorrectCount
+	for _, k := range wordKinds {
+		for _, st := range gs.track(k).sessionStats {
+			n += st.CorrectCount
+		}
 	}
 	return n
 }

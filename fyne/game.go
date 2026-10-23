@@ -71,17 +71,27 @@ type GameState struct {
 	wordProgress           map[string]store.Progress // learning level and flag per reading
 	wordProgressDirty      map[string]bool           // readings whose progress is not saved yet
 	wordProgressLoadFailed bool                      // stored word progress unreadable: never overwrite it
-	wordLevel              int                       // JLPT packages come from N5 down to this level
-	meaningLang            string                    // language meanings are shown in
-	meaningSetting         string                    // the stored meaning language; "" = System (see resolveMeaningLang)
-	words                  *vocab.Index              // every word reading; nil = no words
-	wordsErr               string                    // bundled list failed to load
-	listNames              []string                  // the private lists found, sorted by name
-	lists                  []listInfo                // the private lists found, sorted by name: counts, skipped rows, file
-	listsLoadFailed        bool                      // the list folder could not be read: listNames may be incomplete
-	wordsDir               string                    // the private list folder; "" if unknown
-	playable               []vocab.Entry             // cached playableWords result
-	playableOK             bool                      // playable is up to date
+	// The same per meaning, keyed by reading (see wordKind and track).
+	meaningOverallStats       map[string]store.WordStats
+	meaningSessionStats       map[string]store.WordStats
+	meaningSessionDirty       bool
+	meaningMemory             map[string]memory.State
+	meaningMemoryDirty        map[string]bool
+	meaningMemoryLoadFailed   bool
+	meaningProgress           map[string]store.Progress
+	meaningProgressDirty      map[string]bool
+	meaningProgressLoadFailed bool
+	wordLevel                 int           // JLPT packages come from N5 down to this level
+	meaningLang               string        // language meanings are shown in
+	meaningSetting            string        // the stored meaning language; "" = System (see resolveMeaningLang)
+	words                     *vocab.Index  // every word reading; nil = no words
+	wordsErr                  string        // bundled list failed to load
+	listNames                 []string      // the private lists found, sorted by name
+	lists                     []listInfo    // the private lists found, sorted by name: counts, skipped rows, file
+	listsLoadFailed           bool          // the list folder could not be read: listNames may be incomplete
+	wordsDir                  string        // the private list folder; "" if unknown
+	playable                  []vocab.Entry // cached playableWords result
+	playableOK                bool          // playable is up to date
 
 	// Word packages: only introduced words fall.
 	introduced           map[string]bool     // readings shown in a package intro
@@ -144,37 +154,43 @@ type GameState struct {
 // NewGameState constructs a new GameState, loading persisted state if store is non-nil.
 func NewGameState(st *store.Store) *GameState {
 	gs := &GameState{
-		sessionStats:      make(map[string]store.KanaStats),
-		overallStats:      make(map[string]store.KanaStats),
-		currentStreak:     make(map[string]int),
-		selectedRows:      make(map[string]bool),
-		activeScripts:     map[kanacore.Script]bool{kanacore.ScriptHiragana: true},
-		eventCh:           make(chan gameEvent, 4),
-		stopCh:            make(chan struct{}),
-		scoreLimit:        store.DefaultScoreLimit,
-		charSet:           kanacore.AllKana(),
-		store:             st,
-		canvasW:           400,
-		canvasH:           600,
-		level:             LevelByName(""),
-		memory:            map[string]memory.State{},
-		memoryDirty:       map[string]bool{},
-		kanaProgress:      map[string]store.Progress{},
-		kanaProgressDirty: map[string]bool{},
-		now:               time.Now,
-		rnd:               rand.Float64,
-		wordOverallStats:  make(map[string]store.WordStats),
-		wordSessionStats:  make(map[string]store.WordStats),
-		wordMemory:        map[string]memory.State{},
-		wordMemoryDirty:   map[string]bool{},
-		wordProgress:      map[string]store.Progress{},
-		wordProgressDirty: map[string]bool{},
-		wordLevel:         store.DefaultWordLevel,
-		introduced:        map[string]bool{},
-		introducedDirty:   map[string]bool{},
-		packageSize:       store.DefaultPackageSize,
-		wordSource:        jlptSource,
-		kanaFont:          fontByID(store.DefaultKanaFont),
+		sessionStats:         make(map[string]store.KanaStats),
+		overallStats:         make(map[string]store.KanaStats),
+		currentStreak:        make(map[string]int),
+		selectedRows:         make(map[string]bool),
+		activeScripts:        map[kanacore.Script]bool{kanacore.ScriptHiragana: true},
+		eventCh:              make(chan gameEvent, 4),
+		stopCh:               make(chan struct{}),
+		scoreLimit:           store.DefaultScoreLimit,
+		charSet:              kanacore.AllKana(),
+		store:                st,
+		canvasW:              400,
+		canvasH:              600,
+		level:                LevelByName(""),
+		memory:               map[string]memory.State{},
+		memoryDirty:          map[string]bool{},
+		kanaProgress:         map[string]store.Progress{},
+		kanaProgressDirty:    map[string]bool{},
+		now:                  time.Now,
+		rnd:                  rand.Float64,
+		wordOverallStats:     make(map[string]store.WordStats),
+		wordSessionStats:     make(map[string]store.WordStats),
+		wordMemory:           map[string]memory.State{},
+		wordMemoryDirty:      map[string]bool{},
+		wordProgress:         map[string]store.Progress{},
+		wordProgressDirty:    map[string]bool{},
+		meaningOverallStats:  make(map[string]store.WordStats),
+		meaningSessionStats:  make(map[string]store.WordStats),
+		meaningMemory:        map[string]memory.State{},
+		meaningMemoryDirty:   map[string]bool{},
+		meaningProgress:      map[string]store.Progress{},
+		meaningProgressDirty: map[string]bool{},
+		wordLevel:            store.DefaultWordLevel,
+		introduced:           map[string]bool{},
+		introducedDirty:      map[string]bool{},
+		packageSize:          store.DefaultPackageSize,
+		wordSource:           jlptSource,
+		kanaFont:             fontByID(store.DefaultKanaFont),
 	}
 
 	for _, id := range kanacore.DefaultRowIDs() {
@@ -202,23 +218,13 @@ func NewGameState(st *store.Store) *GameState {
 		} else {
 			gs.memoryLoadFailed = true
 		}
-		if ws, err := st.WordStatistics(); err == nil {
-			gs.wordOverallStats = ws
-		}
-		if ms, err := st.MemoryStates("word:"); err == nil {
-			gs.wordMemory = ms
-		} else {
-			gs.wordMemoryLoadFailed = true
+		for _, k := range wordKinds {
+			gs.loadTrack(k)
 		}
 		if p, err := st.Progress("kana:"); err == nil {
 			gs.kanaProgress = p
 		} else {
 			gs.kanaProgressLoadFailed = true
-		}
-		if p, err := st.Progress("word:"); err == nil {
-			gs.wordProgress = p
-		} else {
-			gs.wordProgressLoadFailed = true
 		}
 		if level, err := st.WordLevel(); err == nil {
 			gs.wordLevel = level
@@ -438,8 +444,6 @@ func (gs *GameState) Reset() {
 	gs.sessionStats = make(map[string]store.KanaStats)
 	gs.currentStreak = make(map[string]int)
 	gs.sessionDirty = false
-	gs.wordSessionStats = make(map[string]store.WordStats)
-	gs.wordSessionDirty = false
 	// An intro dropped by game over is shown before the new game starts; the
 	// offer cannot be pending at game over and is already marked as made.
 	// The new game stays paused only while that intro is still pending,
@@ -463,10 +467,15 @@ func (gs *GameState) Reset() {
 			}
 		}
 	}
-	gs.wordOverallStats = make(map[string]store.WordStats)
-	if gs.store != nil {
-		if ws, err := gs.store.WordStatistics(); err == nil {
-			gs.wordOverallStats = ws
+	for _, k := range wordKinds {
+		t := gs.track(k)
+		clear(t.sessionStats)
+		*t.sessionDirty = false
+		clear(t.overallStats)
+		if gs.store != nil {
+			if ws, err := gs.loadWordStats(k); err == nil {
+				maps.Copy(t.overallStats, ws)
+			}
 		}
 	}
 	gs.invalidatePlayable()
@@ -568,7 +577,7 @@ func (gs *GameState) tick() {
 			missedNow = true
 			gs.lastFallen, gs.lastFallenAt = tile, gs.now()
 			if tile.word != nil {
-				gs.recordWordMiss(tile.word.Kana)
+				gs.recordWordMiss(tile.word.Kana, readingKind)
 				gs.missedWords = append(gs.missedWords, *tile.word)
 				gs.addFeedback(feedbackMiss, missFeedbackText(*tile.word, gs.meaningLang), tile.pos)
 			} else {
@@ -670,7 +679,7 @@ func (gs *GameState) checkAnswer(input string) {
 		announced := false
 		if tile.word != nil {
 			gs.score += 10 * len(tile.word.Units) * gs.pointsFactor()
-			gs.recordWordCorrect(tile.word.Kana)
+			gs.recordWordCorrect(tile.word.Kana, readingKind)
 			byMeaning := !tile.word.ReadingMatches(input)
 			gs.addFeedback(feedbackHit, hitFeedbackText(*tile.word, gs.meaningLang, byMeaning), tile.pos)
 		} else {
@@ -711,7 +720,7 @@ func (gs *GameState) wrongInput(input string) {
 	}
 	tile := gs.tiles[0]
 	if tile.word != nil {
-		gs.applyWordMistake(tile.word.Kana)
+		gs.applyWordMistake(tile.word.Kana, readingKind)
 	} else {
 		gs.applyKanaMistake(tile.kana.Char)
 	}
@@ -900,9 +909,9 @@ func (gs *GameState) mergeKanaStats() {
 	gs.sessionDirty = false
 }
 
-// saveMemory writes changed kana and word memory states. If loading a kind
-// failed, nothing of that kind is written, so the stored states are not
-// replaced by fresh ones. Must be called under lock.
+// saveMemory writes changed kana memory states and both kinds of word memory.
+// If loading a kind failed, nothing of that kind is written, so the stored
+// states are not replaced by fresh ones. Must be called under lock.
 func (gs *GameState) saveMemory() {
 	if gs.store == nil {
 		return
@@ -914,10 +923,14 @@ func (gs *GameState) saveMemory() {
 			}
 		}
 	}
-	if !gs.wordMemoryLoadFailed {
-		for kana := range gs.wordMemoryDirty {
-			if err := gs.store.SaveMemoryState("word:"+kana, gs.wordMemory[kana]); err == nil {
-				delete(gs.wordMemoryDirty, kana)
+	for _, k := range wordKinds {
+		t := gs.track(k)
+		if *t.memoryLoadFailed {
+			continue
+		}
+		for kana := range t.memoryDirty {
+			if err := gs.store.SaveMemoryState(k.prefix()+kana, t.memory[kana]); err == nil {
+				delete(t.memoryDirty, kana)
 			}
 		}
 	}

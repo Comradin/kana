@@ -53,7 +53,7 @@ func (gs *GameState) newestPackageDone() bool {
 			continue
 		}
 		playable++
-		if gs.wordLearned(kana) {
+		if gs.wordLearned(kana, readingKind) {
 			learnedN++
 		}
 	}

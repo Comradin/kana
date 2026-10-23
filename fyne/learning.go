@@ -37,10 +37,10 @@ func (gs *GameState) kanaLevel(char string) int {
 	return gs.kanaProgress[char].Level
 }
 
-// wordLearned reports whether a reading is learned. Must be called under
-// lock.
-func (gs *GameState) wordLearned(kana string) bool {
-	return learned(gs.wordProgress[kana].Level)
+// wordLearned reports whether a reading is learned in kind k. Must be
+// called under lock.
+func (gs *GameState) wordLearned(kana string, k wordKind) bool {
+	return learned(gs.track(k).progress[kana].Level)
 }
 
 // raiseKana records a hit on a character and reports whether it became
@@ -61,22 +61,26 @@ func (gs *GameState) lowerKana(char string) bool {
 	return learned(before.Level)
 }
 
-// raiseWord records a hit on a reading. Must be called under lock.
-func (gs *GameState) raiseWord(kana string) {
-	gs.wordProgress[kana] = hit(gs.wordProgress[kana])
-	gs.wordProgressDirty[kana] = true
+// raiseWord records a hit on a reading in kind k. Must be called under
+// lock.
+func (gs *GameState) raiseWord(kana string, k wordKind) {
+	t := gs.track(k)
+	t.progress[kana] = hit(t.progress[kana])
+	t.progressDirty[kana] = true
 }
 
-// lowerWord records a mistake on a reading. Must be called under lock.
-func (gs *GameState) lowerWord(kana string) {
-	gs.wordProgress[kana] = mistake(gs.wordProgress[kana])
-	gs.wordProgressDirty[kana] = true
+// lowerWord records a mistake on a reading in kind k. Must be called under
+// lock.
+func (gs *GameState) lowerWord(kana string, k wordKind) {
+	t := gs.track(k)
+	t.progress[kana] = mistake(t.progress[kana])
+	t.progressDirty[kana] = true
 }
 
-// saveProgress writes changed kana and word progress. A failed save stays
-// dirty for the next merge. If loading a kind failed, nothing of that kind
-// is written, so the stored levels are not replaced by fresh ones. Must be
-// called under lock.
+// saveProgress writes changed kana progress and both kinds of word progress.
+// A failed save stays dirty for the next merge. If loading a kind failed,
+// nothing of that kind is written, so the stored levels are not replaced by
+// fresh ones. Must be called under lock.
 func (gs *GameState) saveProgress() {
 	if gs.store == nil {
 		return
@@ -88,10 +92,14 @@ func (gs *GameState) saveProgress() {
 			}
 		}
 	}
-	if !gs.wordProgressLoadFailed {
-		for kana := range gs.wordProgressDirty {
-			if err := gs.store.SaveProgress("word:"+kana, gs.wordProgress[kana]); err == nil {
-				delete(gs.wordProgressDirty, kana)
+	for _, k := range wordKinds {
+		t := gs.track(k)
+		if *t.progressLoadFailed {
+			continue
+		}
+		for kana := range t.progressDirty {
+			if err := gs.store.SaveProgress(k.prefix()+kana, t.progress[kana]); err == nil {
+				delete(t.progressDirty, kana)
 			}
 		}
 	}
