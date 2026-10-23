@@ -1,10 +1,13 @@
 package main
 
 import (
+	"math/rand"
 	"testing"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/test"
+	"kana/memory"
 	"kana/store"
 	"kana/vocab"
 )
@@ -193,5 +196,106 @@ func TestChangingWordsAskLeavesFallingTiles(t *testing.T) {
 	gs.applyWordSettings(wordSettings{source: jlptSource, level: 5, packageSize: 5, ask: readingKind})
 	if len(gs.tiles) != 1 || gs.tiles[0] != meaning || meaning.ask != meaningKind {
 		t.Fatal("switching back keeps the meaning tile")
+	}
+}
+
+func TestMeaningModeAsksOnlyWordsWithAMeaning(t *testing.T) {
+	gs := newTestState()
+	selectRows(gs, "vowels")
+	gs.wordsOnly = true
+	gs.rnd = rand.New(rand.NewSource(11)).Float64
+	withWords(gs,
+		bw("あい", 5, "love"),
+		vocab.Word{Kana: "あお", JLPT: 5, Source: vocab.BundledSource, Meanings: vocab.Meanings{}},
+		vocab.Word{Kana: "あう", JLPT: 5, Source: vocab.BundledSource, Meanings: vocab.Meanings{"en": {"(to meet)"}}},
+		vocab.Word{Kana: "いえ", JLPT: 5, Source: vocab.BundledSource, Meanings: vocab.Meanings{"de": {"Haus"}}},
+	)
+	if got := readingsOf(gs.askableWords()); !equalIDs(got, []string{"あい", "あう", "あお", "いえ"}) {
+		t.Fatalf("reading mode asks every playable word, got %v", got)
+	}
+	gs.wordsAsk = meaningKind
+	if got := readingsOf(gs.askableWords()); !equalIDs(got, []string{"あい", "いえ"}) {
+		t.Fatalf("meaning mode: %v, want あい and いえ (a meaning only in brackets or none does not count)", got)
+	}
+	for i := 0; i < 300; i++ {
+		gs.tiles = nil
+		gs.spawnKana()
+		if k := gs.tiles[0].word.Kana; k != "あい" && k != "いえ" {
+			t.Fatalf("spawned %s in meaning mode", k)
+		}
+	}
+	if got := playableKana(gs); len(got) != 4 {
+		t.Fatalf("playable %v: words without a meaning stay playable", got)
+	}
+}
+
+func TestMeaningModeWithoutMeaningsFallsBackToKana(t *testing.T) {
+	gs := newTestState()
+	selectRows(gs, "vowels")
+	gs.wordsOnly = true
+	withWords(gs, vocab.Word{Kana: "あお", JLPT: 5, Source: vocab.BundledSource, Meanings: vocab.Meanings{}})
+	if got := formatWordsLine(gs.wordsStatus()); got != "Words: JLPT N5 finished" {
+		t.Fatalf("reading mode line %q", got)
+	}
+	gs.wordsAsk = meaningKind
+	gs.spawnKana()
+	if gs.tiles[0].word != nil {
+		t.Fatal("no word with a meaning: a kana falls")
+	}
+	if got := formatWordsLine(gs.wordsStatus()); got != "Words only: no word has a meaning to ask for" {
+		t.Fatalf("meaning mode line %q", got)
+	}
+}
+
+func TestMeaningModePicksByMeaningLevel(t *testing.T) {
+	gs := newTestState()
+	selectRows(gs, "vowels")
+	gs.wordsOnly = true
+	gs.focusWeak = true
+	gs.wordsAsk = meaningKind
+	gs.rnd = rand.New(rand.NewSource(5)).Float64
+	words := vowelWords(10)
+	withWords(gs, words...)
+	meaningWeak, readingWeak := words[3].Kana, words[6].Kana
+	gs.meaningProgress[meaningWeak] = store.Progress{Level: 2, Flagged: true}
+	gs.wordProgress[readingWeak] = store.Progress{Level: 2, Flagged: true}
+	counts := map[string]int{}
+	for i := 0; i < 1000; i++ {
+		gs.tiles = nil
+		gs.spawnKana()
+		counts[gs.tiles[0].word.Kana]++
+	}
+	if n := counts[meaningWeak]; n < 480 || n > 640 {
+		t.Fatalf("slipped meaning in %d/1000 spawns, want about 550", n)
+	}
+	if n := counts[readingWeak]; n > 150 {
+		t.Fatalf("a slipped reading is no weak item in meaning mode, got %d/1000", n)
+	}
+}
+
+func TestMeaningModePicksByMeaningMemory(t *testing.T) {
+	gs := newTestState()
+	now := time.Unix(1_700_000_000, 0)
+	gs.now = func() time.Time { return now }
+	gs.rnd = rand.New(rand.NewSource(9)).Float64
+	fresh := memory.State{Stability: 100, LastSeen: now}
+	missed := memory.Miss(fresh, now) // half forgotten
+	gs.wordMemory["あい"], gs.wordMemory["あお"] = missed, fresh
+	gs.meaningMemory["あい"], gs.meaningMemory["あお"] = fresh, missed
+	count := func() int {
+		n := 0
+		for i := 0; i < 1000; i++ {
+			if gs.pickReading([]string{"あい", "あお"}) == "あお" {
+				n++
+			}
+		}
+		return n
+	}
+	if n := count(); n > 200 {
+		t.Fatalf("reading mode picked あお %d/1000; its reading is fresh", n)
+	}
+	gs.wordsAsk = meaningKind
+	if n := count(); n < 800 {
+		t.Fatalf("meaning mode picked あお %d/1000; its meaning was just missed", n)
 	}
 }

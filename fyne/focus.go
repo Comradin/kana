@@ -65,10 +65,12 @@ func (gs *GameState) pickKana(candidates []string) string {
 }
 
 // pickReading picks the next word reading from candidates, like pickKana
-// over the word progress and memory. Must be called under lock.
+// over the progress and memory of what new tiles ask for (gs.wordsAsk).
+// Must be called under lock.
 func (gs *GameState) pickReading(candidates []string) string {
-	if c, ok := gs.pickFocus(candidates, gs.wordProgress); ok {
+	t := gs.track(gs.wordsAsk)
+	if c, ok := gs.pickFocus(candidates, t.progress); ok {
 		return c
 	}
-	return memory.Pick(candidates, gs.wordMemory, gs.now(), gs.rnd)
+	return memory.Pick(candidates, t.memory, gs.now(), gs.rnd)
 }

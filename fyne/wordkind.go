@@ -5,6 +5,7 @@ import (
 
 	"kana/memory"
 	"kana/store"
+	"kana/vocab"
 )
 
 // wordKind is what a word tile asks for and what a word answer counts for:
@@ -144,4 +145,28 @@ func (gs *GameState) readingTyped(input string) *KanaTile {
 		}
 	}
 	return best
+}
+
+// askable reports whether new tiles may ask about e: always in reading
+// mode; in meaning mode only with a meaning to type (see
+// vocab.Meanings.Answerable). Must be called under lock.
+func (gs *GameState) askable(e vocab.Entry) bool {
+	return gs.wordsAsk != meaningKind || e.Meanings.Answerable(gs.meaningLang)
+}
+
+// askableWords returns the playable words new tiles may ask about (see
+// askable), sorted by reading. In reading mode it is playableWords' cached
+// slice; do not modify it. Must be called under lock.
+func (gs *GameState) askableWords() []vocab.Entry {
+	playable := gs.playableWords()
+	if gs.wordsAsk != meaningKind {
+		return playable
+	}
+	var out []vocab.Entry
+	for _, e := range playable {
+		if gs.askable(e) {
+			out = append(out, e)
+		}
+	}
+	return out
 }

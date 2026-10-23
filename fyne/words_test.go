@@ -120,6 +120,7 @@ func TestFormatWordsLine(t *testing.T) {
 		{"words only, scripts", WordsStatus{WordsOnly: true, KanaFallback: true, Introduced: 2, Source: "minna"}, "Words only: no word fits the active scripts"},
 		{"words only, new words need a script", WordsStatus{WordsOnly: true, Next: wordsNeedKana, Introduced: 3, Source: "minna"}, "Words only: new words need a script that is off"},
 		{"mixed, empty lessons", WordsStatus{Empty: true, Filtered: true, Next: wordsFinished, Source: "minna"}, "Words: no words in the chosen lessons"},
+		{"words only, no meanings", WordsStatus{WordsOnly: true, KanaFallback: true, NoMeanings: true, Introduced: 2, Source: "minna"}, "Words only: no word has a meaning to ask for"},
 	}
 	for _, c := range cases {
 		if got := formatWordsLine(c.ws); got != c.want {

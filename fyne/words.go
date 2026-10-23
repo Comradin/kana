@@ -235,6 +235,7 @@ type WordsStatus struct {
 	KanaFallback bool // words-only mode, but no word can fall and no package can come: kana fall
 	Filtered     bool // a lesson filter limits the source
 	Empty        bool // the source with its lesson filter has no word at all
+	NoMeanings   bool // meaning mode: words can fall, but none has a meaning to ask for
 }
 
 // formatWordsLine is the status panel's words line: counts, or a hint when
@@ -289,6 +290,8 @@ func wordsOnlyReason(ws WordsStatus) string {
 		return "no words in the chosen lessons"
 	case ws.Empty:
 		return "no words in " + ws.Source
+	case ws.NoMeanings:
+		return "no word has a meaning to ask for"
 	}
 	return "no word fits the active scripts"
 }
