@@ -115,3 +115,46 @@ func TestWordTileShowsTheShownForm(t *testing.T) {
 		t.Fatalf("text %q, word %q; want ～さん on the tile, さん as its reading", tile.text.Text, tile.word.Kana)
 	}
 }
+
+func TestMeaningTileHasAMarkerBesideTheWord(t *testing.T) {
+	test.NewApp()
+	e := vocab.Entry{Kana: "き", Units: []string{"き"}}
+	reading := newWordTile(e, 400, fontChoice{})
+	tile := newMeaningTile(e, 400, fontChoice{})
+	if reading.ask != readingKind || reading.marker != nil || len(reading.Objects()) != 3 {
+		t.Fatalf("a reading tile asks for the reading and has no marker: ask %v, marker %v", reading.ask, reading.marker)
+	}
+	if tile.ask != meaningKind || tile.marker == nil || tile.word.Kana != "き" {
+		t.Fatalf("meaning tile: ask %v, marker %v", tile.ask, tile.marker)
+	}
+	if objs := tile.Objects(); len(objs) != 4 || objs[3] != tile.marker {
+		t.Fatalf("objects = %d, want shadow, face, text and the marker on top", len(objs))
+	}
+	if tile.marker.Text != meaningMarkerText || tile.marker.Color != wordTileBorderColor {
+		t.Fatalf("marker %q in %v", tile.marker.Text, tile.marker.Color)
+	}
+	if tile.Width() <= reading.Width() {
+		t.Fatalf("meaning tile %.1f should be wider than the reading tile %.1f", tile.Width(), reading.Width())
+	}
+	tile.Move(fyne.NewPos(40, 20))
+	mp, ms := tile.marker.Position(), tile.marker.Size()
+	textLeft := tile.text.Position().X
+	textRight := textLeft + tile.text.Size().Width
+	if mp.X < textRight {
+		t.Fatalf("marker at %.1f covers the word ending at %.1f", mp.X, textRight)
+	}
+	if mp.X+ms.Width > 40+tile.Width() || mp.Y < 20 || mp.Y+ms.Height > 20+tileH {
+		t.Fatalf("marker %v %v outside the face at (40, 20) %.1f×%.0f", mp, ms, tile.Width(), tileH)
+	}
+	if left, right := textLeft-40, 40+tile.Width()-textRight; left-right > 1 || right-left > 1 {
+		t.Fatalf("word not centred (left %.1f, right %.1f)", left, right)
+	}
+}
+
+func TestMeaningTileShrinksToFitField(t *testing.T) {
+	test.NewApp()
+	tile := newMeaningTile(vocab.Entry{Kana: "コンピューター"}, 150, fontChoice{})
+	if tile.Width() > 150 {
+		t.Fatalf("width %.1f exceeds the 150 px field", tile.Width())
+	}
+}
