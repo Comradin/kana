@@ -27,10 +27,10 @@ level**, **meaning level**, **learned**, **slipped**, **weak item**,
 | Which answer raises which level | Reading mode: the reading raises the reading level; a meaning is still accepted and raises the meaning level, not the reading level. Meaning mode: only a meaning counts and raises the meaning level. |
 | Reading typed in meaning mode | When the input matches a falling word tile's reading but none of its meanings, the game shows the hint "type the meaning" at the tile; it is no mistake and the tile keeps falling. Meanings are checked first: an input that matches both a meaning and a reading is a meaning hit. |
 | Mistakes | A tile that falls through lowers the level of the chosen mode only: the meaning level in meaning mode, the reading level in reading mode. |
-| Eligible words | All introduced words, bundled JLPT words included. Meaning matching is as today: any meaning in the meaning language or in English, ignoring brackets, articles and "to". A word with no meaning in either language does not fall in meaning mode. |
+| Eligible words | All introduced words, bundled JLPT words included. Meaning matching is as today: the meanings in the meaning language, else English, else any language a word has, ignoring brackets, articles and "to". A word with no meaning a learner could type does not fall in meaning mode. |
 | Waiting words | Unchanged: a word falls only when all its kana are learned, in both modes. |
 | Selection | In meaning mode, words are picked by their meaning level and meaning memory, also for "Focus on weak items". |
-| Slipped frame | A word tile's red frame follows the level of the chosen mode. |
+| Slipped flag | Kept per level. Word tiles have no red frame today and get none; showing it belongs to the level-dots backlog issue. |
 | Tile marker | In meaning mode, word tiles carry a small marker so a one-kana word (き, え) is not mistaken for a kana tile. Its look is settled in the plan; it must read in both themes and not hide the kana. |
 | Feedback | Hit, miss and the game-over list show "kana · romaji — meaning" as today, in both modes. |
 | Status line | Shows the counts of the chosen mode: "Words: N introduced · N learned · …" in reading mode, "Meanings: N introduced · N learned · …" in meaning mode. Showing both levels per word belongs to the level-dots backlog issue. |
@@ -58,7 +58,7 @@ level**, **meaning level**, **learned**, **slipped**, **weak item**,
 - `store`: meaning progress, memory and hit/miss counts beside the reading's;
   the "Words ask for" setting.
 - `fyne`: the setting in the Words tab; answer matching per mode; level,
-  memory and stats updates per mode; selection, weak items, slipped frame,
+  memory and stats updates per mode; selection, weak items,
   package rhythm and status line by the chosen mode; tile marker; hint
   feedback.
 - README (meaning mode) and GLOSSARY (done).
