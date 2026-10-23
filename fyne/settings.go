@@ -12,6 +12,7 @@ import (
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	"kana/kanacore"
@@ -402,21 +403,23 @@ func (f *settingsForm) newWordsTab(st settingsState) fyne.CanvasObject {
 	}
 
 	f.summary = widget.NewLabel(st.summary)
+	// Labels sit beside their choices, so the tab fits a small window.
+	bold := fyne.TextStyle{Bold: true}
 	return container.NewVBox(
-		widget.NewLabelWithStyle("Tiles", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-		f.tiles,
-		widget.NewLabelWithStyle("Words ask for", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-		f.wordsAsk,
+		container.New(layout.NewFormLayout(),
+			widget.NewLabelWithStyle("Tiles", fyne.TextAlignLeading, bold), f.tiles,
+			widget.NewLabelWithStyle("Words ask for", fyne.TextAlignLeading, bold), f.wordsAsk,
+		),
 		widget.NewSeparator(),
-		widget.NewLabelWithStyle("New words from", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		widget.NewLabelWithStyle("New words from", fyne.TextAlignLeading, bold),
 		f.sourceSelect,
 		container.NewHBox(importButton, manageButton),
 		f.lessonScroll,
-		widget.NewLabel("JLPT level"),
-		f.wordLevel,
-		widget.NewLabel("Words per package"),
-		f.packageSize,
-		container.NewHBox(widget.NewLabel("Meanings in"), f.meaningSelect),
+		container.New(layout.NewFormLayout(),
+			widget.NewLabel("JLPT level"), f.wordLevel,
+			widget.NewLabel("Words per package"), f.packageSize,
+			widget.NewLabel("Meanings in"), container.NewHBox(f.meaningSelect),
+		),
 		widget.NewSeparator(),
 		f.summary,
 		f.folder,
@@ -647,6 +650,24 @@ func (f *settingsForm) apply(gs *GameState) {
 		levelFromLabel(f.difficulty.Selected), pointsFromLabel(f.points.Selected))
 }
 
+// settingsChrome is the height the settings dialog adds around its tabs:
+// title, tab bar, buttons and padding.
+const settingsChrome = 200
+
+// fitTabs makes every tab taller than maxHeight scroll within that height,
+// so the dialog's buttons never cover a tab in a small window.
+func (f *settingsForm) fitTabs(maxHeight float32) {
+	for _, tab := range f.tabs.Items {
+		min := tab.Content.MinSize()
+		if min.Height <= maxHeight {
+			continue
+		}
+		scroll := container.NewVScroll(tab.Content)
+		scroll.SetMinSize(fyne.NewSize(min.Width, max(maxHeight, 0)))
+		tab.Content = scroll
+	}
+}
+
 // showSettingsDialog opens the settings, pausing the game while they are
 // open. A script's reset asks for confirmation, then closes the settings and
 // restarts the round.
@@ -683,6 +704,7 @@ func showSettingsDialog(gs *GameState, statsPanel *StatsPanel, gameCanvas *GameC
 	form.onImport = func() { showImportDialog(gs, form, win) }
 	form.onManage = func() { showListsDialog(gs, form, win) }
 
+	form.fitTabs(win.Canvas().Size().Height - settingsChrome)
 	d = dialog.NewCustomWithoutButtons("Settings", form.tabs, win)
 	openSettings = form
 	// Every way out (Save, Cancel, a reset) hides the dialog.
