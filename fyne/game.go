@@ -153,7 +153,8 @@ type GameState struct {
 	canvas *GameCanvas
 
 	// onStatsChanged refreshes the stats panel and input bar. buildWindow
-	// sets it before Start; tick calls it via fyne.Do after a miss.
+	// sets it before Start; tick calls it via fyne.Do after a miss and,
+	// in reading practice, about once a second for kana/min.
 	onStatsChanged func()
 }
 
@@ -613,6 +614,10 @@ func (gs *GameState) tick() {
 		}
 	}
 
+	// In reading practice kana/min changes with play time: refresh the
+	// status line about once a second once there is a rate to show.
+	rateTick := gs.readingPractice && gs.readKana > 0 && gs.playTicks%ticksPerSecond == 0
+
 	gs.buildSnapshot()
 	canvas := gs.canvas
 	hook := gs.onStatsChanged
@@ -621,7 +626,7 @@ func (gs *GameState) tick() {
 	if canvas != nil {
 		fyne.Do(func() { canvas.Refresh() })
 	}
-	if missedNow && hook != nil {
+	if (missedNow || rateTick) && hook != nil {
 		fyne.Do(hook)
 	}
 }
