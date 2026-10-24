@@ -119,6 +119,7 @@ type GameState struct {
 	focusWeak     bool      // focus on weak items: half the picks go to them
 	answerStreak  int       // correct answers in a row this game
 	tempoStep     int       // session tempo, 0..maxTempoStep
+	readKana      int       // kana units of words read in reading practice this round
 
 	paused       bool     // tick, spawn and answers are suspended
 	pendingIntro []string // row IDs waiting to be introduced
@@ -446,6 +447,7 @@ func (gs *GameState) Reset() {
 	gs.missed = 0
 	gs.answerStreak = 0
 	gs.tempoStep = 0
+	gs.readKana = 0
 	gs.over = false
 	gs.overReason = ""
 	gs.missedKanas = nil
@@ -671,7 +673,8 @@ func (gs *GameState) spawnKana() {
 }
 
 // checkAnswer removes the lowest tile that input answers (see answers): a
-// word hit counts for the reading or the meaning (see answeredKind). If no
+// word hit counts for the reading or the meaning (see answeredKind), a word
+// read in reading practice for its kana (see recordReading). If no
 // tile is answered but input is the reading of a tile asking for its
 // meaning, the hint "type the meaning" is shown there, which is no mistake.
 // Any other input that answers no tile may count as a mistake (see
@@ -700,9 +703,14 @@ func (gs *GameState) checkAnswer(input string) {
 		announced := false
 		if tile.word != nil {
 			gs.score += 10 * len(tile.word.Units) * gs.pointsFactor()
-			kind := answeredKind(tile, input)
-			gs.recordWordCorrect(tile.word.Kana, kind)
-			gs.addFeedback(feedbackHit, hitFeedbackText(*tile.word, gs.meaningLang, kind == meaningKind), tile.pos)
+			if tile.practice {
+				announced = gs.recordReading(*tile.word, input)
+				gs.addFeedback(feedbackHit, hitFeedbackText(*tile.word, gs.meaningLang, false), tile.pos)
+			} else {
+				kind := answeredKind(tile, input)
+				gs.recordWordCorrect(tile.word.Kana, kind)
+				gs.addFeedback(feedbackHit, hitFeedbackText(*tile.word, gs.meaningLang, kind == meaningKind), tile.pos)
+			}
 		} else {
 			gs.score += 10 * gs.pointsFactor()
 			announced = gs.recordCorrect(tile.kana.Char)
@@ -734,7 +742,8 @@ func (gs *GameState) checkAnswer(input string) {
 // and an input answering a tile that just fell through is a late Enter;
 // both are ignored, as is blank input. The tile stays, the miss limit and
 // the tempo are untouched, and no feedback is shown. The mistake counts for
-// the tile's question. Must be called under lock.
+// the tile's question. On a tile spawned in reading practice nothing
+// counts. Must be called under lock.
 func (gs *GameState) wrongInput(input string) {
 	if strings.TrimSpace(input) == "" || len(gs.tiles) != 1 {
 		return
@@ -744,9 +753,13 @@ func (gs *GameState) wrongInput(input string) {
 		return
 	}
 	tile := gs.tiles[0]
-	if tile.word != nil {
+	switch {
+	case tile.practice:
+		// Reading practice changes no word, and only a reading counts
+		// for kana: a wrong input costs nothing.
+	case tile.word != nil:
 		gs.applyWordMistake(tile.word.Kana, tile.ask)
-	} else {
+	default:
 		gs.applyKanaMistake(tile.kana.Char)
 	}
 }
@@ -754,9 +767,13 @@ func (gs *GameState) wrongInput(input string) {
 // answers reports whether input answers the tile: a kana by its romaji; a
 // word by its meaning (see vocab.Meanings.MeaningMatches) or, if it asks
 // for its reading, by one of its readings (see vocab.Entry.ReadingMatches).
-// Must be called under lock.
+// A tile spawned in reading practice takes its readings only. Must be
+// called under lock.
 func (gs *GameState) answers(tile *KanaTile, input string) bool {
 	if tile.word != nil {
+		if tile.practice {
+			return tile.word.ReadingMatches(input)
+		}
 		if tile.word.Meanings.MeaningMatches(gs.meaningLang, input) {
 			return true
 		}
@@ -802,6 +819,14 @@ func (gs *GameState) endGame(reason string) {
 // and tempo, then auto-progression. Reports whether it announced newly
 // unlocked rows. Must be called under lock.
 func (gs *GameState) recordCorrect(char string) bool {
+	gs.creditKana(char)
+	gs.raiseTempo()
+	return gs.progressAfterHit()
+}
+
+// creditKana counts a hit on a character: streak, session stats, memory
+// and level. Must be called under lock.
+func (gs *GameState) creditKana(char string) {
 	streak := gs.currentStreak[char] + 1
 	gs.currentStreak[char] = streak
 
@@ -819,9 +844,11 @@ func (gs *GameState) recordCorrect(char string) bool {
 	if gs.raiseKana(char) {
 		gs.invalidatePlayable() // the kana just became learned
 	}
+}
 
-	gs.raiseTempo()
-
+// progressAfterHit runs auto-progression after a hit and reports whether it
+// announced newly unlocked rows. Must be called under lock.
+func (gs *GameState) progressAfterHit() bool {
 	if unlocked := gs.checkAutoProgression(); len(unlocked) > 0 {
 		gs.announceRows(unlocked)
 		return true
