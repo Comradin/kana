@@ -54,6 +54,7 @@ type KanaTile struct {
 	text        *canvas.Text
 	marker      *canvas.Text // a meaning tile's marker; nil otherwise
 	ask         wordKind     // what a word tile asks for; readingKind for kana tiles
+	practice    bool         // spawned in reading practice: answered by a reading only, counted for its kana
 	fallSeconds float32      // time to cross the canvas; see fallStep
 }
 
