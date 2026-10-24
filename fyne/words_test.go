@@ -180,3 +180,26 @@ func TestDisplayDir(t *testing.T) {
 		t.Errorf("without a home: %q", got)
 	}
 }
+
+func TestFormatWordsLineReadingPractice(t *testing.T) {
+	cases := []struct {
+		name string
+		ws   WordsStatus
+		want string
+	}{
+		{"no word read yet", WordsStatus{Reading: true, Readable: 12, Source: "JLPT N5", Level: 5}, "Reading practice: 12 words to read · – kana/min"},
+		{"speed", WordsStatus{Reading: true, Readable: 1, ReadKana: 40, KanaPerMin: 35, Source: "JLPT N5", Level: 5}, "Reading practice: 1 word to read · 35 kana/min"},
+		{"nothing readable", WordsStatus{Reading: true, Source: "JLPT N5", Level: 5}, noWordsToReadText},
+		{"nothing readable, words only", WordsStatus{Reading: true, WordsOnly: true, KanaFallback: true, Source: "minna", Next: wordsNeedKana}, noWordsToReadText},
+		{"list missing", WordsStatus{Reading: true, WordsOnly: true, KanaFallback: true, Missing: true, Dir: "~/words", Source: "minna"}, "Words only: add a list to ~/words or choose JLPT"},
+		{"skipped rows", WordsStatus{Reading: true, Readable: 3, Skipped: 2, Source: "minna"}, "Reading practice: 3 words to read · – kana/min · 2 rows skipped"},
+	}
+	for _, c := range cases {
+		if got := formatWordsLine(c.ws); got != c.want {
+			t.Errorf("%s: %q, want %q", c.name, got, c.want)
+		}
+	}
+	if noWordsToReadText != "No words to read yet — learn more kana or pick another list" {
+		t.Fatalf("reason %q", noWordsToReadText)
+	}
+}

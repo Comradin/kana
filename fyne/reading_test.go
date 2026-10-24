@@ -411,3 +411,51 @@ func TestPracticeTilesStayWhileReadable(t *testing.T) {
 		t.Fatal("a practice tile whose word is no longer readable goes")
 	}
 }
+
+func TestReadingPracticeStatusLine(t *testing.T) {
+	gs := newTestState()
+	gs.readingPractice = true
+	withWords(gs, bw("かさ", 5, "umbrella"), bw("さか", 5, "slope"), bw("かき", 5, "persimmon"))
+	gs.introduced = map[string]bool{}
+	gs.invalidatePlayable()
+	if got := formatWordsLine(gs.wordsStatus()); got != noWordsToReadText {
+		t.Fatalf("no kana learned: %q", got)
+	}
+	learnKana(gs, "か", "さ")
+	if got := formatWordsLine(gs.wordsStatus()); got != "Reading practice: 2 words to read · – kana/min" {
+		t.Fatalf("before reading: %q", got)
+	}
+	for i := 0; i < 60*ticksPerSecond; i++ { // one minute of play
+		gs.tick()
+	}
+	gs.paused = true
+	for i := 0; i < 60*ticksPerSecond; i++ { // a pause does not count
+		gs.tick()
+	}
+	gs.paused = false
+	gs.tiles = []*KanaTile{practiceTileAt(gs, "かさ", 100)}
+	gs.checkAnswer("kasa")
+	gs.tiles = []*KanaTile{practiceTileAt(gs, "さか", 100)}
+	gs.checkAnswer("saka")
+	if got := formatWordsLine(gs.wordsStatus()); got != "Reading practice: 2 words to read · 4 kana/min" {
+		t.Fatalf("4 kana in one minute of play: %q", got)
+	}
+	gs.Reset()
+	if gs.playTicks != 0 || gs.readKana != 0 {
+		t.Fatalf("a new round starts at 0: ticks %d, kana %d", gs.playTicks, gs.readKana)
+	}
+	if got := formatWordsLine(gs.wordsStatus()); got != "Reading practice: 2 words to read · – kana/min" {
+		t.Fatalf("after Reset: %q", got)
+	}
+}
+
+func TestKanaPerMinute(t *testing.T) {
+	gs := newTestState()
+	if got := gs.kanaPerMinute(); got != 0 {
+		t.Fatalf("no play: %d", got)
+	}
+	gs.playTicks, gs.readKana = 30*ticksPerSecond, 10
+	if got := gs.kanaPerMinute(); got != 20 {
+		t.Fatalf("10 kana in 30 s: %d, want 20", got)
+	}
+}
