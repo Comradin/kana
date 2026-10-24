@@ -61,16 +61,17 @@ Kana is a Fyne v2 desktop app (`kana-desktop`).
   whose kana you have all learned may fall, whether or not a package introduced it, picked at
   random. Type its reading; a meaning does not count, and "Words ask for" is greyed out
   meanwhile. A hit shows the word and its meaning; a wrong input costs nothing. A word read
-  counts for its kana, not for the word: each kana of the form you typed counts as a hit on
-  that kana, for the statistics and (outside "Words only") the learning path and the katakana
-  offer (the short form of an optional part counts only its own kana, ここ counts こ twice, っ
-  and ー count for nothing), and the tempo rises once per word. Words gain no level, and a
-  missed word costs a miss but changes no kana. No word packages and no JLPT level offer come
-  while it is on. The status line shows how many words you can read and your reading speed
-  this round in kana per minute, pauses excluded ("Reading practice: 214 words to read · 38
-  kana/min"). With "Words only" it is a pure reading drill; while no word can be read, kana
-  fall and the status line says so. A change applies to new tiles; tiles already falling keep
-  their rules.
+  counts for its kana, not for the word: each learned kana of the form you typed counts as a
+  hit on that kana, for the statistics and (outside "Words only") the learning path and the
+  katakana offer (the short form of an optional part counts only its own kana, ここ counts こ
+  twice; っ, ー and kana of another variant that you have not learned or whose script is off
+  count for nothing), and the tempo rises once per word. Words gain no level, and a missed word
+  costs a miss but changes no kana. No word packages and no JLPT level offer come while it is
+  on. The status line shows how many words you can read and your reading speed this round in
+  kana per minute of reading practice, pauses excluded, updated every second ("Reading
+  practice: 214 words to read · 38 kana/min"). With "Words only" it is a pure reading drill;
+  while no word can be read, kana fall and the status line says so. A change applies to new
+  tiles; tiles already falling keep their rules.
 - **Learning path**: start with あいうえお, unlock two rows at a time; each automatically unlocked row is introduced before it is asked, and the game pauses while new rows are introduced
 - **Two scripts**: hiragana and katakana progress independently; switch scripts in the settings. After the basic hiragana you are offered katakana once.
 - **Score Limit Mode**: Set a target score or 0 for endless practice
