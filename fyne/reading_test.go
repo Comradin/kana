@@ -109,6 +109,29 @@ func TestReadablePoolFollowsTheJLPTLevel(t *testing.T) {
 	}
 }
 
+func TestWordSettingsRefreshTheReadablePool(t *testing.T) {
+	gs := newTestState()
+	withWords(gs, bw("あい", 5, "love"), bw("いえ", 4, "house"))
+	learnKana(gs, "あ", "い", "う", "え", "お")
+	if got := readableKana(gs); !equalIDs(got, []string{"あい"}) {
+		t.Fatalf("N5: %v", got)
+	}
+	gs.applyWordSettings(wordSettings{source: jlptSource, level: 4, packageSize: gs.packageSize})
+	if got := readableKana(gs); !equalIDs(got, []string{"あい", "いえ"}) {
+		t.Fatalf("after choosing N4: %v", got)
+	}
+
+	words := []vocab.Word{lw("minna", "あい", "1"), lw("minna", "あお", "2")}
+	withList(gs, "minna", words...)
+	if got := readableKana(gs); !equalIDs(got, []string{"あい", "あお"}) {
+		t.Fatalf("all lessons: %v", got)
+	}
+	gs.applyWordSettings(wordSettings{source: listSourcePrefix + "minna", level: 4, packageSize: gs.packageSize, lessons: []string{"2"}})
+	if got := readableKana(gs); !equalIDs(got, []string{"あお"}) {
+		t.Fatalf("after choosing lesson 2: %v", got)
+	}
+}
+
 func TestReadingPracticeHoldsPackagesAndTheLevelOffer(t *testing.T) {
 	gs := packageReady(10)
 	gs.readingPractice = true
