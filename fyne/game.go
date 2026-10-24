@@ -620,7 +620,8 @@ func (gs *GameState) tick() {
 // probability wordShare when words are playable, otherwise a kana; with no
 // kana available it spawns a word if one is playable, else nothing. In
 // words-only mode every spawn is a word while one is playable, and a kana
-// only when none is. A word tile asks for what gs.wordsAsk says.
+// only when none is. A word tile asks for what gs.wordsAsk says; in reading
+// practice it is a practice tile asking for the reading (see pickReadable).
 func (gs *GameState) spawnKana() {
 	gs.mu.Lock()
 	if gs.over || gs.paused {
@@ -632,9 +633,13 @@ func (gs *GameState) spawnKana() {
 	base := gs.level.MinFall + rand.Float32()*(gs.level.MaxFall-gs.level.MinFall)
 	chars := gs.availableCharacters()
 	if entry, ok := gs.pickWord(gs.wordsOnly || len(chars) == 0); ok {
-		if gs.wordsAsk == meaningKind {
+		switch {
+		case gs.readingPractice:
+			tile = newWordTile(entry, gs.canvasW, gs.kanaFont)
+			tile.practice = true
+		case gs.wordsAsk == meaningKind:
 			tile = newMeaningTile(entry, gs.canvasW, gs.kanaFont)
-		} else {
+		default:
 			tile = newWordTile(entry, gs.canvasW, gs.kanaFont)
 		}
 		tile.fallSeconds = base * wordFallFactor(len(entry.Units)) * tempoFactor(gs.tempoStep)

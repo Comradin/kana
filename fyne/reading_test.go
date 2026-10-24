@@ -1,6 +1,7 @@
 package main
 
 import (
+	"math/rand"
 	"testing"
 
 	"fyne.io/fyne/v2/test"
@@ -131,4 +132,98 @@ func TestReadingPracticeHoldsPackagesAndTheLevelOffer(t *testing.T) {
 	if !lv.pendingLevelOffer {
 		t.Fatal("the level offer resumes when reading practice is off")
 	}
+}
+
+func TestReadingPracticeSpawnsReadableWords(t *testing.T) {
+	gs := newTestState()
+	selectRows(gs, "vowels")
+	gs.wordsOnly = true
+	gs.readingPractice = true
+	gs.wordsAsk = meaningKind // practice tiles ask for the reading all the same
+	gs.rnd = rand.New(rand.NewSource(3)).Float64
+	withWords(gs, bw("あい", 5, "love"), bw("あか", 5, "red"))
+	gs.introduced = map[string]bool{}
+	gs.invalidatePlayable()
+
+	gs.spawnKana()
+	if gs.tiles[0].word != nil {
+		t.Fatal("no word to read yet: a kana falls")
+	}
+	learnKana(gs, "あ", "い", "う", "え", "お")
+	for i := 0; i < 50; i++ {
+		gs.tiles = nil
+		gs.spawnKana()
+		tile := gs.tiles[0]
+		if tile.word == nil || !tile.practice || tile.ask != readingKind || tile.marker != nil {
+			t.Fatalf("spawn %d: want a practice tile asking for the reading, got %+v", i, tile)
+		}
+		if tile.word.Kana != "あい" {
+			t.Fatalf("spawn %d: %s has an unlearned kana", i, tile.word.Kana)
+		}
+	}
+	gs.readingPractice = false
+	gs.tiles = nil
+	gs.spawnKana()
+	if gs.tiles[0].word != nil {
+		t.Fatal("reading practice off: あい is not introduced and must not fall")
+	}
+}
+
+func TestReadingPracticePicksUniformlyAndAvoidsFallingWords(t *testing.T) {
+	gs := newTestState()
+	selectRows(gs, "vowels")
+	gs.wordsOnly = true
+	gs.readingPractice = true
+	gs.focusWeak = true // applies to kana tiles only
+	gs.rnd = rand.New(rand.NewSource(5)).Float64
+	words := vowelWords(5)
+	withWords(gs, words...)
+	gs.introduced = map[string]bool{}
+	learnKana(gs, "あ", "い", "う", "え", "お")
+	setWordLevel(gs, words[0].Kana, 2) // weak, yet not favoured
+
+	seen := map[string]int{}
+	for i := 0; i < 1000; i++ {
+		gs.tiles = nil
+		gs.spawnKana()
+		seen[gs.tiles[0].word.Kana]++
+	}
+	for _, w := range words {
+		if n := seen[w.Kana]; n < 150 || n > 250 {
+			t.Fatalf("%s spawned %d/1000 times, want about 200 (uniform): %v", w.Kana, n, seen)
+		}
+	}
+
+	var falling []*KanaTile
+	for _, w := range words[:4] {
+		falling = append(falling, practiceTileAt(gs, w.Kana, 100))
+	}
+	for i := 0; i < 20; i++ {
+		gs.tiles = append([]*KanaTile(nil), falling...)
+		gs.spawnKana()
+		if got := gs.tiles[len(gs.tiles)-1].word.Kana; got != words[4].Kana {
+			t.Fatalf("spawned %s, which is already falling", got)
+		}
+	}
+}
+
+func TestReadingPracticeKeepsTheWordShareInMixedMode(t *testing.T) {
+	gs := newTestState()
+	selectRows(gs, "vowels")
+	gs.readingPractice = true
+	gs.rnd = rand.New(rand.NewSource(9)).Float64
+	withWords(gs, vowelWords(60)...)
+	gs.introduced = map[string]bool{}
+	learnKana(gs, "あ", "い", "う", "え", "お")
+	if n := countWordSpawns(gs, 1000); n < 60 || n > 140 {
+		t.Fatalf("%d/1000 word spawns, want about 10 %%", n)
+	}
+}
+
+// practiceTileAt is a word tile spawned in reading practice at (10, y) for
+// a reading in gs.words.
+func practiceTileAt(gs *GameState, kana string, y float32) *KanaTile {
+	tile := wordTileAt(gs, kana, y)
+	tile.practice = true
+	return tile
 }

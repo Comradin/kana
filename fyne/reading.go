@@ -30,3 +30,19 @@ func (gs *GameState) readableWords() []vocab.Entry {
 	}
 	return gs.readable
 }
+
+// pickReadable is pickWord in reading practice: whether this spawn is a
+// word is drawn with gs.rnd as in pickWord, over the readable words; the
+// word is drawn uniformly with gs.rnd among those not already falling (see
+// wordCandidates). The focus on weak items applies to kana tiles only.
+// With no readable word it returns false without drawing. Must be called
+// under lock.
+func (gs *GameState) pickReadable(always bool) (vocab.Entry, bool) {
+	pool := gs.readableWords()
+	if len(pool) == 0 || (!always && gs.rnd() >= wordShare(len(pool))) {
+		return vocab.Entry{}, false
+	}
+	candidates := gs.wordCandidates(pool)
+	i := min(int(gs.rnd()*float64(len(candidates))), len(candidates)-1)
+	return gs.words.Lookup(candidates[i])
+}
