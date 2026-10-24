@@ -459,3 +459,26 @@ func TestKanaPerMinute(t *testing.T) {
 		t.Fatalf("10 kana in 30 s: %d, want 20", got)
 	}
 }
+
+func TestReadingHitCreditsOnlyLearnedKanaOfAnotherVariant(t *testing.T) {
+	asu := vocab.Word{Kana: "あす", Alts: []string{"あした"}, Source: "course", Meanings: vocab.Meanings{"en": {"tomorrow"}}} // あした // あす
+	gs := newTestState()
+	gs.readingPractice = true
+	withList(gs, "course", asu)
+	learnKana(gs, "あ", "す", "し") // た is not learned
+	gs.tiles = []*KanaTile{practiceTileAt(gs, "あす", 100)}
+	gs.checkAnswer("ashita")
+	if len(gs.tiles) != 0 {
+		t.Fatal("the other variant answers the tile")
+	}
+	count := func(c string) int { return gs.sessionStats[c].CorrectCount }
+	if count("あ") != 1 || count("し") != 1 || count("す") != 0 {
+		t.Fatalf("あ %d, し %d, す %d: the learned kana of the typed form count", count("あ"), count("し"), count("す"))
+	}
+	if _, ok := gs.sessionStats["た"]; ok || gs.kanaProgress["た"].Level != 0 || gs.currentStreak["た"] != 0 {
+		t.Fatalf("た is not learned and must not be credited: stats %+v, progress %+v", gs.sessionStats["た"], gs.kanaProgress["た"])
+	}
+	if gs.readKana != 2 || gs.answerStreak != 1 {
+		t.Fatalf("read kana %d (want 2), answer streak %d", gs.readKana, gs.answerStreak)
+	}
+}
