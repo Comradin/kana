@@ -487,3 +487,32 @@ func TestReadingHitCreditsOnlyLearnedKanaOfAnotherVariant(t *testing.T) {
 		t.Fatalf("read kana %d (want 2), answer streak %d", gs.readKana, gs.answerStreak)
 	}
 }
+
+func TestReadingPracticeRefreshesTheStatusLineEverySecond(t *testing.T) {
+	gs := newTestState() // calls test.NewApp(), so fyne.Do runs the hook
+	calls := 0
+	gs.onStatsChanged = func() { calls++ }
+	ticks := func(n int) {
+		for i := 0; i < n; i++ {
+			gs.tick()
+		}
+	}
+	gs.readingPractice = true
+	ticks(3 * ticksPerSecond)
+	if calls != 0 {
+		t.Fatalf("%d refreshes before a word is read: kana/min shows – and does not change", calls)
+	}
+	gs.readKana = 2
+	ticks(3 * ticksPerSecond)
+	if calls != 3 {
+		t.Fatalf("%d refreshes in 3 s of reading practice, want 3", calls)
+	}
+	gs.paused = true
+	ticks(3 * ticksPerSecond)
+	gs.paused = false
+	gs.readingPractice = false
+	ticks(3 * ticksPerSecond)
+	if calls != 3 {
+		t.Fatalf("%d refreshes, want none while paused or without reading practice", calls)
+	}
+}
