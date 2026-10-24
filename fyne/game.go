@@ -589,7 +589,11 @@ func (gs *GameState) tick() {
 			missedNow = true
 			gs.lastFallen, gs.lastFallenAt = tile, gs.now()
 			if tile.word != nil {
-				gs.recordWordMiss(tile.word.Kana, tile.ask)
+				if tile.practice {
+					gs.lowerTempo() // reading practice: no kana and no word changes
+				} else {
+					gs.recordWordMiss(tile.word.Kana, tile.ask)
+				}
 				gs.missedWords = append(gs.missedWords, *tile.word)
 				gs.addFeedback(feedbackMiss, missFeedbackText(*tile.word, gs.meaningLang), tile.pos)
 			} else {
@@ -1114,20 +1118,27 @@ func (gs *GameState) applySettings(rows []string, scripts []kanacore.Script, aut
 }
 
 // dropInactiveTiles removes kana tiles whose row is deselected or whose
-// script is inactive, and word tiles whose word is no longer playable. Must
+// script is inactive, word tiles whose word is no longer playable, and
+// tiles spawned in reading practice whose word is no longer readable. Must
 // be called under lock.
 func (gs *GameState) dropInactiveTiles() {
-	var playable map[string]bool // built on the first word tile
+	var playable, readable map[string]bool // built on the first word tile that needs them
 	kept := gs.tiles[:0]
 	for _, t := range gs.tiles {
 		if t.word != nil {
-			if playable == nil {
-				playable = make(map[string]bool)
-				for _, e := range gs.playableWords() {
-					playable[e.Kana] = true
+			var ok bool
+			if t.practice {
+				if readable == nil {
+					readable = readingSet(gs.readableWords())
 				}
+				ok = readable[t.word.Kana]
+			} else {
+				if playable == nil {
+					playable = readingSet(gs.playableWords())
+				}
+				ok = playable[t.word.Kana]
 			}
-			if playable[t.word.Kana] {
+			if ok {
 				kept = append(kept, t)
 			}
 			continue
