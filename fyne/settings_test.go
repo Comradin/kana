@@ -699,3 +699,49 @@ func TestFitTabsScrollsOnlyTallTabs(t *testing.T) {
 		t.Errorf("%s tab wrapped although it fits", short.Text)
 	}
 }
+
+func TestReadingPracticeInTheWordsTab(t *testing.T) {
+	test.NewApp()
+	gs := settingsGame()
+	gs.wordsAsk = meaningKind
+	f := newSettingsForm(gs.settingsState(), nil)
+	if f.readingCheck.Text != "Reading practice" || f.readingCheck.Checked || f.wordsAsk.Disabled() {
+		t.Fatalf("check %q checked %v, words ask disabled %v", f.readingCheck.Text, f.readingCheck.Checked, f.wordsAsk.Disabled())
+	}
+	f.readingCheck.SetChecked(true)
+	if !f.wordsAsk.Disabled() || f.wordsAsk.Selected != "Meaning" {
+		t.Fatal("Words ask for is greyed out and keeps its choice")
+	}
+	f.apply(gs)
+	if !gs.readingPractice || gs.wordsAsk != meaningKind {
+		t.Fatalf("applied: reading practice %v, words ask %v", gs.readingPractice, gs.wordsAsk)
+	}
+	f = newSettingsForm(gs.settingsState(), nil)
+	if !f.readingCheck.Checked || !f.wordsAsk.Disabled() {
+		t.Fatal("reopened: checked and greyed out")
+	}
+	f.readingCheck.SetChecked(false)
+	if f.wordsAsk.Disabled() {
+		t.Fatal("unchecked: Words ask for is enabled again")
+	}
+	f.apply(gs)
+	if gs.readingPractice || gs.wordsAsk != meaningKind {
+		t.Fatalf("off: reading practice %v, words ask %v", gs.readingPractice, gs.wordsAsk)
+	}
+}
+
+func TestTurningReadingPracticeOffOffersTheDuePackage(t *testing.T) {
+	test.NewApp()
+	gs := packageReady(10)
+	gs.readingPractice = true
+	f := newSettingsForm(gs.settingsState(), nil)
+	f.apply(gs)
+	if len(gs.pendingPackage) != 0 {
+		t.Fatal("no package while reading practice stays on")
+	}
+	f.readingCheck.SetChecked(false)
+	f.apply(gs)
+	if len(gs.pendingPackage) == 0 {
+		t.Fatal("the due package comes once reading practice is off")
+	}
+}
