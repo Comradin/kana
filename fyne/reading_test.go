@@ -6,6 +6,7 @@ import (
 
 	"fyne.io/fyne/v2/test"
 	"kana/kanacore"
+	"kana/store"
 	"kana/vocab"
 )
 
@@ -226,4 +227,139 @@ func practiceTileAt(gs *GameState, kana string, y float32) *KanaTile {
 	tile := wordTileAt(gs, kana, y)
 	tile.practice = true
 	return tile
+}
+
+func TestReadingHitCreditsItsKanaNotTheWord(t *testing.T) {
+	gs := newTestState()
+	gs.readingPractice = true
+	withWords(gs, bw("かさ", 5, "umbrella")) // introduced: its word progress stays all the same
+	setWordLevel(gs, "かさ", 2)
+	learnKana(gs, "か", "さ")
+	gs.tiles = []*KanaTile{practiceTileAt(gs, "かさ", 100)}
+	gs.checkAnswer("kasa")
+	if len(gs.tiles) != 0 {
+		t.Fatal("the reading answers the tile")
+	}
+	if gs.wordProgress["かさ"] != (store.Progress{Level: 2}) || len(gs.wordSessionStats) != 0 || len(gs.wordMemory) != 0 ||
+		len(gs.meaningProgress) != 0 || len(gs.meaningSessionStats) != 0 || len(gs.meaningMemory) != 0 {
+		t.Fatalf("no word progress: reading %+v, stats %v, memory %v", gs.wordProgress["かさ"], gs.wordSessionStats, gs.wordMemory)
+	}
+	for _, c := range []string{"か", "さ"} {
+		if gs.sessionStats[c].CorrectCount != 1 || gs.currentStreak[c] != 1 || gs.kanaProgress[c].Level != learnedLevel || !gs.memoryDirty[c] {
+			t.Fatalf("%s: stats %+v, streak %d, progress %+v", c, gs.sessionStats[c], gs.currentStreak[c], gs.kanaProgress[c])
+		}
+	}
+	if gs.answerStreak != 1 {
+		t.Fatalf("answer streak %d: a word read raises the tempo once", gs.answerStreak)
+	}
+	if gs.score != 20*gs.pointsFactor() || gs.readKana != 2 {
+		t.Fatalf("score %d, read kana %d", gs.score, gs.readKana)
+	}
+	if got := gs.feedback[0].text.Text; got != "かさ — umbrella" {
+		t.Fatalf("feedback %q", got)
+	}
+}
+
+func TestReadingHitCreditsTheUnitsOfTheTypedForm(t *testing.T) {
+	okasa := vocab.Word{Kana: "おかさ", Display: "（お）かさ", Alts: []string{"かさ"}, Phrase: true, Source: "course", Meanings: vocab.Meanings{"en": {"umbrella"}}}
+	koko := vocab.Word{Kana: "ここ", Source: "course", Meanings: vocab.Meanings{"en": {"here"}}}
+	kitte := vocab.Word{Kana: "きって", Source: "course", Meanings: vocab.Meanings{"en": {"stamp"}}}
+	gs := newTestState()
+	gs.readingPractice = true
+	withList(gs, "course", okasa, koko, kitte)
+	learnKana(gs, "お", "か", "さ", "こ", "き", "て")
+	read := func(kana, input string) {
+		gs.tiles = []*KanaTile{practiceTileAt(gs, kana, 100)}
+		gs.checkAnswer(input)
+		if len(gs.tiles) != 0 {
+			t.Fatalf("%q does not answer %s", input, kana)
+		}
+	}
+	count := func(c string) int { return gs.sessionStats[c].CorrectCount }
+
+	read("おかさ", "kasa")
+	if count("お") != 0 || count("か") != 1 || count("さ") != 1 {
+		t.Fatalf("short form: お %d, か %d, さ %d; only its own kana count", count("お"), count("か"), count("さ"))
+	}
+	read("おかさ", "okasa")
+	if count("お") != 1 || count("か") != 2 || count("さ") != 2 {
+		t.Fatalf("full form: お %d, か %d, さ %d", count("お"), count("か"), count("さ"))
+	}
+	read("ここ", "koko")
+	if count("こ") != 2 || gs.currentStreak["こ"] != 2 {
+		t.Fatalf("ここ: こ %d, streak %d; a doubled kana counts twice", count("こ"), gs.currentStreak["こ"])
+	}
+	read("きって", "kitte")
+	if count("き") != 1 || count("て") != 1 {
+		t.Fatalf("きって: き %d, て %d", count("き"), count("て"))
+	}
+	if _, ok := gs.sessionStats["っ"]; ok {
+		t.Fatal("っ is no kana of its own")
+	}
+	if gs.readKana != 9 || gs.answerStreak != 4 {
+		t.Fatalf("read kana %d (want 2+3+2+2), answer streak %d (want one per word)", gs.readKana, gs.answerStreak)
+	}
+}
+
+func TestReadingPracticeTakesOnlyTheReading(t *testing.T) {
+	gs := newTestState()
+	gs.readingPractice = true
+	gs.wordsAsk = meaningKind
+	withWords(gs, kasa)
+	learnKana(gs, "か", "さ")
+	tile := practiceTileAt(gs, "かさ", 100)
+	gs.tiles = []*KanaTile{tile}
+	gs.checkAnswer("umbrella")
+	gs.checkAnswer("kaso")
+	if len(gs.tiles) != 1 || gs.tiles[0] != tile {
+		t.Fatal("a meaning or a wrong reading answers no practice tile")
+	}
+	if len(gs.sessionStats) != 0 || len(gs.wordSessionStats) != 0 || len(gs.meaningSessionStats) != 0 ||
+		len(gs.wordProgress) != 0 || len(gs.meaningProgress) != 0 || gs.kanaProgress["か"] != (store.Progress{Level: learnedLevel}) ||
+		gs.score != 0 || len(gs.feedback) != 0 {
+		t.Fatal("neither is a hit, a mistake or a hint")
+	}
+	gs.checkAnswer("kasa")
+	if len(gs.tiles) != 0 || gs.sessionStats["か"].CorrectCount != 1 {
+		t.Fatal("the reading answers it, whatever Words ask for says")
+	}
+}
+
+func TestReadingHitDrivesTheKanaPath(t *testing.T) {
+	gs := newUnlockReadyState()
+	gs.readingPractice = true
+	withWords(gs, bw("あい", 5, "love"))
+	gs.tiles = []*KanaTile{practiceTileAt(gs, "あい", 0)}
+	gs.checkAnswer("ai")
+	if !equalIDs(gs.pendingIntro, []string{"k", "s"}) || !gs.paused {
+		t.Fatalf("pendingIntro %v, paused %v: a word read counts towards auto-progression", gs.pendingIntro, gs.paused)
+	}
+
+	offer := newOfferReadyState()
+	offer.readingPractice = true
+	withWords(offer, bw("あい", 5, "love"))
+	offer.tiles = []*KanaTile{practiceTileAt(offer, "あい", 0)}
+	offer.checkAnswer("ai")
+	if !offer.pendingOffer {
+		t.Fatal("a word read counts towards the katakana offer")
+	}
+}
+
+func TestATileKeepsTheRulesItWasSpawnedUnder(t *testing.T) {
+	gs := newTestState()
+	withWords(gs, bw("かさ", 5, "umbrella"))
+	learnKana(gs, "か", "さ")
+	gs.levelOfferDeclined = true // かさ is the whole source: no level offer may pause the game
+	gs.readingPractice = true
+	gs.tiles = []*KanaTile{wordTileAt(gs, "かさ", 100)} // spawned before reading practice was on
+	gs.checkAnswer("kasa")
+	if gs.wordProgress["かさ"].Level != 1 || len(gs.sessionStats) != 0 {
+		t.Fatal("a word tile from before counts for the word")
+	}
+	gs.readingPractice = false
+	gs.tiles = []*KanaTile{practiceTileAt(gs, "かさ", 100)}
+	gs.checkAnswer("kasa")
+	if gs.wordProgress["かさ"].Level != 1 || gs.sessionStats["か"].CorrectCount != 1 {
+		t.Fatal("a practice tile keeps counting for its kana")
+	}
 }

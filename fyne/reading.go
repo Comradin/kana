@@ -1,6 +1,9 @@
 package main
 
-import "kana/vocab"
+import (
+	"kana/kanacore"
+	"kana/vocab"
+)
 
 // Reading practice: every word of the source whose kana are all learned
 // may fall, introduced or not, and a word read counts for its kana, not
@@ -45,4 +48,27 @@ func (gs *GameState) pickReadable(always bool) (vocab.Entry, bool) {
 	candidates := gs.wordCandidates(pool)
 	i := min(int(gs.rnd()*float64(len(candidates))), len(candidates)-1)
 	return gs.words.Lookup(candidates[i])
+}
+
+// recordReading counts a word read in reading practice: every kana unit
+// of the reading input is a romaji reading of (see
+// vocab.Entry.MatchedReading) gets a hit as on a kana tile (see
+// creditKana) — a short form only its own kana, a kana that occurs twice
+// two hits, っ, ッ and ー none — then the tempo rises once and
+// auto-progression runs. The word's own progress is not touched. Reports
+// whether rows were announced. Must be called under lock.
+func (gs *GameState) recordReading(e vocab.Entry, input string) bool {
+	reading, ok := e.MatchedReading(input)
+	if !ok {
+		return false
+	}
+	units, _ := kanacore.KanaUnits(reading)
+	for _, u := range units {
+		if _, isKana := kanacore.CharToRow[u]; isKana {
+			gs.creditKana(u)
+			gs.readKana++
+		}
+	}
+	gs.raiseTempo()
+	return gs.progressAfterHit()
 }
