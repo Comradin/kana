@@ -104,6 +104,7 @@ type GameState struct {
 	lessonFilters        map[string][]string // lesson filter per list name; absent = all lessons
 	wordsOnly            bool                // words-only mode: only words fall; the kana learning path rests
 	wordsAsk             wordKind            // what new word tiles ask for: the reading or the meaning
+	readingPractice      bool                // reading practice: every readable word may fall and counts for its kana (see reading.go)
 
 	selectedRows  map[string]bool
 	autoProgress  bool
@@ -249,6 +250,9 @@ func NewGameState(st *store.Store) *GameState {
 		}
 		if a, err := st.WordsAsk(); err == nil {
 			gs.wordsAsk = kindFromSetting(a)
+		}
+		if on, err := st.ReadingPractice(); err == nil {
+			gs.readingPractice = on
 		}
 		if on, err := st.FocusWeak(); err == nil {
 			gs.focusWeak = on
