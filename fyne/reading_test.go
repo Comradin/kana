@@ -363,3 +363,51 @@ func TestATileKeepsTheRulesItWasSpawnedUnder(t *testing.T) {
 		t.Fatal("a practice tile keeps counting for its kana")
 	}
 }
+
+func TestReadingPracticeMissChangesNoKanaOrWord(t *testing.T) {
+	gs := newTestState()
+	gs.readingPractice = true
+	withWords(gs, bw("かさ", 5, "umbrella"))
+	learnKana(gs, "か", "さ")
+	setWordLevel(gs, "かさ", 3)
+	gs.tempoStep, gs.answerStreak = 3, 2
+	gs.tiles = []*KanaTile{practiceTileAt(gs, "かさ", 599)}
+	gs.tick()
+	if len(gs.tiles) != 0 || gs.missed != 1 || len(gs.missedWords) != 1 {
+		t.Fatalf("tiles %d, missed %d, missed words %d", len(gs.tiles), gs.missed, len(gs.missedWords))
+	}
+	if gs.tempoStep != 3-missTempoSteps || gs.answerStreak != 0 {
+		t.Fatalf("tempo %d, streak %d: a miss lowers the tempo", gs.tempoStep, gs.answerStreak)
+	}
+	if gs.wordProgress["かさ"] != (store.Progress{Level: 3}) || len(gs.wordSessionStats) != 0 || len(gs.sessionStats) != 0 ||
+		gs.kanaProgress["か"] != (store.Progress{Level: learnedLevel}) || gs.kanaProgress["さ"] != (store.Progress{Level: learnedLevel}) {
+		t.Fatal("a miss changes no kana and no word")
+	}
+	if got := gs.feedback[0].text.Text; got != "かさ · kasa — umbrella" {
+		t.Fatalf("miss feedback %q", got)
+	}
+	gs.missed = gs.level.MissLimit - 1
+	gs.tiles = []*KanaTile{practiceTileAt(gs, "かさ", 599)}
+	gs.tick()
+	if !gs.over {
+		t.Fatal("a missed word counts towards the miss limit")
+	}
+}
+
+func TestPracticeTilesStayWhileReadable(t *testing.T) {
+	gs := newTestState()
+	withWords(gs, bw("かさ", 5, "umbrella"))
+	gs.introduced = map[string]bool{} // not playable
+	learnKana(gs, "か", "さ")
+	gs.tiles = []*KanaTile{practiceTileAt(gs, "かさ", 100)}
+	gs.dropInactiveTiles()
+	if len(gs.tiles) != 1 {
+		t.Fatal("a practice tile stays while its word is readable, introduced or not")
+	}
+	gs.wordSource = listSourcePrefix + "gone"
+	gs.invalidatePlayable()
+	gs.dropInactiveTiles()
+	if len(gs.tiles) != 0 {
+		t.Fatal("a practice tile whose word is no longer readable goes")
+	}
+}

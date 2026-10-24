@@ -72,3 +72,12 @@ func (gs *GameState) recordReading(e vocab.Entry, input string) bool {
 	gs.raiseTempo()
 	return gs.progressAfterHit()
 }
+
+// readingSet returns the readings of entries as a set.
+func readingSet(entries []vocab.Entry) map[string]bool {
+	set := make(map[string]bool, len(entries))
+	for _, e := range entries {
+		set[e.Kana] = true
+	}
+	return set
+}
