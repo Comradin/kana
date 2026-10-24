@@ -34,22 +34,30 @@ func (e Entry) Shown() string {
 }
 
 // ReadingMatches reports whether input is a romaji reading of the entry's
-// reading or of one of its other accepted readings (see
-// kanacore.ReadingMatches; kanacore.PhraseReadingMatches for a phrase).
+// reading or of one of its other accepted readings (see MatchedReading).
 func (e Entry) ReadingMatches(input string) bool {
+	_, ok := e.MatchedReading(input)
+	return ok
+}
+
+// MatchedReading returns the reading input is a romaji reading of (see
+// kanacore.ReadingMatches; kanacore.PhraseReadingMatches for a phrase): the
+// entry's reading if it matches, else the first of its other readings that
+// does. ok is false when none matches.
+func (e Entry) MatchedReading(input string) (reading string, ok bool) {
 	matches := kanacore.ReadingMatches
 	if e.Phrase {
 		matches = kanacore.PhraseReadingMatches
 	}
 	if matches(e.Kana, input) {
-		return true
+		return e.Kana, true
 	}
 	for _, a := range e.Alts {
 		if matches(a, input) {
-			return true
+			return a, true
 		}
 	}
-	return false
+	return "", false
 }
 
 // Index holds one entry per reading.
