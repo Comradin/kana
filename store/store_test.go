@@ -593,3 +593,22 @@ func TestWordsAsk(t *testing.T) {
 		t.Fatalf("unknown stored value gives %q, want %q", a, WordsAskReading)
 	}
 }
+
+func TestReadingPractice(t *testing.T) {
+	st := openTemp(t)
+	if on, err := st.ReadingPractice(); err != nil || on {
+		t.Fatalf("unset ReadingPractice = %v, %v; want false", on, err)
+	}
+	if err := st.SaveReadingPractice(true); err != nil {
+		t.Fatal(err)
+	}
+	if on, _ := st.ReadingPractice(); !on {
+		t.Fatal("ReadingPractice not saved")
+	}
+	if err := st.SaveReadingPractice(false); err != nil {
+		t.Fatal(err)
+	}
+	if on, _ := st.ReadingPractice(); on {
+		t.Fatal("ReadingPractice off not saved")
+	}
+}
