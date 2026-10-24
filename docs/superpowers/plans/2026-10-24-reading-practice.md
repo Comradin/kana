@@ -27,7 +27,7 @@ The spec leaves these open or calls them indicative; check them before Task 1.
 7. **Answers on a practice tile:** only `ReadingMatches`; a meaning answers nothing. No "type the meaning" hint (practice tiles never ask for the meaning).
 8. **A wrong input on a practice tile** (the only tile on the field) changes nothing — no kana and no word mistake — because the spec says a word in reading practice changes no word and only a reading counts for kana. The tile stays.
 9. **A practice tile falling through:** counts towards the miss limit, lowers the tempo (`lowerTempo`), is listed in the game-over missed words and shows the miss label as today; no kana and no word is touched.
-10. **Feedback after a hit:** the spec's "kana · romaji — meaning", which is today's text for a hit by meaning: `hitFeedbackText(e, lang, true)`, e.g. "かさ · kasa — umbrella". The romaji is the canonical romaji of the shown reading, also when a short form was typed. (Today's reading hit shows "かさ — umbrella"; if "as today" was meant, pass `false` instead — one argument.)
+10. **Feedback after a hit:** as today for a reading hit, without romaji: `hitFeedbackText(e, lang, false)`, e.g. "かさ — umbrella" (decided with the user; the learner just typed the romaji).
 11. **Selection:** `pickWord` delegates to `pickReadable` while reading practice is on: the word share is drawn as today from `wordShare(len(pool))` (mixed mode; words-only always a word), the word uniformly with `gs.rnd` over `wordCandidates(pool)` (falling words avoided unless that leaves none). No focus pick, no memory pick.
 12. **Packages and level offer:** `packageDue` returns nothing while reading practice is on, which covers `maybeOfferPackage` (every re-check point, including `Reset`) and `offerPackageAtStart`. Turning reading practice off in the settings re-checks at once (`applySettings` already calls `maybeOfferPackage`). A package or level offer already pending when it is turned on is still shown.
 13. **Dropping tiles on a settings change:** a practice tile stays while its word is in the readable pool (not the playable words), a word tile while its word is playable, as today. Turning reading practice on or off drops nothing (the pool does not depend on the flag).
@@ -759,7 +759,7 @@ func TestReadingHitCreditsItsKanaNotTheWord(t *testing.T) {
 	if gs.score != 20*gs.pointsFactor() || gs.readKana != 2 {
 		t.Fatalf("score %d, read kana %d", gs.score, gs.readKana)
 	}
-	if got := gs.feedback[0].text.Text; got != "かさ · kasa — umbrella" {
+	if got := gs.feedback[0].text.Text; got != "かさ — umbrella" {
 		t.Fatalf("feedback %q", got)
 	}
 }
@@ -958,7 +958,7 @@ with
 			gs.score += 10 * len(tile.word.Units) * gs.pointsFactor()
 			if tile.practice {
 				announced = gs.recordReading(*tile.word, input)
-				gs.addFeedback(feedbackHit, hitFeedbackText(*tile.word, gs.meaningLang, true), tile.pos)
+				gs.addFeedback(feedbackHit, hitFeedbackText(*tile.word, gs.meaningLang, false), tile.pos)
 			} else {
 				kind := answeredKind(tile, input)
 				gs.recordWordCorrect(tile.word.Kana, kind)
