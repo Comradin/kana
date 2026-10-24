@@ -34,6 +34,7 @@ const (
 	wordsOnlyKey       = "words_only"
 	focusWeakKey       = "focus_weak"
 	wordsAskKey        = "words_ask"
+	readingPracticeKey = "reading_practice"
 	lessonFilterPrefix = "lesson_filter:" // followed by a word list's name
 	databaseFilePerm   = 0o644
 	databaseDirPerm    = 0o755
@@ -425,6 +426,12 @@ func (s *Store) FocusWeak() (bool, error) { return s.flag(focusWeakKey) }
 
 // SaveFocusWeak persists the focus on weak items.
 func (s *Store) SaveFocusWeak(on bool) error { return s.saveFlag(focusWeakKey, on) }
+
+// ReadingPractice reports whether reading practice is on; false when unset.
+func (s *Store) ReadingPractice() (bool, error) { return s.flag(readingPracticeKey) }
+
+// SaveReadingPractice persists reading practice.
+func (s *Store) SaveReadingPractice(on bool) error { return s.saveFlag(readingPracticeKey, on) }
 
 // WordsAsk returns what word tiles ask for: WordsAskMeaning, or
 // WordsAskReading when stored so, unset or unknown.
