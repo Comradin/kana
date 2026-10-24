@@ -470,6 +470,11 @@ func (gs *GameState) wordsStatus() WordsStatus {
 		home, _ := os.UserHomeDir()
 		ws.Dir = displayDir(gs.wordsDir, home)
 	}
+	if gs.readingPractice {
+		ws.Reading = true
+		ws.Readable = len(gs.readableWords())
+		ws.ReadKana, ws.KanaPerMin = gs.readKana, gs.kanaPerMinute()
+	}
 	if gs.words == nil {
 		ws.KanaFallback = gs.wordsOnly
 		return ws

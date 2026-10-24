@@ -176,6 +176,10 @@ func missFeedbackText(e vocab.Entry, lang string) string {
 // fits the line to its width (see StatsPanel.Update).
 const maxWordsLineRunes = 200
 
+// noWordsToReadText is the words line in reading practice when no word of
+// the source can be read yet.
+const noWordsToReadText = "No words to read yet — learn more kana or pick another list"
+
 // Word sources as stored in the word_source setting.
 const (
 	jlptSource       = "jlpt"  // the bundled JLPT words
@@ -237,11 +241,19 @@ type WordsStatus struct {
 	Filtered     bool // a lesson filter limits the source
 	Empty        bool // the source with its lesson filter has no word at all
 	NoMeanings   bool // meaning mode: words can fall, but none has a meaning to ask for
+
+	Reading    bool // reading practice is on
+	Readable   int  // words that may fall in reading practice
+	ReadKana   int  // kana units of words read this round
+	KanaPerMin int  // ReadKana per minute of play this round; shown once ReadKana > 0
 }
 
 // formatWordsLine is the status panel's words line: counts, or a hint when
 // nothing can be introduced. In words-only mode a problem starts with
 // "Words only:". In meaning mode the counts line starts with "Meanings:".
+// In reading practice it shows the words to read and the kana per minute,
+// or why there is none (a broken bundled list or a missing list keep their
+// own message).
 func formatWordsLine(ws WordsStatus) string {
 	var s string
 	label := "Words"
@@ -249,6 +261,14 @@ func formatWordsLine(ws WordsStatus) string {
 		label = "Meanings"
 	}
 	switch {
+	case ws.Reading && ws.Readable > 0:
+		rate := "–"
+		if ws.ReadKana > 0 {
+			rate = fmt.Sprint(ws.KanaPerMin)
+		}
+		s = fmt.Sprintf("Reading practice: %s to read · %s kana/min", plural(ws.Readable, "word"), rate)
+	case ws.Reading && ws.Err == "" && !ws.Missing:
+		s = noWordsToReadText
 	case ws.KanaFallback:
 		s = "Words only: " + wordsOnlyReason(ws)
 	case ws.LoadFailed:
