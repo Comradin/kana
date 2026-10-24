@@ -36,13 +36,14 @@ type settingsState struct {
 	wordsDir    string // the word list folder for display; "" if unknown
 	kanaFont    string // the kana font's id
 
-	wordsOnly     bool
-	wordsAsk      wordKind
-	lessons       map[string][]string // per list: its lessons in learning order, "" last when it has words without a lesson
-	lessonFilters map[string][]string // per list: the stored lesson filter; absent = all lessons
-	meaningLang   string              // the stored meaning language; "" = System
-	languages     []string            // the meaning languages of the words, by code
-	focusWeak     bool
+	wordsOnly       bool
+	wordsAsk        wordKind
+	lessons         map[string][]string // per list: its lessons in learning order, "" last when it has words without a lesson
+	lessonFilters   map[string][]string // per list: the stored lesson filter; absent = all lessons
+	meaningLang     string              // the stored meaning language; "" = System
+	languages       []string            // the meaning languages of the words, by code
+	focusWeak       bool
+	readingPractice bool
 }
 
 // settingsState copies the current settings for the dialog.
@@ -85,13 +86,14 @@ func (gs *GameState) settingsState() settingsState {
 		wordsDir:    dir,
 		kanaFont:    gs.kanaFont.id,
 
-		wordsOnly:     gs.wordsOnly,
-		wordsAsk:      gs.wordsAsk,
-		lessons:       lessons,
-		lessonFilters: filters,
-		meaningLang:   gs.meaningSetting,
-		languages:     langs,
-		focusWeak:     gs.focusWeak,
+		wordsOnly:       gs.wordsOnly,
+		wordsAsk:        gs.wordsAsk,
+		lessons:         lessons,
+		lessonFilters:   filters,
+		meaningLang:     gs.meaningSetting,
+		languages:       langs,
+		focusWeak:       gs.focusWeak,
+		readingPractice: gs.readingPractice,
 	}
 }
 
@@ -127,6 +129,7 @@ type settingsForm struct {
 
 	tiles         *widget.RadioGroup  // tilesMixed or tilesWordsOnly
 	wordsAsk      *widget.RadioGroup  // askReadingLabel or askMeaningLabel
+	readingCheck  *widget.Check       // reading practice; "Words ask for" is disabled while it is checked
 	listLessons   map[string][]string // per list: its lessons, "" last for words without one
 	lessonFilters map[string][]string // per list: its lesson filter as edited in this dialog
 	lessonBox     *fyne.Container     // "All lessons" and the selected list's lesson checks
@@ -317,10 +320,10 @@ func (f *settingsForm) listRenamed(st settingsState, from, to string) {
 }
 
 // newWordsTab holds the tiles (kana and words, or words only), what word
-// tiles ask for (reading or meaning), where new words come from, the import
-// button, the lessons of a list, the JLPT level (for JLPT only), the package
-// size, the meaning language, a summary of the current source and the word
-// list folder.
+// tiles ask for (reading or meaning), reading practice, where new words come
+// from, the import button, the lessons of a list, the JLPT level (for JLPT
+// only), the package size, the meaning language, a summary of the current
+// source and the word list folder.
 func (f *settingsForm) newWordsTab(st settingsState) fyne.CanvasObject {
 	f.storedSource = st.wordSource
 	labels, values := sourceOptions(st.lists, st.wordSource)
@@ -346,6 +349,9 @@ func (f *settingsForm) newWordsTab(st settingsState) fyne.CanvasObject {
 	if st.wordsAsk == meaningKind {
 		f.wordsAsk.SetSelected(askMeaningLabel)
 	}
+	f.readingCheck = widget.NewCheck("Reading practice", func(bool) { f.syncWordsAsk() })
+	f.readingCheck.SetChecked(st.readingPractice)
+	f.syncWordsAsk()
 
 	// The lesson box comes before the source select, whose OnChanged
 	// fills it.
@@ -409,6 +415,7 @@ func (f *settingsForm) newWordsTab(st settingsState) fyne.CanvasObject {
 		container.New(layout.NewFormLayout(),
 			widget.NewLabelWithStyle("Tiles", fyne.TextAlignLeading, bold), f.tiles,
 			widget.NewLabelWithStyle("Words ask for", fyne.TextAlignLeading, bold), f.wordsAsk,
+			widget.NewLabel(""), f.readingCheck,
 		),
 		widget.NewSeparator(),
 		widget.NewLabelWithStyle("New words from", fyne.TextAlignLeading, bold),
@@ -514,13 +521,24 @@ func (f *settingsForm) askedKind() wordKind {
 	return readingKind
 }
 
+// syncWordsAsk disables "Words ask for" while reading practice is checked:
+// a word there counts by its reading only. Its choice stays and is saved
+// as it is.
+func (f *settingsForm) syncWordsAsk() {
+	if f.readingCheck.Checked {
+		f.wordsAsk.Disable()
+	} else {
+		f.wordsAsk.Enable()
+	}
+}
+
 // words returns the Words tab's values.
 func (f *settingsForm) words() wordSettings {
 	level, _ := strconv.Atoi(strings.TrimPrefix(f.wordLevel.Selected, "N"))
 	size, _ := strconv.Atoi(f.packageSize.Selected)
 	return wordSettings{source: f.wordSource(), level: level, packageSize: size,
 		wordsOnly: f.tiles.Selected == tilesWordsOnly, lessons: f.selectedLessons(), meaningLang: f.meaningLang(),
-		ask: f.askedKind()}
+		ask: f.askedKind(), readingPractice: f.readingCheck.Checked}
 }
 
 // showLessons fills the lesson box for the selected source: "All lessons"
