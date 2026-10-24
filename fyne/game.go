@@ -92,6 +92,8 @@ type GameState struct {
 	wordsDir                  string        // the private list folder; "" if unknown
 	playable                  []vocab.Entry // cached playableWords result
 	playableOK                bool          // playable is up to date
+	readable                  []vocab.Entry // cached readableWords result
+	readableOK                bool          // readable is up to date
 
 	// Word packages: only introduced words fall.
 	introduced           map[string]bool     // readings shown in a package intro
