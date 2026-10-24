@@ -245,7 +245,7 @@ type WordsStatus struct {
 	Reading    bool // reading practice is on
 	Readable   int  // words that may fall in reading practice
 	ReadKana   int  // kana units of words read this round
-	KanaPerMin int  // ReadKana per minute of play this round; shown once ReadKana > 0
+	KanaPerMin int  // ReadKana per minute of reading-practice play this round; shown once ReadKana > 0
 }
 
 // formatWordsLine is the status panel's words line: counts, or a hint when

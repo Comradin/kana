@@ -120,7 +120,7 @@ type GameState struct {
 	answerStreak  int       // correct answers in a row this game
 	tempoStep     int       // session tempo, 0..maxTempoStep
 	readKana      int       // kana units of words read in reading practice this round
-	playTicks     int       // ticks of play this round; tick does not run while paused or over
+	playTicks     int       // ticks of play in reading practice this round; tick does not run while paused or over
 
 	paused       bool     // tick, spawn and answers are suspended
 	pendingIntro []string // row IDs waiting to be introduced
@@ -579,7 +579,9 @@ func (gs *GameState) tick() {
 		gs.mu.Unlock()
 		return
 	}
-	gs.playTicks++
+	if gs.readingPractice {
+		gs.playTicks++
+	}
 	gs.ageFeedback()
 
 	missedNow := false

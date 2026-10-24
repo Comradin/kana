@@ -433,12 +433,17 @@ func TestReadingPracticeStatusLine(t *testing.T) {
 		gs.tick()
 	}
 	gs.paused = false
+	gs.readingPractice = false
+	for i := 0; i < 60*ticksPerSecond; i++ { // nor does play without reading practice
+		gs.tick()
+	}
+	gs.readingPractice = true
 	gs.tiles = []*KanaTile{practiceTileAt(gs, "かさ", 100)}
 	gs.checkAnswer("kasa")
 	gs.tiles = []*KanaTile{practiceTileAt(gs, "さか", 100)}
 	gs.checkAnswer("saka")
 	if got := formatWordsLine(gs.wordsStatus()); got != "Reading practice: 2 words to read · 4 kana/min" {
-		t.Fatalf("4 kana in one minute of play: %q", got)
+		t.Fatalf("4 kana in one minute of reading practice: %q", got)
 	}
 	gs.Reset()
 	if gs.playTicks != 0 || gs.readKana != 0 {
