@@ -52,13 +52,16 @@ func (gs *GameState) pickReadable(always bool) (vocab.Entry, bool) {
 	return gs.words.Lookup(candidates[i])
 }
 
-// recordReading counts a word read in reading practice: every kana unit
-// of the reading input is a romaji reading of (see
+// recordReading counts a word read in reading practice: every known kana
+// unit (see unitKnown) of the reading input is a romaji reading of (see
 // vocab.Entry.MatchedReading) gets a hit as on a kana tile (see
 // creditKana) — a short form only its own kana, a kana that occurs twice
 // two hits, っ, ッ and ー none — then the tempo rises once and
-// auto-progression runs. The word's own progress is not touched. Reports
-// whether rows were announced. Must be called under lock.
+// auto-progression runs. The shown reading's kana are all known (see
+// readableWords), but another variant or merged reading may have kana that
+// are not learned or not in an active script; those get nothing. The
+// word's own progress is not touched. Reports whether rows were announced.
+// Must be called under lock.
 func (gs *GameState) recordReading(e vocab.Entry, input string) bool {
 	reading, ok := e.MatchedReading(input)
 	if !ok {
@@ -66,7 +69,7 @@ func (gs *GameState) recordReading(e vocab.Entry, input string) bool {
 	}
 	units, _ := kanacore.KanaUnits(reading)
 	for _, u := range units {
-		if _, isKana := kanacore.CharToRow[u]; isKana {
+		if _, isKana := kanacore.CharToRow[u]; isKana && gs.unitKnown(u) {
 			gs.creditKana(u)
 			gs.readKana++
 		}
