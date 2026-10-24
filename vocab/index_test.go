@@ -359,3 +359,29 @@ func TestEntryReadingMatchesParticles(t *testing.T) {
 		t.Error("outside a phrase は is ha")
 	}
 }
+
+func TestEntryMatchedReading(t *testing.T) {
+	e := Entry{Kana: "どうぞよろしく", Alts: []string{"よろしく"}, Phrase: true}
+	for in, want := range map[string]string{
+		"douzoyoroshiku": "どうぞよろしく",
+		"yoroshiku":      "よろしく",
+		"douzo":          "",
+		"":               "",
+	} {
+		got, ok := e.MatchedReading(in)
+		if got != want || ok != (want != "") {
+			t.Errorf("MatchedReading(%q) = %q, %v; want %q", in, got, ok, want)
+		}
+	}
+	v := Entry{Kana: "ローソク", Alts: []string{"ろうそく"}}
+	if got, _ := v.MatchedReading("roosoku"); got != "ローソク" {
+		t.Errorf("roosoku gives %q, want ローソク", got)
+	}
+	if got, _ := v.MatchedReading("rousoku"); got != "ろうそく" {
+		t.Errorf("rousoku gives %q, want ろうそく", got)
+	}
+	same := Entry{Kana: "アメリカ", Alts: []string{"あめりか"}}
+	if got, _ := same.MatchedReading("amerika"); got != "アメリカ" {
+		t.Errorf("variants that read the same: %q, want the shown reading アメリカ", got)
+	}
+}
