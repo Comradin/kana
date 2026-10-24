@@ -82,6 +82,10 @@ _Avoid_: vocabulary mode, word mode
 Practice in which a word tile asks for the word's meaning instead of its reading; kana tiles still ask for the romaji.
 _Avoid_: translation mode, vocabulary mode
 
+**Reading practice**:
+Practice in which any word whose kana are all learned may fall, introduced or not, to train reading speed; a word read counts for its kana, not for the word.
+_Avoid_: reading mode, speed mode
+
 **Lesson filter**:
 The lessons of a word list chosen for practice; they decide which words fall and where new word packages come from.
 _Avoid_: lesson selection, chapter
