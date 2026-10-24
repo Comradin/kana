@@ -72,11 +72,12 @@ func (gs *GameState) newestPackageDone() bool {
 // packageDue returns the next word package if one is due, or reports that
 // the level offer is due instead: when the JLPT source has no word left at
 // the current level and an easier level remains. Nothing is due when over,
-// while a package or the level offer is pending, without words or without
-// the introduced words, while the newest package is not learned yet, or
-// when the chosen list is missing. Must be called under lock.
+// in reading practice, while a package or the level offer is pending,
+// without words or without the introduced words, while the newest package
+// is not learned yet, or when the chosen list is missing. Must be called
+// under lock.
 func (gs *GameState) packageDue() (pkg []vocab.Entry, levelOffer bool) {
-	if gs.over || gs.words == nil || gs.introducedLoadFailed || len(gs.pendingPackage) > 0 || gs.pendingLevelOffer {
+	if gs.over || gs.readingPractice || gs.words == nil || gs.introducedLoadFailed || len(gs.pendingPackage) > 0 || gs.pendingLevelOffer {
 		return nil, false
 	}
 	if !gs.newestPackageDone() {
