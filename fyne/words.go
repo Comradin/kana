@@ -252,8 +252,8 @@ type WordsStatus struct {
 // nothing can be introduced. In words-only mode a problem starts with
 // "Words only:". In meaning mode the counts line starts with "Meanings:".
 // In reading practice it shows the words to read and the kana per minute,
-// or why there is none (a broken bundled list or a missing list keep their
-// own message).
+// or why there is none (a broken bundled list, a missing list and a lesson
+// filter without words keep their own message).
 func formatWordsLine(ws WordsStatus) string {
 	var s string
 	label := "Words"
@@ -267,7 +267,7 @@ func formatWordsLine(ws WordsStatus) string {
 			rate = fmt.Sprint(ws.KanaPerMin)
 		}
 		s = fmt.Sprintf("Reading practice: %s to read · %s kana/min", plural(ws.Readable, "word"), rate)
-	case ws.Reading && ws.Err == "" && !ws.Missing:
+	case ws.Reading && ws.Err == "" && !ws.Missing && !(ws.Empty && ws.Filtered):
 		s = noWordsToReadText
 	case ws.KanaFallback:
 		s = "Words only: " + wordsOnlyReason(ws)

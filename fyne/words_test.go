@@ -192,6 +192,8 @@ func TestFormatWordsLineReadingPractice(t *testing.T) {
 		{"nothing readable", WordsStatus{Reading: true, Source: "JLPT N5", Level: 5}, noWordsToReadText},
 		{"nothing readable, words only", WordsStatus{Reading: true, WordsOnly: true, KanaFallback: true, Source: "minna", Next: wordsNeedKana}, noWordsToReadText},
 		{"list missing", WordsStatus{Reading: true, WordsOnly: true, KanaFallback: true, Missing: true, Dir: "~/words", Source: "minna"}, "Words only: add a list to ~/words or choose JLPT"},
+		{"no words in the chosen lessons", WordsStatus{Reading: true, Empty: true, Filtered: true, Source: "minna", Next: wordsFinished}, "Words: no words in the chosen lessons"},
+		{"no words in the chosen lessons, words only", WordsStatus{Reading: true, WordsOnly: true, KanaFallback: true, Empty: true, Filtered: true, Source: "minna"}, "Words only: no words in the chosen lessons"},
 		{"skipped rows", WordsStatus{Reading: true, Readable: 3, Skipped: 2, Source: "minna"}, "Reading practice: 3 words to read · – kana/min · 2 rows skipped"},
 	}
 	for _, c := range cases {
