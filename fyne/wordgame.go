@@ -292,12 +292,13 @@ func (gs *GameState) playableWords() []vocab.Entry {
 	return gs.playable
 }
 
-// invalidatePlayable marks the playable cache stale. Call it whenever a kana
-// may have become learned or stopped being learned, or the active scripts,
-// the introduced words, the index, the mode, the source or its lesson
-// filter changed. Must be called under lock.
+// invalidatePlayable marks the playable and the readable cache stale. Call
+// it whenever a kana may have become learned or stopped being learned, or
+// the active scripts, the introduced words, the index, the mode, the source
+// or its lesson filter changed. Must be called under lock.
 func (gs *GameState) invalidatePlayable() {
 	gs.playableOK = false
+	gs.readableOK = false
 }
 
 // wordCandidates returns the playable readings without those already
