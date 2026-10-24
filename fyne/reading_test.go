@@ -106,3 +106,29 @@ func TestReadablePoolFollowsTheJLPTLevel(t *testing.T) {
 		t.Fatalf("a missing list has no readable words, got %v", got)
 	}
 }
+
+func TestReadingPracticeHoldsPackagesAndTheLevelOffer(t *testing.T) {
+	gs := packageReady(10)
+	gs.readingPractice = true
+	gs.maybeOfferPackage()
+	if len(gs.pendingPackage) != 0 || gs.paused || len(drainEvents(gs)) != 0 {
+		t.Fatal("no package may come while reading practice is on")
+	}
+	gs.readingPractice = false
+	gs.maybeOfferPackage()
+	if len(gs.pendingPackage) == 0 {
+		t.Fatal("packages resume when reading practice is off")
+	}
+
+	lv := levelDone()
+	lv.readingPractice = true
+	lv.maybeOfferPackage()
+	if lv.pendingLevelOffer || lv.paused {
+		t.Fatal("no level offer while reading practice is on")
+	}
+	lv.readingPractice = false
+	lv.maybeOfferPackage()
+	if !lv.pendingLevelOffer {
+		t.Fatal("the level offer resumes when reading practice is off")
+	}
+}
