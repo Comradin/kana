@@ -87,9 +87,9 @@ func readingSet(entries []vocab.Entry) map[string]bool {
 	return set
 }
 
-// kanaPerMinute is the kana units of words read per minute of play this
-// round (see readKana and playTicks), rounded; 0 before any play. Must be
-// called under lock.
+// kanaPerMinute is the kana units of words read per minute of play in
+// reading practice this round (see readKana and playTicks), rounded; 0
+// before any such play. Must be called under lock.
 func (gs *GameState) kanaPerMinute() int {
 	if gs.playTicks == 0 {
 		return 0

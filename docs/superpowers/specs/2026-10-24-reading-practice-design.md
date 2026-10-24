@@ -34,7 +34,7 @@ filter**, **word list**.
 | Word share | As today: 5–10 % words in mixed mode; words-only mode is the reading drill. No slider. |
 | Kana tiles | Unchanged: levels, auto-progression, katakana offer, focus on weak items. |
 | Points and game over | Word hits score as today; the game-over list shows missed words as today. |
-| Status line | The words line becomes "Reading practice: N words to read · N kana/min": N words is how many words may fall now; kana/min counts the kana units of words read (as for kana progress) per minute of play in the running round, pauses and dialogs excluded. Nothing of it is saved. |
+| Status line | The words line becomes "Reading practice: N words to read · N kana/min": N words is how many words may fall now; kana/min counts the kana units of words read (as for kana progress) per minute of play with reading practice on in the running round, pauses, dialogs and play without reading practice excluded. Nothing of it is saved. |
 | No word to read | Kana fall instead, as in words-only mode without playable words, and the status line says "No words to read yet — learn more kana or pick another list". |
 | Changing the setting | Applies to tiles spawned afterwards; a falling tile keeps the rules it was spawned under. |
 
