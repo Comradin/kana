@@ -24,13 +24,14 @@ func validPackageSize(n int) bool {
 
 // wordSettings are the settings dialog's Words tab values.
 type wordSettings struct {
-	source      string   // jlptSource or listSourcePrefix + a list name
-	level       int      // JLPT level packages come down to, 1–5
-	packageSize int      // 3, 5 or 10
-	wordsOnly   bool     // only words fall
-	lessons     []string // the lesson filter of a list source; nil = all lessons
-	meaningLang string   // "" = System
-	ask         wordKind // what word tiles ask for
+	source          string   // jlptSource or listSourcePrefix + a list name
+	level           int      // JLPT level packages come down to, 1–5
+	packageSize     int      // 3, 5 or 10
+	wordsOnly       bool     // only words fall
+	lessons         []string // the lesson filter of a list source; nil = all lessons
+	meaningLang     string   // "" = System
+	ask             wordKind // what word tiles ask for
+	readingPractice bool     // reading practice is on
 }
 
 // readingsOf returns the readings of entries, in order.
@@ -294,7 +295,7 @@ func (gs *GameState) DeclineLevelOffer() {
 // applyWordSettings applies the settings dialog's Words tab. A new source or
 // lesson filter clears the newest package, so its first package can come at
 // once; words already introduced keep falling; switching words-only mode
-// keeps it. A new "Words ask for" applies to tiles spawned afterwards. The
+// keeps it. A new "Words ask for" applies to tiles spawned afterwards. So does reading practice. The
 // caller re-checks packages (applySettings does).
 func (gs *GameState) applyWordSettings(ws wordSettings) {
 	gs.mu.Lock()
@@ -356,6 +357,15 @@ func (gs *GameState) applyWordSettings(ws wordSettings) {
 		gs.wordsAsk = ws.ask
 		if gs.store != nil {
 			_ = gs.store.SaveWordsAsk(ws.ask.setting())
+		}
+	}
+	if ws.readingPractice != gs.readingPractice {
+		// Only new tiles follow; falling tiles keep their rules (see
+		// KanaTile.practice), and the readable words do not depend on
+		// it, so nothing is dropped.
+		gs.readingPractice = ws.readingPractice
+		if gs.store != nil {
+			_ = gs.store.SaveReadingPractice(ws.readingPractice)
 		}
 	}
 	if changed {
