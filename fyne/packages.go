@@ -296,8 +296,9 @@ func (gs *GameState) DeclineLevelOffer() {
 // applyWordSettings applies the settings dialog's Words tab. A new source or
 // lesson filter clears the newest package, so its first package can come at
 // once; words already introduced keep falling; switching words-only mode
-// keeps it. A new "Words ask for" applies to tiles spawned afterwards. So does reading practice. The
-// caller re-checks packages (applySettings does).
+// keeps it. A new "Words ask for" applies to tiles spawned afterwards, and
+// so does reading practice. The caller re-checks packages (applySettings
+// does).
 func (gs *GameState) applyWordSettings(ws wordSettings) {
 	gs.mu.Lock()
 	defer gs.mu.Unlock()
