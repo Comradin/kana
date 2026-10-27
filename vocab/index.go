@@ -13,7 +13,7 @@ import (
 type Entry struct {
 	Kana     string
 	Display  string   // shown form from the first private list row of this reading; "" = Kana
-	Alts     []string // other accepted readings across sources, unique, in first-seen order
+	Alts     []string // other accepted readings across sources, unique, in first-seen order; a variant may use kana Units lacks
 	Phrase   bool     // any source row is a phrase: は may be wa, へ e
 	Units    []string // kanacore.KanaUnits of Kana, computed once
 	Meanings Meanings
