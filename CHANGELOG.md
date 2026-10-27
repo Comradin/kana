@@ -2,8 +2,18 @@
 
 ## [0.8.0](https://github.com/Comradin/kana/compare/v0.7.0...v0.8.0) (2026-10-27)
 
+**Reading practice: read more words, faster.** Tick *Settings → Words → Reading practice*, and any word whose kana you have all learned may fall, whether you have met it in a word package or not. It trains how fast you read, not your vocabulary.
 
-### New
+- **Only the reading counts.** Type the word in romaji; a hit shows the word and its meaning. A wrong input costs nothing.
+- **Reading strengthens your kana.** Every learned kana of the word you typed counts as a hit for that kana. Your words' levels stay as they are.
+- **Words come from your chosen source:** the JLPT list up to your level, or your word list with its lesson filter.
+- **See your speed.** The status line shows how many words you can read and your reading speed in kana per minute for this round.
+- New word packages wait while reading practice is on and come when you turn it off.
+- Combine it with *Tiles: Words only* for a pure reading drill.
+
+### Commits
+
+#### New
 
 * **fyne:** count a word read for its kana ([3e0ee39](https://github.com/Comradin/kana/commit/3e0ee39e1c23091e7bb745c92be38773af4a700a))
 * **fyne:** find the words a learner can read ([9b652fa](https://github.com/Comradin/kana/commit/9b652fa2190d89115020883442cb64b96461aab6))
@@ -17,7 +27,7 @@
 * **vocab:** tell which reading of a word was typed ([682477e](https://github.com/Comradin/kana/commit/682477e748fc10769674d306520301012c9a2343))
 
 
-### Improvements and fixes
+#### Improvements and fixes
 
 * **fyne:** count kana/min over reading-practice play only ([afd12fe](https://github.com/Comradin/kana/commit/afd12fe52fec4d47a5ddb4b06b054bef88aadb32))
 * **fyne:** credit only learned kana of the typed reading ([fb82cbe](https://github.com/Comradin/kana/commit/fb82cbe99359e13da3aa9f08feee3203b5943961))
