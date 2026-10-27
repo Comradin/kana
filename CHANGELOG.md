@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.8.0](https://github.com/Comradin/kana/compare/v0.7.0...v0.8.0) (2026-10-27)
+
+
+### New
+
+* **fyne:** count a word read for its kana ([3e0ee39](https://github.com/Comradin/kana/commit/3e0ee39e1c23091e7bb745c92be38773af4a700a))
+* **fyne:** find the words a learner can read ([9b652fa](https://github.com/Comradin/kana/commit/9b652fa2190d89115020883442cb64b96461aab6))
+* **fyne:** handle missed and dropped tiles in reading practice ([03c2385](https://github.com/Comradin/kana/commit/03c2385ae53200ba78e9cbecab866a54f40a8f28))
+* **fyne:** hold word packages while reading practice is on ([1c0871c](https://github.com/Comradin/kana/commit/1c0871c41fbef28319090ec1263a46fff3153704))
+* **fyne:** keep the reading practice setting in the game ([ed6b950](https://github.com/Comradin/kana/commit/ed6b95034785342df953c937b245944e9e746979))
+* **fyne:** let readable words fall in reading practice ([e8461a1](https://github.com/Comradin/kana/commit/e8461a12d10b7c2fff91d5265665d16cae433e36))
+* **fyne:** show words to read and kana per minute ([81b0405](https://github.com/Comradin/kana/commit/81b040521c041da35e525c0e03c887b481151e5d))
+* **fyne:** turn on reading practice in the settings ([316c969](https://github.com/Comradin/kana/commit/316c969e1cba5d7cd7ca999b1c75a7e36e5d6d1b))
+* **store:** store whether reading practice is on ([c7e806c](https://github.com/Comradin/kana/commit/c7e806cba23c0ae89b2cac3a96d4240ea66646c1))
+* **vocab:** tell which reading of a word was typed ([682477e](https://github.com/Comradin/kana/commit/682477e748fc10769674d306520301012c9a2343))
+
+
+### Improvements and fixes
+
+* **fyne:** count kana/min over reading-practice play only ([afd12fe](https://github.com/Comradin/kana/commit/afd12fe52fec4d47a5ddb4b06b054bef88aadb32))
+* **fyne:** credit only learned kana of the typed reading ([fb82cbe](https://github.com/Comradin/kana/commit/fb82cbe99359e13da3aa9f08feee3203b5943961))
+* **fyne:** name empty lessons in the reading-practice status line ([991e885](https://github.com/Comradin/kana/commit/991e885a93e6a65f4116e51010c7b1ba4b550a0a))
+* **fyne:** refresh kana/min every second in reading practice ([f281b26](https://github.com/Comradin/kana/commit/f281b26cd1323d7e6dec9248d99fdfaf103484ad))
+
 ## [0.7.0](https://github.com/Comradin/kana/compare/v0.6.1...v0.7.0) (2026-10-23)
 
 **Meaning mode: practise what your words mean.** *Settings → Words → Words ask for* now offers **Reading** (as before) and **Meaning**. In meaning mode a word tile shows the word in kana, and you type what it means, in your meaning language or in English.
